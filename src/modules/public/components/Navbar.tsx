@@ -9,6 +9,8 @@ export default function Navbar() {
     { name: 'Home', href: '/' },
     { name: 'About', href: '/about' },
     { name: 'Menu', href: '/menu' },
+    { name: 'Order', href: '/order' },
+    { name: 'Staff Dashboard', href: '/dashboard' },
     { name: 'Gallery', href: '/gallery' },
     { name: 'Contact', href: '/contact' },
   ];

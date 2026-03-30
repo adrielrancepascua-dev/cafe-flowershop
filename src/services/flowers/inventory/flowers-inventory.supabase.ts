@@ -1,0 +1,314 @@
+import { getSupabaseClient } from '../../../lib/supabase/client';
+import type {
+  AdjustFlowerInventoryInput,
+  FlowerBranchOption,
+  FlowerInventoryMovementRow,
+  FlowerInventoryStockRow,
+  ListFlowerInventoryOptions,
+} from '../../../modules/flowers/shared/types/flower-inventory';
+
+type BranchRow = {
+  id: string;
+  name: string;
+  is_active: boolean;
+};
+
+type ProductRow = {
+  id: string;
+  name: string;
+  is_active: boolean;
+};
+
+type InventoryStockDbRow = {
+  branch_id: string;
+  product_id: string;
+  on_hand: number;
+  updated_at: string;
+};
+
+type InventoryMovementDbRow = {
+  id: number;
+  branch_id: string;
+  product_id: string;
+  movement_type: 'in' | 'out' | 'adjustment';
+  quantity: number;
+  previous_on_hand: number;
+  new_on_hand: number;
+  note: string;
+  created_at: string;
+};
+
+function requireSupabaseClient() {
+  const supabase = getSupabaseClient();
+  if (!supabase) {
+    throw new Error('Supabase is not configured.');
+  }
+
+  return supabase;
+}
+
+function toAdjustmentType(value: 'in' | 'out' | 'adjustment'): 'stock_in' | 'stock_out' {
+  return value === 'in' ? 'stock_in' : 'stock_out';
+}
+
+function toMovementType(value: 'stock_in' | 'stock_out'): 'in' | 'out' {
+  return value === 'stock_in' ? 'in' : 'out';
+}
+
+async function listBranchesInternal(options: ListFlowerInventoryOptions = {}): Promise<BranchRow[]> {
+  const supabase = requireSupabaseClient();
+
+  let query = supabase
+    .from('flower_branches')
+    .select('id, name, is_active')
+    .order('name', { ascending: true });
+
+  if (options.branchId) {
+    query = query.eq('id', options.branchId);
+  }
+
+  const { data, error } = await query;
+
+  if (error) {
+    throw error;
+  }
+
+  return (data as BranchRow[] | null) ?? [];
+}
+
+async function listProductsInternal(): Promise<ProductRow[]> {
+  const supabase = requireSupabaseClient();
+
+  const { data, error } = await supabase
+    .from('flower_products')
+    .select('id, name, is_active')
+    .order('name', { ascending: true });
+
+  if (error) {
+    throw error;
+  }
+
+  return (data as ProductRow[] | null) ?? [];
+}
+
+export async function listFlowerBranchesSupabase(): Promise<FlowerBranchOption[]> {
+  const rows = await listBranchesInternal();
+
+  return rows.map((row) => ({
+    id: row.id,
+    name: row.name,
+    is_active: Boolean(row.is_active),
+  }));
+}
+
+export async function listFlowerInventoryStockSupabase(
+  options: ListFlowerInventoryOptions = {},
+): Promise<FlowerInventoryStockRow[]> {
+  const supabase = requireSupabaseClient();
+
+  const [branches, products] = await Promise.all([
+    listBranchesInternal(options),
+    listProductsInternal(),
+  ]);
+
+  if (branches.length === 0 || products.length === 0) {
+    return [];
+  }
+
+  let stockQuery = supabase
+    .from('flower_inventory_stock')
+    .select('branch_id, product_id, on_hand, updated_at');
+
+  if (options.branchId) {
+    stockQuery = stockQuery.eq('branch_id', options.branchId);
+  }
+
+  const { data: stockRowsData, error: stockError } = await stockQuery;
+
+  if (stockError) {
+    throw stockError;
+  }
+
+  const stockRows = (stockRowsData as InventoryStockDbRow[] | null) ?? [];
+  const stockMap = new Map<string, InventoryStockDbRow>();
+
+  for (const row of stockRows) {
+    stockMap.set(`${row.branch_id}:${row.product_id}`, row);
+  }
+
+  const rows: FlowerInventoryStockRow[] = [];
+
+  for (const branch of branches) {
+    for (const product of products) {
+      const stock = stockMap.get(`${branch.id}:${product.id}`);
+
+      rows.push({
+        branch_id: branch.id,
+        branch_name: branch.name,
+        product_id: product.id,
+        product_name: product.name,
+        product_is_active: Boolean(product.is_active),
+        on_hand: Number(stock?.on_hand ?? 0),
+        last_updated: stock?.updated_at ?? null,
+      });
+    }
+  }
+
+  rows.sort((a, b) => {
+    if (a.branch_name !== b.branch_name) {
+      return a.branch_name.localeCompare(b.branch_name);
+    }
+
+    return a.product_name.localeCompare(b.product_name);
+  });
+
+  return rows;
+}
+
+export async function listFlowerInventoryMovementsSupabase(
+  options: ListFlowerInventoryOptions & { limit?: number } = {},
+): Promise<FlowerInventoryMovementRow[]> {
+  const supabase = requireSupabaseClient();
+  const limit = options.limit ?? 40;
+
+  let query = supabase
+    .from('flower_inventory_movements')
+    .select('id, branch_id, product_id, movement_type, quantity, previous_on_hand, new_on_hand, note, created_at')
+    .order('created_at', { ascending: false })
+    .limit(limit);
+
+  if (options.branchId) {
+    query = query.eq('branch_id', options.branchId);
+  }
+
+  const { data, error } = await query;
+
+  if (error) {
+    throw error;
+  }
+
+  const movementRows = (data as InventoryMovementDbRow[] | null) ?? [];
+
+  if (movementRows.length === 0) {
+    return [];
+  }
+
+  const branchIds = [...new Set(movementRows.map((row) => row.branch_id))];
+  const productIds = [...new Set(movementRows.map((row) => row.product_id))];
+
+  const [{ data: branchesData, error: branchesError }, { data: productsData, error: productsError }] = await Promise.all([
+    supabase.from('flower_branches').select('id, name, is_active').in('id', branchIds),
+    supabase.from('flower_products').select('id, name, is_active').in('id', productIds),
+  ]);
+
+  if (branchesError) {
+    throw branchesError;
+  }
+
+  if (productsError) {
+    throw productsError;
+  }
+
+  const branchMap = new Map<string, string>();
+  for (const branch of (branchesData as BranchRow[] | null) ?? []) {
+    branchMap.set(branch.id, branch.name);
+  }
+
+  const productMap = new Map<string, string>();
+  for (const product of (productsData as ProductRow[] | null) ?? []) {
+    productMap.set(product.id, product.name);
+  }
+
+  return movementRows.map((row) => ({
+    id: Number(row.id),
+    branch_id: row.branch_id,
+    branch_name: branchMap.get(row.branch_id) ?? row.branch_id,
+    product_id: row.product_id,
+    product_name: productMap.get(row.product_id) ?? row.product_id,
+    movement_type: toAdjustmentType(row.movement_type),
+    quantity: Number(row.quantity),
+    previous_on_hand: Number(row.previous_on_hand),
+    new_on_hand: Number(row.new_on_hand),
+    note: row.note ?? '',
+    created_at: row.created_at,
+  }));
+}
+
+export async function adjustFlowerInventorySupabase(input: AdjustFlowerInventoryInput): Promise<void> {
+  const supabase = requireSupabaseClient();
+  const quantity = Number(input.quantity);
+
+  if (!Number.isFinite(quantity) || quantity <= 0 || !Number.isInteger(quantity)) {
+    throw new Error('Quantity must be a whole number greater than 0.');
+  }
+
+  const { data: existingStock, error: existingStockError } = await supabase
+    .from('flower_inventory_stock')
+    .select('branch_id, product_id, on_hand')
+    .eq('branch_id', input.branchId)
+    .eq('product_id', input.productId)
+    .maybeSingle();
+
+  if (existingStockError) {
+    throw existingStockError;
+  }
+
+  const previousOnHand = Number(existingStock?.on_hand ?? 0);
+  const nextOnHand =
+    input.movementType === 'stock_in'
+      ? previousOnHand + quantity
+      : previousOnHand - quantity;
+
+  if (nextOnHand < 0) {
+    throw new Error('Insufficient stock. Stock out would result in negative balance.');
+  }
+
+  const nowIso = new Date().toISOString();
+
+  const { error: upsertError } = await supabase
+    .from('flower_inventory_stock')
+    .upsert(
+      {
+        branch_id: input.branchId,
+        product_id: input.productId,
+        on_hand: nextOnHand,
+        updated_at: nowIso,
+      },
+      { onConflict: 'branch_id,product_id' },
+    );
+
+  if (upsertError) {
+    throw upsertError;
+  }
+
+  const { error: movementError } = await supabase
+    .from('flower_inventory_movements')
+    .insert({
+      branch_id: input.branchId,
+      product_id: input.productId,
+      movement_type: toMovementType(input.movementType),
+      quantity,
+      previous_on_hand: previousOnHand,
+      new_on_hand: nextOnHand,
+      note: input.note?.trim() ?? '',
+      created_at: nowIso,
+    });
+
+  if (!movementError) {
+    return;
+  }
+
+  await supabase
+    .from('flower_inventory_stock')
+    .upsert(
+      {
+        branch_id: input.branchId,
+        product_id: input.productId,
+        on_hand: previousOnHand,
+        updated_at: nowIso,
+      },
+      { onConflict: 'branch_id,product_id' },
+    );
+
+  throw new Error(`Inventory movement logging failed: ${movementError.message}`);
+}
