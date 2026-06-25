@@ -1,0 +1,66 @@
+import { NavLink } from 'react-router-dom';
+import { BarChart3, Flower2, Home, Package, ShoppingBag, ShoppingCart } from 'lucide-react';
+
+const MOBILE_LINKS = [
+  { label: 'Home', to: '/dashboard/flowers', icon: Home, end: true },
+  { label: 'POS', to: '/dashboard/flowers/pos', icon: ShoppingCart, end: false },
+  { label: 'Orders', to: '/dashboard/flowers/orders', icon: ShoppingBag, end: false },
+  { label: 'Stock', to: '/dashboard/flowers/inventory', icon: Package, end: false },
+  { label: 'Reports', to: '/dashboard/flowers/reports', icon: BarChart3, end: false },
+];
+
+export default function FlowerMobileNav() {
+  return (
+    <nav
+      className="fixed inset-x-0 bottom-0 z-50 border-t border-brand-muted/50 bg-white/95 px-2 pb-[env(safe-area-inset-bottom)] pt-1 backdrop-blur-md lg:hidden"
+      aria-label="Mobile navigation"
+    >
+      <ul className="mx-auto flex max-w-lg items-stretch justify-around">
+        {MOBILE_LINKS.map((link) => (
+          <li key={link.to} className="flex-1">
+            <NavLink
+              to={link.to}
+              end={link.end}
+              className={({ isActive }) =>
+                `flex min-h-[52px] flex-col items-center justify-center gap-0.5 rounded-lg px-1 py-1.5 text-[10px] font-semibold transition ${
+                  isActive ? 'text-brand-brown' : 'text-brand-brown/50'
+                }`
+              }
+            >
+              {({ isActive }) => (
+                <>
+                  <span
+                    className={`flex h-8 w-8 items-center justify-center rounded-full transition ${
+                      isActive ? 'bg-brand-brown text-white shadow-sm' : ''
+                    }`}
+                  >
+                    <link.icon className="h-[18px] w-[18px]" strokeWidth={isActive ? 2.25 : 1.75} />
+                  </span>
+                  <span>{link.label}</span>
+                </>
+              )}
+            </NavLink>
+          </li>
+        ))}
+      </ul>
+    </nav>
+  );
+}
+
+export function FlowerDesktopSidebarHeader() {
+  return (
+    <div className="mb-4 hidden border-b border-brand-muted/40 px-2 pb-4 lg:block">
+      <div className="flex items-center gap-2.5">
+        <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-brand-brown text-white shadow-sm">
+          <Flower2 className="h-5 w-5" strokeWidth={1.75} />
+        </span>
+        <div>
+          <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-brand-accent">
+            Stay Awhile
+          </p>
+          <p className="font-serif text-sm font-semibold text-brand-dark">Flower Shop</p>
+        </div>
+      </div>
+    </div>
+  );
+}

@@ -4,6 +4,9 @@ import { getFlowerReports } from '../../../../services/flowers/reports';
 import type { FlowerBranchOption } from '../../shared/types/flower-inventory';
 import type { FlowerReportsData } from '../../shared/types/flower-report';
 
+import DemoModeBanner from '../../shared/components/DemoModeBanner';
+import FlowerPageHeader from '../../shared/components/FlowerPageHeader';
+
 const PRICE_FORMATTER = new Intl.NumberFormat('en-PH', {
   style: 'currency',
   currency: 'PHP',
@@ -73,20 +76,22 @@ export default function FlowerReportsPage() {
   );
 
   return (
-    <div>
-      <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Flowers Admin Zone</p>
-      <h2 className="mt-2 text-2xl font-semibold text-slate-900">Reports</h2>
-      <p className="mt-3 text-slate-600">
-        Phase 1 internal reports using flower orders data only.
-      </p>
+    <div className="animate-fade-in">
+      <DemoModeBanner />
 
-      <div className="mt-6 rounded-xl border border-slate-200 bg-white p-4">
-        <label className="block text-sm font-medium text-slate-700 max-w-sm">
+      <FlowerPageHeader
+        label="Reports"
+        title="Sales & Advance Orders"
+        description="Daily and monthly sales summaries plus upcoming scheduled orders."
+      />
+
+      <div className="mt-6 rounded-2xl border border-brand-muted/40 bg-white p-4 sm:p-5">
+        <label className="block max-w-sm text-sm font-medium text-brand-brown">
           Branch Filter
           <select
             value={branchFilter}
             onChange={(event) => setBranchFilter(event.target.value)}
-            className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none transition focus:border-amber-500 focus:ring-2 focus:ring-amber-100"
+            className="flower-input mt-1.5"
           >
             <option value="all">All Branches</option>
             {branches.map((branch) => (
@@ -98,18 +103,18 @@ export default function FlowerReportsPage() {
         </label>
       </div>
 
-      <div className="mt-6 grid grid-cols-1 gap-4 sm:grid-cols-3">
-        <div className="rounded-lg border border-slate-200 bg-slate-50 p-4">
-          <p className="text-xs font-medium uppercase tracking-[0.12em] text-slate-500">14-Day Sales</p>
-          <p className="mt-2 text-2xl font-semibold text-slate-900">{PRICE_FORMATTER.format(dailySalesTotal)}</p>
+      <div className="mt-6 grid grid-cols-1 gap-3 sm:grid-cols-3 sm:gap-4">
+        <div className="flower-card p-4 sm:p-5">
+          <p className="text-xs font-medium uppercase tracking-[0.12em] text-brand-accent">14-Day Sales</p>
+          <p className="mt-2 font-serif text-2xl font-semibold text-brand-dark">{PRICE_FORMATTER.format(dailySalesTotal)}</p>
         </div>
-        <div className="rounded-lg border border-slate-200 bg-slate-50 p-4">
-          <p className="text-xs font-medium uppercase tracking-[0.12em] text-slate-500">6-Month Sales</p>
-          <p className="mt-2 text-2xl font-semibold text-slate-900">{PRICE_FORMATTER.format(monthlySalesTotal)}</p>
+        <div className="flower-card p-4 sm:p-5">
+          <p className="text-xs font-medium uppercase tracking-[0.12em] text-brand-accent">6-Month Sales</p>
+          <p className="mt-2 font-serif text-2xl font-semibold text-brand-dark">{PRICE_FORMATTER.format(monthlySalesTotal)}</p>
         </div>
-        <div className="rounded-lg border border-slate-200 bg-slate-50 p-4">
-          <p className="text-xs font-medium uppercase tracking-[0.12em] text-slate-500">Advance Orders</p>
-          <p className="mt-2 text-2xl font-semibold text-slate-900">{reportsData.advance_orders.length}</p>
+        <div className="flower-card p-4 sm:p-5">
+          <p className="text-xs font-medium uppercase tracking-[0.12em] text-brand-accent">Advance Orders</p>
+          <p className="mt-2 font-serif text-2xl font-semibold text-brand-dark">{reportsData.advance_orders.length}</p>
         </div>
       </div>
 

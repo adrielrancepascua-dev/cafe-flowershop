@@ -10,6 +10,8 @@ import {
   listFlowerInventoryMovements,
   listFlowerInventoryStock,
 } from '../../../../services/flowers/inventory';
+import DemoModeBanner from '../../shared/components/DemoModeBanner';
+import FlowerPageHeader from '../../shared/components/FlowerPageHeader';
 
 export default function FlowerBranchInventoryPlaceholder() {
   const [branches, setBranches] = useState<FlowerBranchOption[]>([]);
@@ -139,29 +141,31 @@ export default function FlowerBranchInventoryPlaceholder() {
   }
 
   return (
-    <div>
-      <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Flowers Admin Zone</p>
-      <h2 className="mt-2 text-2xl font-semibold text-slate-900">Branch Inventory</h2>
-      <p className="mt-3 text-slate-600">
-        Internal inventory module for branch-level stock tracking and manual stock adjustments.
-      </p>
+    <div className="animate-fade-in">
+      <DemoModeBanner />
 
-      <div className="mt-6 grid grid-cols-1 gap-4 sm:grid-cols-4">
-        <div className="rounded-lg border border-slate-200 bg-slate-50 p-4">
-          <p className="text-xs font-medium uppercase tracking-[0.12em] text-slate-500">Stock Rows</p>
-          <p className="mt-2 text-3xl font-semibold text-slate-900">{stockRows.length}</p>
+      <FlowerPageHeader
+        label="Inventory"
+        title="Branch Inventory"
+        description="Track stock levels per branch and make manual stock adjustments."
+      />
+
+      <div className="mt-6 grid grid-cols-2 gap-3 sm:grid-cols-4 sm:gap-4">
+        <div className="flower-card p-4">
+          <p className="text-xs font-medium uppercase tracking-[0.12em] text-brand-accent">Stock Rows</p>
+          <p className="mt-2 font-serif text-2xl font-semibold text-brand-dark sm:text-3xl">{stockRows.length}</p>
         </div>
-        <div className="rounded-lg border border-slate-200 bg-slate-50 p-4">
-          <p className="text-xs font-medium uppercase tracking-[0.12em] text-slate-500">Total On Hand</p>
-          <p className="mt-2 text-3xl font-semibold text-slate-900">{totalOnHand}</p>
+        <div className="flower-card p-4">
+          <p className="text-xs font-medium uppercase tracking-[0.12em] text-brand-accent">Total On Hand</p>
+          <p className="mt-2 font-serif text-2xl font-semibold text-brand-dark sm:text-3xl">{totalOnHand}</p>
         </div>
-        <div className="rounded-lg border border-slate-200 bg-slate-50 p-4">
-          <p className="text-xs font-medium uppercase tracking-[0.12em] text-slate-500">Low Stock (&lt;=5)</p>
-          <p className="mt-2 text-3xl font-semibold text-slate-900">{lowStockCount}</p>
+        <div className="flower-card p-4">
+          <p className="text-xs font-medium uppercase tracking-[0.12em] text-brand-accent">Low Stock</p>
+          <p className="mt-2 font-serif text-2xl font-semibold text-brand-dark sm:text-3xl">{lowStockCount}</p>
         </div>
-        <div className="rounded-lg border border-slate-200 bg-slate-50 p-4">
-          <p className="text-xs font-medium uppercase tracking-[0.12em] text-slate-500">Recent Movements</p>
-          <p className="mt-2 text-3xl font-semibold text-slate-900">{movementRows.length}</p>
+        <div className="flower-card p-4">
+          <p className="text-xs font-medium uppercase tracking-[0.12em] text-brand-accent">Movements</p>
+          <p className="mt-2 font-serif text-2xl font-semibold text-brand-dark sm:text-3xl">{movementRows.length}</p>
         </div>
       </div>
 

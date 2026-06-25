@@ -2,10 +2,61 @@
 @config "../tailwind.config.js";
 
 @layer base {
-  body {
-    @apply bg-brand-light text-brand-dark font-sans;
+  html {
+    -webkit-tap-highlight-color: transparent;
+    scroll-behavior: smooth;
   }
+
+  body {
+    @apply bg-brand-light text-brand-dark font-sans antialiased;
+  }
+
   h1, h2, h3, h4, h5, h6 {
     @apply font-serif;
+  }
+}
+
+@layer components {
+  .flower-card {
+    @apply rounded-2xl border border-brand-muted/40 bg-white shadow-[0_1px_3px_rgba(62,39,35,0.06),0_8px_24px_rgba(62,39,35,0.04)];
+  }
+
+  .flower-input {
+    @apply w-full rounded-xl border border-brand-muted/70 bg-white px-3.5 py-2.5 text-sm text-brand-dark outline-none transition placeholder:text-brand-brown/40 focus:border-brand-accent focus:ring-2 focus:ring-brand-beige;
+  }
+
+  .flower-btn-primary {
+    @apply inline-flex min-h-[44px] items-center justify-center rounded-xl bg-brand-brown px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition enabled:hover:bg-brand-dark enabled:active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-40;
+  }
+
+  .flower-btn-secondary {
+    @apply inline-flex min-h-[44px] items-center justify-center rounded-xl border border-brand-muted px-4 py-2.5 text-sm font-semibold text-brand-brown transition enabled:hover:border-brand-accent enabled:hover:bg-brand-beige/60 enabled:active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-40;
+  }
+
+  .flower-pill {
+    @apply whitespace-nowrap rounded-full px-3.5 py-2 text-xs font-semibold transition;
+  }
+
+  .flower-pill-active {
+    @apply bg-brand-brown text-white shadow-sm;
+  }
+
+  .flower-pill-inactive {
+    @apply bg-brand-beige/80 text-brand-brown hover:bg-brand-muted/60;
+  }
+
+  .flower-scroll {
+    scrollbar-width: thin;
+    scrollbar-color: #D7CCC8 transparent;
+  }
+
+  .flower-scroll::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+
+  .flower-scroll::-webkit-scrollbar-thumb {
+    background-color: #D7CCC8;
+    border-radius: 9999px;
   }
 }

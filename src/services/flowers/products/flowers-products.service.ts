@@ -4,12 +4,20 @@ import type {
   UpdateFlowerProductInput,
 } from '../../../modules/flowers/shared/types/flower-product';
 import {
+  createFlowerProductLocal,
+  deleteFlowerProductLocal,
+  listFlowerProductsLocal,
+  toggleFlowerProductActiveLocal,
+  updateFlowerProductLocal,
+} from './flowers-products.local';
+import {
   createFlowerProductSupabase,
   deleteFlowerProductSupabase,
   listFlowerProductsSupabase,
   toggleFlowerProductActiveSupabase,
   updateFlowerProductSupabase,
 } from './flowers-products.supabase';
+import { getFlowerStorageMode, shouldUseFlowerSupabase } from '../storage-mode';
 
 function validateName(name: string) {
   if (!name.trim()) {
@@ -24,14 +32,40 @@ function validateBasePrice(basePrice: number) {
 }
 
 export async function listFlowerProducts(): Promise<FlowerProduct[]> {
-  return listFlowerProductsSupabase();
+  const mode = getFlowerStorageMode();
+
+  if (shouldUseFlowerSupabase(mode)) {
+    try {
+      return await listFlowerProductsSupabase();
+    } catch (error) {
+      if (mode === 'supabase') {
+        throw error;
+      }
+      console.warn('Falling back to local flower product storage after Supabase read failure.', error);
+    }
+  }
+
+  return listFlowerProductsLocal();
 }
 
 export async function createFlowerProduct(input: CreateFlowerProductInput): Promise<FlowerProduct> {
   validateName(input.name);
   validateBasePrice(input.base_price);
 
-  return createFlowerProductSupabase(input);
+  const mode = getFlowerStorageMode();
+
+  if (shouldUseFlowerSupabase(mode)) {
+    try {
+      return await createFlowerProductSupabase(input);
+    } catch (error) {
+      if (mode === 'supabase') {
+        throw error;
+      }
+      console.warn('Falling back to local flower product storage after Supabase write failure.', error);
+    }
+  }
+
+  return createFlowerProductLocal(input);
 }
 
 export async function updateFlowerProduct(
@@ -41,14 +75,40 @@ export async function updateFlowerProduct(
   validateName(input.name);
   validateBasePrice(input.base_price);
 
-  return updateFlowerProductSupabase(productId, input);
+  const mode = getFlowerStorageMode();
+
+  if (shouldUseFlowerSupabase(mode)) {
+    try {
+      return await updateFlowerProductSupabase(productId, input);
+    } catch (error) {
+      if (mode === 'supabase') {
+        throw error;
+      }
+      console.warn('Falling back to local flower product storage after Supabase update failure.', error);
+    }
+  }
+
+  return updateFlowerProductLocal(productId, input);
 }
 
 export async function toggleFlowerProductActive(
   productId: string,
   isActive: boolean,
 ): Promise<FlowerProduct> {
-  return toggleFlowerProductActiveSupabase(productId, isActive);
+  const mode = getFlowerStorageMode();
+
+  if (shouldUseFlowerSupabase(mode)) {
+    try {
+      return await toggleFlowerProductActiveSupabase(productId, isActive);
+    } catch (error) {
+      if (mode === 'supabase') {
+        throw error;
+      }
+      console.warn('Falling back to local flower product storage after Supabase toggle failure.', error);
+    }
+  }
+
+  return toggleFlowerProductActiveLocal(productId, isActive);
 }
 
 export async function deleteFlowerProduct(productId: string): Promise<void> {
@@ -56,5 +116,18 @@ export async function deleteFlowerProduct(productId: string): Promise<void> {
     throw new Error('Product ID is required.');
   }
 
-  return deleteFlowerProductSupabase(productId);
+  const mode = getFlowerStorageMode();
+
+  if (shouldUseFlowerSupabase(mode)) {
+    try {
+      return await deleteFlowerProductSupabase(productId);
+    } catch (error) {
+      if (mode === 'supabase') {
+        throw error;
+      }
+      console.warn('Falling back to local flower product storage after Supabase delete failure.', error);
+    }
+  }
+
+  return deleteFlowerProductLocal(productId);
 }

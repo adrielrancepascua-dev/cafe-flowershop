@@ -27,6 +27,7 @@ import FlowerPaymentVerificationPlaceholder from '../../modules/flowers/dashboar
 import FlowerWalkInOrdersPlaceholder from '../../modules/flowers/dashboard/pages/FlowerWalkInOrdersPlaceholder';
 import FlowerAttendancePlaceholder from '../../modules/flowers/dashboard/pages/FlowerAttendancePlaceholder';
 import FlowerReportsPage from '../../modules/flowers/dashboard/pages/FlowerReportsPage';
+import FlowerPosPage from '../../modules/flowers/dashboard/pages/FlowerPosPage';
 
 export default function AppRouter() {
   const flowerDemoMode = isFlowerDemoMode();
@@ -38,6 +39,7 @@ export default function AppRouter() {
           <Route path="/dashboard" element={<DashboardLayout />}>
             <Route index element={<Navigate to="/dashboard/flowers" replace />} />
             <Route path="flowers" element={<FlowersAdminHome />} />
+            <Route path="flowers/pos" element={<FlowerPosPage />} />
             <Route path="flowers/orders" element={<FlowerOrdersPlaceholder />} />
             <Route path="flowers/products" element={<FlowerProductsPlaceholder />} />
             <Route path="flowers/inventory" element={<FlowerBranchInventoryPlaceholder />} />
@@ -70,6 +72,7 @@ export default function AppRouter() {
           <Route path="products" element={<DashboardProducts />} />
           <Route path="inventory" element={<DashboardInventory />} />
           <Route path="flowers" element={<FlowersAdminHome />} />
+          <Route path="flowers/pos" element={<FlowerPosPage />} />
           <Route path="flowers/orders" element={<FlowerOrdersPlaceholder />} />
           <Route path="flowers/products" element={<FlowerProductsPlaceholder />} />
           <Route path="flowers/branches" element={<FlowerBranchSettingsPlaceholder />} />

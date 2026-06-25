@@ -7,6 +7,8 @@ import {
   toggleFlowerProductActive,
   updateFlowerProduct,
 } from '../../../../services/flowers/products';
+import DemoModeBanner from '../../shared/components/DemoModeBanner';
+import FlowerPageHeader from '../../shared/components/FlowerPageHeader';
 
 const PRICE_FORMATTER = new Intl.NumberFormat('en-PH', {
   style: 'currency',
@@ -201,25 +203,27 @@ export default function FlowerProductsPlaceholder() {
   }
 
   return (
-    <div>
-      <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Flowers Admin Zone</p>
-      <h2 className="mt-2 text-2xl font-semibold text-slate-900">Flower Product Management</h2>
-      <p className="mt-3 text-slate-600">
-        Internal demo module for managing a reusable flower product list.
-      </p>
+    <div className="animate-fade-in">
+      <DemoModeBanner />
 
-      <div className="mt-6 grid grid-cols-1 gap-4 sm:grid-cols-3">
-        <div className="rounded-lg border border-slate-200 bg-slate-50 p-4">
-          <p className="text-xs font-medium uppercase tracking-[0.12em] text-slate-500">Total Products</p>
-          <p className="mt-2 text-3xl font-semibold text-slate-900">{products.length}</p>
+      <FlowerPageHeader
+        label="Products"
+        title="Flower Product Management"
+        description="Manage your reusable flower product catalog — names, prices, and availability."
+      />
+
+      <div className="mt-6 grid grid-cols-1 gap-3 sm:grid-cols-3 sm:gap-4">
+        <div className="flower-card p-4 sm:p-5">
+          <p className="text-xs font-medium uppercase tracking-[0.12em] text-brand-accent">Total Products</p>
+          <p className="mt-2 font-serif text-3xl font-semibold text-brand-dark">{products.length}</p>
         </div>
-        <div className="rounded-lg border border-slate-200 bg-slate-50 p-4">
-          <p className="text-xs font-medium uppercase tracking-[0.12em] text-slate-500">Active</p>
-          <p className="mt-2 text-3xl font-semibold text-slate-900">{activeCount}</p>
+        <div className="flower-card p-4 sm:p-5">
+          <p className="text-xs font-medium uppercase tracking-[0.12em] text-brand-accent">Active</p>
+          <p className="mt-2 font-serif text-3xl font-semibold text-brand-dark">{activeCount}</p>
         </div>
-        <div className="rounded-lg border border-slate-200 bg-slate-50 p-4">
-          <p className="text-xs font-medium uppercase tracking-[0.12em] text-slate-500">Inactive</p>
-          <p className="mt-2 text-3xl font-semibold text-slate-900">{products.length - activeCount}</p>
+        <div className="flower-card p-4 sm:p-5">
+          <p className="text-xs font-medium uppercase tracking-[0.12em] text-brand-accent">Inactive</p>
+          <p className="mt-2 font-serif text-3xl font-semibold text-brand-dark">{products.length - activeCount}</p>
         </div>
       </div>
 

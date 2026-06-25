@@ -6,6 +6,9 @@ import type { FlowerBranchOption } from '../../shared/types/flower-inventory';
 import type { FlowerProduct } from '../../shared/types/flower-product';
 import type { FlowerOrder } from '../../shared/types/flower-order';
 
+import DemoModeBanner from '../../shared/components/DemoModeBanner';
+import FlowerPageHeader from '../../shared/components/FlowerPageHeader';
+
 const PRICE_FORMATTER = new Intl.NumberFormat('en-PH', {
   style: 'currency',
   currency: 'PHP',
@@ -276,13 +279,15 @@ export default function FlowerOrdersPlaceholder() {
 
   return (
     <div>
-      <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Flowers Admin Zone</p>
-      <h2 className="mt-2 text-2xl font-semibold text-slate-900">Manual Flower Order Entry</h2>
-      <p className="mt-3 text-slate-600">
-        Internal-use order encoding with optional scheduling and customizable total. Inventory deduction is intentionally not included in this step.
-      </p>
+      <DemoModeBanner />
 
-      <div className="mt-6 rounded-xl border border-slate-200 bg-white p-4">
+      <FlowerPageHeader
+        label="Orders"
+        title="Order Management"
+        description="Manual order entry with optional scheduling. For walk-in sales, use the POS module. Inventory is deducted on order creation."
+      />
+
+      <div className="mt-6 rounded-2xl border border-brand-muted/40 bg-white p-4 sm:p-5">
         <h3 className="text-sm font-semibold text-slate-900">Create Order</h3>
 
         <div className="mt-3 grid grid-cols-1 gap-3 md:grid-cols-2">

@@ -3,10 +3,12 @@ import type {
   FlowerOrder,
   ListFlowerOrdersOptions,
 } from '../../../modules/flowers/shared/types/flower-order';
+import { createFlowerOrderLocal, listFlowerOrdersLocal } from './flowers-orders.local';
 import {
   createFlowerOrderSupabase,
   listFlowerOrdersSupabase,
 } from './flowers-orders.supabase';
+import { getFlowerStorageMode, shouldUseFlowerSupabase } from '../storage-mode';
 
 function validateOrderInput(input: CreateFlowerOrderInput) {
   if (!input.branch_id) {
@@ -45,10 +47,37 @@ function validateOrderInput(input: CreateFlowerOrderInput) {
 }
 
 export async function listFlowerOrders(options: ListFlowerOrdersOptions = {}): Promise<FlowerOrder[]> {
-  return listFlowerOrdersSupabase(options);
+  const mode = getFlowerStorageMode();
+
+  if (shouldUseFlowerSupabase(mode)) {
+    try {
+      return await listFlowerOrdersSupabase(options);
+    } catch (error) {
+      if (mode === 'supabase') {
+        throw error;
+      }
+      console.warn('Falling back to local flower order storage after Supabase read failure.', error);
+    }
+  }
+
+  return listFlowerOrdersLocal(options);
 }
 
 export async function createFlowerOrder(input: CreateFlowerOrderInput): Promise<FlowerOrder> {
   validateOrderInput(input);
-  return createFlowerOrderSupabase(input);
+
+  const mode = getFlowerStorageMode();
+
+  if (shouldUseFlowerSupabase(mode)) {
+    try {
+      return await createFlowerOrderSupabase(input);
+    } catch (error) {
+      if (mode === 'supabase') {
+        throw error;
+      }
+      console.warn('Falling back to local flower order storage after Supabase write failure.', error);
+    }
+  }
+
+  return createFlowerOrderLocal(input);
 }
