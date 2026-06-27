@@ -18,6 +18,7 @@ function StockAdjustControls({
   branchId,
   productId,
   onAdjust,
+  layout = 'stacked',
 }: {
   branchId: string;
   productId: string;
@@ -27,6 +28,7 @@ function StockAdjustControls({
     movementType: 'stock_in' | 'stock_out',
     quantity: number,
   ) => Promise<void>;
+  layout?: 'stacked' | 'inline';
 }) {
   const [quantity, setQuantity] = useState('1');
 
@@ -45,7 +47,7 @@ function StockAdjustControls({
     await onAdjust(branchId, productId, movementType, parsed);
   }
 
-  return (
+  return layout === 'inline' ? (
     <div className="flex flex-wrap items-center gap-1.5">
       <div className="inline-flex items-center rounded-xl border border-brand-muted/70 bg-white">
         <button
@@ -86,6 +88,53 @@ function StockAdjustControls({
       >
         Stock out
       </button>
+    </div>
+  ) : (
+    <div className="flex w-full flex-col gap-2">
+      <div className="flex items-center justify-between gap-2">
+        <span className="text-xs font-medium text-brand-brown/70">Quantity</span>
+        <div className="inline-flex items-center rounded-xl border border-brand-muted/70 bg-white">
+          <button
+            type="button"
+            aria-label="Decrease quantity"
+            className="flex h-9 w-9 items-center justify-center text-brand-brown hover:bg-brand-beige/60"
+            onClick={() => bump(-1)}
+          >
+            <Minus className="h-4 w-4" />
+          </button>
+          <input
+            type="text"
+            inputMode="numeric"
+            value={quantity}
+            onChange={(event) => setQuantity(event.target.value.replace(/[^\d]/g, ''))}
+            className="h-9 w-12 border-x border-brand-muted/70 bg-transparent text-center text-sm font-semibold text-brand-dark outline-none"
+          />
+          <button
+            type="button"
+            aria-label="Increase quantity"
+            className="flex h-9 w-9 items-center justify-center text-brand-brown hover:bg-brand-beige/60"
+            onClick={() => bump(1)}
+          >
+            <Plus className="h-4 w-4" />
+          </button>
+        </div>
+      </div>
+      <div className="grid grid-cols-2 gap-2">
+        <button
+          type="button"
+          className="flower-btn-secondary w-full px-2 py-2 text-xs"
+          onClick={() => void apply('stock_in')}
+        >
+          Stock in
+        </button>
+        <button
+          type="button"
+          className="flower-btn-secondary w-full px-2 py-2 text-xs"
+          onClick={() => void apply('stock_out')}
+        >
+          Stock out
+        </button>
+      </div>
     </div>
   );
 }
@@ -206,28 +255,55 @@ export default function FlowerInventoryPage() {
         <p className="mt-6 text-sm text-brand-brown/60">Loading inventory...</p>
       ) : (
         <>
-          <div className="mt-5 overflow-x-auto rounded-2xl border border-brand-muted/40">
+          <div className="mt-5 space-y-3 md:hidden">
+            {filteredStock.map((row) => (
+              <div key={`${row.branch_id}-${row.product_id}-card`} className="flower-card p-4">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0 flex-1">
+                    <p className="font-semibold text-brand-dark">{row.product_name}</p>
+                    <p className="mt-0.5 text-xs text-brand-brown/70">{row.branch_name}</p>
+                  </div>
+                  <div className="shrink-0 text-right">
+                    <p className="text-xs font-medium uppercase tracking-wide text-brand-brown/60">On hand</p>
+                    <p className="text-2xl font-bold leading-tight text-brand-dark">{row.on_hand}</p>
+                  </div>
+                </div>
+                {isAdmin ? (
+                  <div className="mt-4 border-t border-brand-muted/30 pt-4">
+                    <StockAdjustControls
+                      branchId={row.branch_id}
+                      productId={row.product_id}
+                      onAdjust={handleAdjust}
+                    />
+                  </div>
+                ) : null}
+              </div>
+            ))}
+          </div>
+
+          <div className="mt-5 hidden overflow-x-auto rounded-2xl border border-brand-muted/40 md:block">
             <table className="min-w-full text-left text-sm">
               <thead className="bg-brand-beige/40 text-brand-brown">
                 <tr>
                   <th className="px-3 py-2">Branch</th>
-                  <th className="px-3 py-2">Flower</th>
+                  <th className="min-w-[10rem] px-3 py-2">Flower</th>
                   <th className="px-3 py-2">On hand</th>
-                  {isAdmin ? <th className="px-3 py-2">Adjust stock</th> : null}
+                  {isAdmin ? <th className="min-w-[16rem] px-3 py-2">Adjust stock</th> : null}
                 </tr>
               </thead>
               <tbody>
                 {filteredStock.map((row) => (
                   <tr key={`${row.branch_id}-${row.product_id}`} className="border-t border-brand-muted/30">
-                    <td className="px-3 py-2">{row.branch_name}</td>
-                    <td className="px-3 py-2">{row.product_name}</td>
+                    <td className="px-3 py-2 whitespace-nowrap">{row.branch_name}</td>
+                    <td className="min-w-[10rem] px-3 py-2">{row.product_name}</td>
                     <td className="px-3 py-2 font-semibold">{row.on_hand}</td>
                     {isAdmin ? (
-                      <td className="px-3 py-2">
+                      <td className="min-w-[16rem] px-3 py-2">
                         <StockAdjustControls
                           branchId={row.branch_id}
                           productId={row.product_id}
                           onAdjust={handleAdjust}
+                          layout="inline"
                         />
                       </td>
                     ) : null}

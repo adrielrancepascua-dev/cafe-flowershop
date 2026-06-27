@@ -92,30 +92,125 @@ export default function FlowerProductsPage() {
       {loading ? (
         <p className="mt-6 text-sm text-brand-brown/60">Loading products...</p>
       ) : (
-        <div className="mt-5 overflow-x-auto rounded-2xl border border-brand-muted/40">
-          <table className="min-w-full text-left text-sm">
-            <thead className="bg-brand-beige/40 text-brand-brown">
-              <tr>
-                <th className="px-3 py-2">Name</th>
-                <th className="px-3 py-2">Unit cost</th>
-                <th className="px-3 py-2">Status</th>
-                <RequireFlowerAdmin silent>
-                  <th className="px-3 py-2">Actions</th>
-                </RequireFlowerAdmin>
-              </tr>
-            </thead>
-            <tbody>
-              {products.map((product) => (
-                <ProductRow
-                  key={product.id}
-                  product={product}
-                  onChanged={loadProducts}
-                />
-              ))}
-            </tbody>
-          </table>
-        </div>
+        <>
+          <div className="mt-5 space-y-3 md:hidden">
+            {products.map((product) => (
+              <ProductCard key={product.id} product={product} onChanged={loadProducts} />
+            ))}
+          </div>
+
+          <div className="mt-5 hidden overflow-x-auto rounded-2xl border border-brand-muted/40 md:block">
+            <table className="min-w-full text-left text-sm">
+              <thead className="bg-brand-beige/40 text-brand-brown">
+                <tr>
+                  <th className="min-w-[12rem] px-3 py-2">Name</th>
+                  <th className="px-3 py-2">Unit cost</th>
+                  <th className="px-3 py-2">Status</th>
+                  <RequireFlowerAdmin silent>
+                    <th className="min-w-[14rem] px-3 py-2">Actions</th>
+                  </RequireFlowerAdmin>
+                </tr>
+              </thead>
+              <tbody>
+                {products.map((product) => (
+                  <ProductRow key={product.id} product={product} onChanged={loadProducts} />
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </>
       )}
+    </div>
+  );
+}
+
+function ProductStatusBadge({ isActive }: { isActive: boolean }) {
+  return (
+    <span
+      className={`rounded-full px-2 py-0.5 text-xs font-semibold ${isActive ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-100 text-slate-600'}`}
+    >
+      {isActive ? 'Active' : 'Inactive'}
+    </span>
+  );
+}
+
+function ProductActions({
+  product,
+  onSave,
+  onChanged,
+}: {
+  product: FlowerProduct;
+  onSave: () => Promise<void>;
+  onChanged: () => Promise<void>;
+}) {
+  return (
+    <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap">
+      <button type="button" className="flower-btn-secondary px-3 py-2 text-xs sm:py-1.5" onClick={() => void onSave()}>
+        Save
+      </button>
+      <button
+        type="button"
+        className="flower-btn-secondary px-3 py-2 text-xs sm:py-1.5"
+        onClick={() => void toggleFlowerProductActive(product.id, !product.is_active).then(onChanged)}
+      >
+        {product.is_active ? 'Deactivate' : 'Activate'}
+      </button>
+      <button
+        type="button"
+        className="flower-btn-secondary col-span-2 px-3 py-2 text-xs text-red-700 sm:col-span-1 sm:py-1.5"
+        onClick={() => void deleteFlowerProduct(product.id).then(onChanged)}
+      >
+        Delete
+      </button>
+    </div>
+  );
+}
+
+function ProductCard({
+  product,
+  onChanged,
+}: {
+  product: FlowerProduct;
+  onChanged: () => Promise<void>;
+}) {
+  const [name, setName] = useState(product.name);
+
+  useEffect(() => {
+    setName(product.name);
+  }, [product.id, product.name]);
+
+  async function save() {
+    await updateFlowerProduct(product.id, {
+      name,
+      unit_cost: product.unit_cost,
+    });
+    await onChanged();
+  }
+
+  return (
+    <div className="flower-card p-4">
+      <label className="block text-xs font-medium uppercase tracking-wide text-brand-brown/60">
+        Flower name
+        <input
+          value={name}
+          onChange={(event) => setName(event.target.value)}
+          className="flower-input mt-1.5"
+        />
+      </label>
+
+      <div className="mt-3 flex items-center justify-between gap-3">
+        <div>
+          <p className="text-xs font-medium uppercase tracking-wide text-brand-brown/60">Unit cost</p>
+          <p className="mt-0.5 font-semibold text-brand-dark">{PRICE_FORMATTER.format(product.unit_cost)}</p>
+        </div>
+        <ProductStatusBadge isActive={product.is_active} />
+      </div>
+
+      <RequireFlowerAdmin silent>
+        <div className="mt-4 border-t border-brand-muted/30 pt-4">
+          <ProductActions product={product} onSave={save} onChanged={onChanged} />
+        </div>
+      </RequireFlowerAdmin>
     </div>
   );
 }
@@ -129,6 +224,10 @@ function ProductRow({
 }) {
   const [name, setName] = useState(product.name);
 
+  useEffect(() => {
+    setName(product.name);
+  }, [product.id, product.name]);
+
   async function save() {
     await updateFlowerProduct(product.id, {
       name,
@@ -139,36 +238,16 @@ function ProductRow({
 
   return (
     <tr className="border-t border-brand-muted/30">
-      <td className="px-3 py-2">
-        <input value={name} onChange={(event) => setName(event.target.value)} className="flower-input" readOnly={false} />
+      <td className="min-w-[12rem] px-3 py-2">
+        <input value={name} onChange={(event) => setName(event.target.value)} className="flower-input min-w-[10rem]" />
       </td>
-      <td className="px-3 py-2">{PRICE_FORMATTER.format(product.unit_cost)}</td>
+      <td className="px-3 py-2 whitespace-nowrap">{PRICE_FORMATTER.format(product.unit_cost)}</td>
       <td className="px-3 py-2">
-        <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${product.is_active ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-100 text-slate-600'}`}>
-          {product.is_active ? 'Active' : 'Inactive'}
-        </span>
+        <ProductStatusBadge isActive={product.is_active} />
       </td>
       <RequireFlowerAdmin silent>
-        <td className="px-3 py-2">
-          <div className="flex flex-wrap gap-2">
-            <button type="button" className="flower-btn-secondary px-3 py-1.5 text-xs" onClick={() => void save()}>
-              Save
-            </button>
-            <button
-              type="button"
-              className="flower-btn-secondary px-3 py-1.5 text-xs"
-              onClick={() => void toggleFlowerProductActive(product.id, !product.is_active).then(onChanged)}
-            >
-              {product.is_active ? 'Deactivate' : 'Activate'}
-            </button>
-            <button
-              type="button"
-              className="flower-btn-secondary px-3 py-1.5 text-xs text-red-700"
-              onClick={() => void deleteFlowerProduct(product.id).then(onChanged)}
-            >
-              Delete
-            </button>
-          </div>
+        <td className="min-w-[14rem] px-3 py-2">
+          <ProductActions product={product} onSave={save} onChanged={onChanged} />
         </td>
       </RequireFlowerAdmin>
     </tr>
