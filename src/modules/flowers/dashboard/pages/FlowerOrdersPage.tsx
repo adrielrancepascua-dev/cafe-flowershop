@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useState } from 'react';
-import { CalendarDays, List } from 'lucide-react';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { CalendarDays, ChevronUp, List } from 'lucide-react';
 import { listFlowerBranches } from '../../../../services/flowers/inventory';
 import {
   createFlowerOrder,
@@ -134,6 +134,153 @@ function DayOrdersPanelHeader({
   );
 }
 
+type MobileSheetPhase = 'closed' | 'peek' | 'expanded';
+
+function MobileDayOrdersSheet({
+  phase,
+  selectedDayLabel,
+  orders,
+  onClose,
+  onExpand,
+  onCollapse,
+  onNewOrder,
+  onSelectOrder,
+}: {
+  phase: MobileSheetPhase;
+  selectedDayLabel: string;
+  orders: FlowerOrder[];
+  onClose: () => void;
+  onExpand: () => void;
+  onCollapse: () => void;
+  onNewOrder: () => void;
+  onSelectOrder: (order: FlowerOrder) => void;
+}) {
+  const dragStartY = useRef<number | null>(null);
+
+  if (phase === 'closed') {
+    return null;
+  }
+
+  const isExpanded = phase === 'expanded';
+  const previewNames = orders
+    .slice(0, 2)
+    .map((order) => order.receiver)
+    .join(' · ');
+  const remainingCount = Math.max(0, orders.length - 2);
+
+  function handleTouchStart(event: React.TouchEvent) {
+    dragStartY.current = event.touches[0]?.clientY ?? null;
+  }
+
+  function handleTouchEnd(event: React.TouchEvent) {
+    if (dragStartY.current === null) {
+      return;
+    }
+
+    const endY = event.changedTouches[0]?.clientY ?? dragStartY.current;
+    const delta = dragStartY.current - endY;
+    dragStartY.current = null;
+
+    if (delta > 48) {
+      onExpand();
+      return;
+    }
+
+    if (delta < -48) {
+      if (isExpanded) {
+        onCollapse();
+      } else {
+        onClose();
+      }
+    }
+  }
+
+  function handleBackdropClick() {
+    if (isExpanded) {
+      onCollapse();
+      return;
+    }
+
+    onClose();
+  }
+
+  return (
+    <div className="fixed inset-0 z-[90] lg:hidden">
+      <button
+        type="button"
+        aria-label="Close day preview"
+        className={`absolute inset-0 transition-colors duration-300 ${
+          isExpanded ? 'bg-brand-dark/45' : 'bg-brand-dark/20'
+        }`}
+        onClick={handleBackdropClick}
+      />
+
+      <div
+        className={`absolute inset-x-0 bottom-0 flex flex-col overflow-hidden rounded-t-[1.35rem] border-t border-brand-muted/30 bg-white shadow-[0_-8px_32px_rgba(62,39,35,0.14)] transition-[max-height] duration-300 ease-out ${
+          isExpanded
+            ? 'max-h-[min(78dvh,640px)]'
+            : 'max-h-[10.5rem] pb-[calc(0.5rem+env(safe-area-inset-bottom))]'
+        }`}
+      >
+        <button
+          type="button"
+          aria-label={isExpanded ? 'Swipe down to minimize' : 'Swipe up to view all orders'}
+          className="flex w-full shrink-0 flex-col items-center px-4 pt-3 pb-2 touch-pan-y"
+          onClick={() => (isExpanded ? onCollapse() : onExpand())}
+          onTouchStart={handleTouchStart}
+          onTouchEnd={handleTouchEnd}
+        >
+          <div className="h-1.5 w-14 rounded-full bg-brand-muted/80 shadow-[inset_0_1px_2px_rgba(62,39,35,0.12)]" />
+          <div className="mt-2 flex items-center gap-1 text-[11px] font-medium text-brand-brown/55">
+            <ChevronUp
+              className={`h-3.5 w-3.5 transition-transform duration-300 ${isExpanded ? 'rotate-180' : ''}`}
+            />
+            {isExpanded ? 'Swipe down to minimize' : 'Swipe up to view orders'}
+          </div>
+        </button>
+
+        {isExpanded ? (
+          <>
+            <DayOrdersPanelHeader
+              selectedDayLabel={selectedDayLabel}
+              orderCount={orders.length}
+              onClose={onClose}
+              onNewOrder={onNewOrder}
+            />
+            <div className="flower-scroll min-h-0 flex-1 overflow-y-auto pb-[calc(4.5rem+env(safe-area-inset-bottom))]">
+              <DayOrderList orders={orders} onSelectOrder={onSelectOrder} />
+            </div>
+          </>
+        ) : (
+          <button
+            type="button"
+            className="px-4 pb-3 text-left"
+            onClick={onExpand}
+          >
+            <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-brand-accent">
+              Selected date
+            </p>
+            <p className="mt-0.5 font-serif text-base font-semibold leading-snug text-brand-dark">
+              {selectedDayLabel}
+            </p>
+            <p className="mt-1 text-sm font-semibold text-brand-brown">
+              {orders.length === 0
+                ? 'No orders yet — swipe up to add one'
+                : `${orders.length} order${orders.length === 1 ? '' : 's'} scheduled`}
+            </p>
+            {orders.length > 0 ? (
+              <p className="mt-1 truncate text-xs text-brand-brown/65">
+                {previewNames}
+                {remainingCount > 0 ? ` · +${remainingCount} more` : ''}
+              </p>
+            ) : null}
+          </button>
+        )}
+      </div>
+    </div>
+  );
+}
+
 export default function FlowerOrdersPage() {
   const { user } = useFlowerAuth();
   const [viewMode, setViewMode] = useState<ViewMode>(() => {
@@ -154,6 +301,7 @@ export default function FlowerOrdersPage() {
   const [initialPickupIso, setInitialPickupIso] = useState<string | undefined>();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [selectedDateKey, setSelectedDateKey] = useState<string | null>(null);
+  const [mobileSheetPhase, setMobileSheetPhase] = useState<MobileSheetPhase>('closed');
 
   useEffect(() => {
     window.localStorage.setItem('pp_orders_view', viewMode);
@@ -201,6 +349,20 @@ export default function FlowerOrdersPage() {
 
   function selectCalendarDate(date: Date) {
     setSelectedDateKey(toDateKey(date));
+    setMobileSheetPhase('peek');
+  }
+
+  function closeDaySheet() {
+    setSelectedDateKey(null);
+    setMobileSheetPhase('closed');
+  }
+
+  function expandMobileDaySheet() {
+    setMobileSheetPhase('expanded');
+  }
+
+  function collapseMobileDaySheet() {
+    setMobileSheetPhase('peek');
   }
 
   function openNewOrderForSelectedDate() {
@@ -430,32 +592,22 @@ export default function FlowerOrdersPage() {
                 <DayOrdersPanelHeader
                   selectedDayLabel={selectedDayLabel}
                   orderCount={selectedDayOrders.length}
-                  onClose={() => setSelectedDateKey(null)}
+                  onClose={closeDaySheet}
                   onNewOrder={openNewOrderForSelectedDate}
                 />
                 <DayOrderList orders={selectedDayOrders} onSelectOrder={openExistingOrder} />
               </div>
 
-              <div className="fixed inset-0 z-[90] lg:hidden">
-                <button
-                  type="button"
-                  aria-label="Close day orders"
-                  className="absolute inset-0 bg-brand-dark/45"
-                  onClick={() => setSelectedDateKey(null)}
-                />
-                <div className="absolute inset-x-0 bottom-0 flex max-h-[min(78dvh,640px)] flex-col rounded-t-2xl border-t border-brand-muted/40 bg-white shadow-[0_-12px_40px_rgba(62,39,35,0.18)]">
-                  <div className="mx-auto mt-2 h-1 w-10 shrink-0 rounded-full bg-brand-muted/80" />
-                  <DayOrdersPanelHeader
-                    selectedDayLabel={selectedDayLabel}
-                    orderCount={selectedDayOrders.length}
-                    onClose={() => setSelectedDateKey(null)}
-                    onNewOrder={openNewOrderForSelectedDate}
-                  />
-                  <div className="flower-scroll min-h-0 flex-1 overflow-y-auto pb-[calc(4.5rem+env(safe-area-inset-bottom))]">
-                    <DayOrderList orders={selectedDayOrders} onSelectOrder={openExistingOrder} />
-                  </div>
-                </div>
-              </div>
+              <MobileDayOrdersSheet
+                phase={mobileSheetPhase}
+                selectedDayLabel={selectedDayLabel}
+                orders={selectedDayOrders}
+                onClose={closeDaySheet}
+                onExpand={expandMobileDaySheet}
+                onCollapse={collapseMobileDaySheet}
+                onNewOrder={openNewOrderForSelectedDate}
+                onSelectOrder={openExistingOrder}
+              />
             </>
           ) : (
             <p className="mt-4 text-center text-sm text-brand-brown/60">
