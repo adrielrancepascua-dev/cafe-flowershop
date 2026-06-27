@@ -257,15 +257,26 @@ export default function FlowerOrdersPage() {
               }
 
               const dayOrders = ordersByDate.get(cell.key) ?? [];
+              const hasOrders = dayOrders.length > 0;
 
               return (
                 <button
                   key={cell.key}
                   type="button"
                   onClick={() => openNewOrderForDate(cell.date as Date)}
-                  className="min-h-[88px] rounded-xl border border-brand-muted/40 bg-white p-1.5 text-left transition hover:border-brand-accent hover:bg-brand-beige/20"
+                  className={`min-h-[88px] rounded-xl border p-1.5 text-left transition hover:border-brand-accent ${
+                    hasOrders
+                      ? 'border-brand-brown/50 bg-brand-beige/50 hover:bg-brand-beige/70'
+                      : 'border-brand-muted/40 bg-white hover:bg-brand-beige/20'
+                  }`}
                 >
-                  <span className="text-xs font-semibold text-brand-dark">{cell.date.getDate()}</span>
+                  <span
+                    className={`inline-flex min-w-[1.25rem] items-center justify-center rounded-full text-xs font-semibold ${
+                      hasOrders ? 'bg-brand-brown px-1.5 text-white' : 'text-brand-dark'
+                    }`}
+                  >
+                    {cell.date.getDate()}
+                  </span>
                   <div className="mt-1 space-y-1">
                     {dayOrders.slice(0, 2).map((order) => (
                       <span
@@ -274,13 +285,13 @@ export default function FlowerOrdersPage() {
                           event.stopPropagation();
                           openExistingOrder(order);
                         }}
-                        className="block truncate rounded-md bg-brand-brown/10 px-1 py-0.5 text-[10px] font-medium text-brand-brown"
+                        className="block truncate rounded-md bg-brand-brown px-1.5 py-0.5 text-[10px] font-semibold text-white shadow-sm"
                       >
                         {order.receiver}
                       </span>
                     ))}
                     {dayOrders.length > 2 ? (
-                      <span className="block text-[10px] text-brand-brown/60">
+                      <span className="block text-[10px] font-medium text-brand-brown">
                         +{dayOrders.length - 2} more
                       </span>
                     ) : null}

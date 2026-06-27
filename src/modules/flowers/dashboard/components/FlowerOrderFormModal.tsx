@@ -88,6 +88,8 @@ export default function FlowerOrderFormModal({
     emptyForm(initialPickupIso ?? new Date().toISOString(), staffId, staffName),
   );
   const [lineDrafts, setLineDrafts] = useState<LineDraft[]>([createLineDraft()]);
+  const [downpaymentDraft, setDownpaymentDraft] = useState('');
+  const [totalAmountDraft, setTotalAmountDraft] = useState('');
   const [errorMessage, setErrorMessage] = useState('');
 
   useEffect(() => {
@@ -125,18 +127,27 @@ export default function FlowerOrderFormModal({
             }))
           : [createLineDraft()],
       );
+      setDownpaymentDraft(String(existingOrder.downpayment));
+      setTotalAmountDraft(String(existingOrder.total_amount));
       return;
     }
 
     setForm(emptyForm(initialPickupIso ?? new Date().toISOString(), staffId, staffName));
     setLineDrafts([createLineDraft()]);
+    setDownpaymentDraft('');
+    setTotalAmountDraft('');
     setErrorMessage('');
   }, [open, existingOrder, initialPickupIso, staffId, staffName]);
 
-  const balance = useMemo(
-    () => Math.max(0, form.total_amount - form.downpayment),
-    [form.total_amount, form.downpayment],
-  );
+  const balance = useMemo(() => {
+    const total = totalAmountDraft === '' ? 0 : Number(totalAmountDraft);
+    const downpayment = downpaymentDraft === '' ? 0 : Number(downpaymentDraft);
+    if (!Number.isFinite(total) || !Number.isFinite(downpayment)) {
+      return 0;
+    }
+
+    return Math.max(0, total - downpayment);
+  }, [totalAmountDraft, downpaymentDraft]);
 
   const activeProducts = useMemo(
     () => products.filter((product) => product.is_active),
@@ -230,23 +241,31 @@ export default function FlowerOrderFormModal({
       return null;
     }
 
-    if (!Number.isFinite(form.total_amount) || form.total_amount <= 0) {
+    if (downpaymentDraft.trim() === '') {
+      setErrorMessage('Downpayment is required (use 0 if none).');
+      return null;
+    }
+
+    const downpayment = Number(downpaymentDraft);
+    const total_amount = Number(totalAmountDraft);
+
+    if (!Number.isFinite(total_amount) || total_amount <= 0) {
       setErrorMessage('Total amount must be greater than 0.');
       return null;
     }
 
-    if (!Number.isFinite(form.downpayment) || form.downpayment < 0) {
+    if (!Number.isFinite(downpayment) || downpayment < 0) {
       setErrorMessage('Downpayment must be 0 or greater.');
       return null;
     }
 
-    if (form.downpayment > form.total_amount) {
+    if (downpayment > total_amount) {
       setErrorMessage('Downpayment cannot exceed total amount.');
       return null;
     }
 
     setErrorMessage('');
-    return { ...form, items };
+    return { ...form, downpayment, total_amount, items };
   }
 
   async function handleSubmit(event: React.FormEvent) {
@@ -467,11 +486,11 @@ export default function FlowerOrderFormModal({
             <label className="block text-sm font-medium text-brand-brown">
               Downpayment
               <input
-                type="number"
-                min="0"
-                step="0.01"
-                value={form.downpayment}
-                onChange={(event) => updateField('downpayment', Number(event.target.value))}
+                type="text"
+                inputMode="decimal"
+                value={downpaymentDraft}
+                onChange={(event) => setDownpaymentDraft(event.target.value.replace(/[^\d.]/g, ''))}
+                placeholder="0.00"
                 className="flower-input mt-1.5"
                 required
               />
@@ -479,11 +498,11 @@ export default function FlowerOrderFormModal({
             <label className="block text-sm font-medium text-brand-brown">
               Total amount
               <input
-                type="number"
-                min="0"
-                step="0.01"
-                value={form.total_amount}
-                onChange={(event) => updateField('total_amount', Number(event.target.value))}
+                type="text"
+                inputMode="decimal"
+                value={totalAmountDraft}
+                onChange={(event) => setTotalAmountDraft(event.target.value.replace(/[^\d.]/g, ''))}
+                placeholder="0.00"
                 className="flower-input mt-1.5"
                 required
               />

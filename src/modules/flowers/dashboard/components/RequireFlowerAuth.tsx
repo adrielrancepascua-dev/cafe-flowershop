@@ -21,7 +21,13 @@ export default function RequireFlowerAuth({ children }: { children: ReactNode })
   return children;
 }
 
-export function RequireFlowerAdmin({ children }: { children: ReactNode }) {
+export function RequireFlowerAdmin({
+  children,
+  silent = false,
+}: {
+  children: ReactNode;
+  silent?: boolean;
+}) {
   const { isAdmin, isLoading } = useFlowerAuth();
 
   if (isLoading) {
@@ -29,6 +35,10 @@ export function RequireFlowerAdmin({ children }: { children: ReactNode }) {
   }
 
   if (!isAdmin) {
+    if (silent) {
+      return null;
+    }
+
     return (
       <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
         Admin access required for this section.

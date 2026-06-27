@@ -99,7 +99,7 @@ export default function FlowerProductsPage() {
                 <th className="px-3 py-2">Name</th>
                 <th className="px-3 py-2">Unit cost</th>
                 <th className="px-3 py-2">Status</th>
-                <RequireFlowerAdmin>
+                <RequireFlowerAdmin silent>
                   <th className="px-3 py-2">Actions</th>
                 </RequireFlowerAdmin>
               </tr>
@@ -148,7 +148,7 @@ function ProductRow({
           {product.is_active ? 'Active' : 'Inactive'}
         </span>
       </td>
-      <RequireFlowerAdmin>
+      <RequireFlowerAdmin silent>
         <td className="px-3 py-2">
           <div className="flex flex-wrap gap-2">
             <button type="button" className="flower-btn-secondary px-3 py-1.5 text-xs" onClick={() => void save()}>

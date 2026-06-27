@@ -7,12 +7,91 @@ import {
   transferFlowerInventory,
 } from '../../../../services/flowers/inventory';
 import { listFlowerProducts } from '../../../../services/flowers/products';
+import { useFlowerAuth } from '../../../../lib/auth/FlowerAuthContext';
 import type { FlowerBranchOption, FlowerInventoryMovementRow, FlowerInventoryStockRow } from '../../shared/types/flower-inventory';
 import type { FlowerProduct } from '../../shared/types/flower-product';
 import FlowerPageHeader from '../../shared/components/FlowerPageHeader';
 import { RequireFlowerAdmin } from '../components/RequireFlowerAuth';
+import { Minus, Plus } from 'lucide-react';
+
+function StockAdjustControls({
+  branchId,
+  productId,
+  onAdjust,
+}: {
+  branchId: string;
+  productId: string;
+  onAdjust: (
+    branchId: string,
+    productId: string,
+    movementType: 'stock_in' | 'stock_out',
+    quantity: number,
+  ) => Promise<void>;
+}) {
+  const [quantity, setQuantity] = useState('1');
+
+  function bump(delta: number) {
+    const current = Number(quantity);
+    const next = Number.isFinite(current) ? current + delta : 1;
+    setQuantity(String(Math.max(1, next)));
+  }
+
+  async function apply(movementType: 'stock_in' | 'stock_out') {
+    const parsed = Number(quantity);
+    if (!Number.isFinite(parsed) || parsed <= 0) {
+      return;
+    }
+
+    await onAdjust(branchId, productId, movementType, parsed);
+  }
+
+  return (
+    <div className="flex flex-wrap items-center gap-1.5">
+      <div className="inline-flex items-center rounded-xl border border-brand-muted/70 bg-white">
+        <button
+          type="button"
+          aria-label="Decrease quantity"
+          className="flex h-9 w-9 items-center justify-center text-brand-brown hover:bg-brand-beige/60"
+          onClick={() => bump(-1)}
+        >
+          <Minus className="h-4 w-4" />
+        </button>
+        <input
+          type="text"
+          inputMode="numeric"
+          value={quantity}
+          onChange={(event) => setQuantity(event.target.value.replace(/[^\d]/g, ''))}
+          className="h-9 w-12 border-x border-brand-muted/70 bg-transparent text-center text-sm font-semibold text-brand-dark outline-none"
+        />
+        <button
+          type="button"
+          aria-label="Increase quantity"
+          className="flex h-9 w-9 items-center justify-center text-brand-brown hover:bg-brand-beige/60"
+          onClick={() => bump(1)}
+        >
+          <Plus className="h-4 w-4" />
+        </button>
+      </div>
+      <button
+        type="button"
+        className="flower-btn-secondary px-2 py-1.5 text-xs"
+        onClick={() => void apply('stock_in')}
+      >
+        Stock in
+      </button>
+      <button
+        type="button"
+        className="flower-btn-secondary px-2 py-1.5 text-xs"
+        onClick={() => void apply('stock_out')}
+      >
+        Stock out
+      </button>
+    </div>
+  );
+}
 
 export default function FlowerInventoryPage() {
+  const { isAdmin } = useFlowerAuth();
   const [branches, setBranches] = useState<FlowerBranchOption[]>([]);
   const [products, setProducts] = useState<FlowerProduct[]>([]);
   const [selectedBranchId, setSelectedBranchId] = useState('all');
@@ -98,7 +177,11 @@ export default function FlowerInventoryPage() {
       <FlowerPageHeader
         label="Inventory"
         title="Branch Stock"
-        description="Staff can view stock levels. Stock in/out and transfers are admin-only. Stock deducts when orders are marked completed."
+        description={
+          isAdmin
+            ? 'Adjust stock with custom quantities. Stock deducts when orders are marked completed.'
+            : 'View-only stock levels for your branches.'
+        }
       />
 
       <div className="mt-4">
@@ -130,9 +213,7 @@ export default function FlowerInventoryPage() {
                   <th className="px-3 py-2">Branch</th>
                   <th className="px-3 py-2">Flower</th>
                   <th className="px-3 py-2">On hand</th>
-                  <RequireFlowerAdmin>
-                    <th className="px-3 py-2">Admin actions</th>
-                  </RequireFlowerAdmin>
+                  {isAdmin ? <th className="px-3 py-2">Adjust stock</th> : null}
                 </tr>
               </thead>
               <tbody>
@@ -141,30 +222,15 @@ export default function FlowerInventoryPage() {
                     <td className="px-3 py-2">{row.branch_name}</td>
                     <td className="px-3 py-2">{row.product_name}</td>
                     <td className="px-3 py-2 font-semibold">{row.on_hand}</td>
-                    <RequireFlowerAdmin>
+                    {isAdmin ? (
                       <td className="px-3 py-2">
-                        <div className="flex gap-2">
-                          <button
-                            type="button"
-                            className="flower-btn-secondary px-2 py-1 text-xs"
-                            onClick={() =>
-                              void handleAdjust(row.branch_id, row.product_id, 'stock_in', 10)
-                            }
-                          >
-                            +10 in
-                          </button>
-                          <button
-                            type="button"
-                            className="flower-btn-secondary px-2 py-1 text-xs"
-                            onClick={() =>
-                              void handleAdjust(row.branch_id, row.product_id, 'stock_out', 1)
-                            }
-                          >
-                            -1 out
-                          </button>
-                        </div>
+                        <StockAdjustControls
+                          branchId={row.branch_id}
+                          productId={row.product_id}
+                          onAdjust={handleAdjust}
+                        />
                       </td>
-                    </RequireFlowerAdmin>
+                    ) : null}
                   </tr>
                 ))}
               </tbody>
@@ -193,7 +259,7 @@ export default function FlowerInventoryPage() {
                     <option key={p.id} value={p.id}>{p.name}</option>
                   ))}
                 </select>
-                <input type="number" min="1" value={transferQty} onChange={(e) => setTransferQty(e.target.value)} className="flower-input" required />
+                <input type="text" inputMode="numeric" value={transferQty} onChange={(e) => setTransferQty(e.target.value.replace(/[^\d]/g, ''))} className="flower-input" required />
                 <button type="submit" className="flower-btn-primary">Transfer</button>
               </div>
             </form>
