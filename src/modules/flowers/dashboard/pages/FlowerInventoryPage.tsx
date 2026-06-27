@@ -14,6 +14,30 @@ import FlowerPageHeader from '../../shared/components/FlowerPageHeader';
 import { RequireFlowerAdmin } from '../components/RequireFlowerAuth';
 import { Minus, Plus } from 'lucide-react';
 
+function aggregateStockByProduct(rows: FlowerInventoryStockRow[]): FlowerInventoryStockRow[] {
+  const totals = new Map<string, FlowerInventoryStockRow>();
+
+  for (const row of rows) {
+    const existing = totals.get(row.product_id);
+    if (existing) {
+      existing.on_hand += row.on_hand;
+      continue;
+    }
+
+    totals.set(row.product_id, {
+      ...row,
+      branch_id: 'all',
+      branch_name: 'All branches',
+      on_hand: row.on_hand,
+      last_updated: null,
+    });
+  }
+
+  return [...totals.values()].sort((left, right) =>
+    left.product_name.localeCompare(right.product_name),
+  );
+}
+
 function StockAdjustControls({
   branchId,
   productId,
@@ -182,7 +206,23 @@ export default function FlowerInventoryPage() {
     void loadData();
   }, [selectedBranchId]);
 
-  const filteredStock = useMemo(() => stockRows, [stockRows]);
+  const isAllBranchesView = selectedBranchId === 'all';
+
+  const displayStock = useMemo(() => {
+    if (!isAllBranchesView) {
+      return stockRows;
+    }
+
+    return aggregateStockByProduct(stockRows);
+  }, [isAllBranchesView, stockRows]);
+
+  const totalUnitsOnHand = useMemo(
+    () => displayStock.reduce((sum, row) => sum + row.on_hand, 0),
+    [displayStock],
+  );
+
+  const selectedBranchName =
+    branches.find((branch) => branch.id === selectedBranchId)?.name ?? 'All branches';
 
   async function handleAdjust(
     branchId: string,
@@ -238,8 +278,12 @@ export default function FlowerInventoryPage() {
         title="Branch Stock"
         description={
           isAdmin
-            ? 'Adjust stock with custom quantities. Stock deducts when orders are marked completed.'
-            : 'View-only stock levels for your branches.'
+            ? isAllBranchesView
+              ? 'Totals across Dagupan, San Carlos, and Urdaneta. Select a branch to adjust stock.'
+              : 'Adjust stock with custom quantities. Stock deducts when orders are marked completed.'
+            : isAllBranchesView
+              ? 'Combined stock totals across all branches.'
+              : 'View-only stock levels for this branch.'
         }
       />
 
@@ -256,6 +300,11 @@ export default function FlowerInventoryPage() {
             </option>
           ))}
         </select>
+        <p className="mt-2 text-sm text-brand-brown/70">
+          {isAllBranchesView
+            ? `Showing combined totals for all branches (${totalUnitsOnHand} units on hand).`
+            : `Showing stock for ${selectedBranchName} (${totalUnitsOnHand} units on hand).`}
+        </p>
       </div>
 
       {message ? <p className="mt-3 text-sm text-emerald-700">{message}</p> : null}
@@ -266,19 +315,26 @@ export default function FlowerInventoryPage() {
       ) : (
         <>
           <div className="mt-5 space-y-3 md:hidden">
-            {filteredStock.map((row) => (
-              <div key={`${row.branch_id}-${row.product_id}-card`} className="flower-card p-4">
+            {displayStock.map((row) => (
+              <div
+                key={isAllBranchesView ? row.product_id : `${row.branch_id}-${row.product_id}-card`}
+                className="flower-card p-4"
+              >
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0 flex-1">
                     <p className="font-semibold text-brand-dark">{row.product_name}</p>
-                    <p className="mt-0.5 text-xs text-brand-brown/70">{row.branch_name}</p>
+                    <p className="mt-0.5 text-xs text-brand-brown/70">
+                      {isAllBranchesView ? 'All branches total' : row.branch_name}
+                    </p>
                   </div>
                   <div className="shrink-0 text-right">
-                    <p className="text-xs font-medium uppercase tracking-wide text-brand-brown/60">On hand</p>
+                    <p className="text-xs font-medium uppercase tracking-wide text-brand-brown/60">
+                      {isAllBranchesView ? 'Total on hand' : 'On hand'}
+                    </p>
                     <p className="text-2xl font-bold leading-tight text-brand-dark">{row.on_hand}</p>
                   </div>
                 </div>
-                {isAdmin ? (
+                {isAdmin && !isAllBranchesView ? (
                   <div className="mt-4 border-t border-brand-muted/30 pt-4">
                     <StockAdjustControls
                       branchId={row.branch_id}
@@ -295,19 +351,26 @@ export default function FlowerInventoryPage() {
             <table className="min-w-full text-left text-sm">
               <thead className="bg-brand-beige/40 text-brand-brown">
                 <tr>
-                  <th className="px-3 py-2">Branch</th>
+                  {isAllBranchesView ? null : <th className="px-3 py-2">Branch</th>}
                   <th className="min-w-[10rem] px-3 py-2">Flower</th>
-                  <th className="px-3 py-2">On hand</th>
-                  {isAdmin ? <th className="min-w-[16rem] px-3 py-2">Adjust stock</th> : null}
+                  <th className="px-3 py-2">{isAllBranchesView ? 'Total on hand' : 'On hand'}</th>
+                  {isAdmin && !isAllBranchesView ? (
+                    <th className="min-w-[16rem] px-3 py-2">Adjust stock</th>
+                  ) : null}
                 </tr>
               </thead>
               <tbody>
-                {filteredStock.map((row) => (
-                  <tr key={`${row.branch_id}-${row.product_id}`} className="border-t border-brand-muted/30">
-                    <td className="px-3 py-2 whitespace-nowrap">{row.branch_name}</td>
+                {displayStock.map((row) => (
+                  <tr
+                    key={isAllBranchesView ? row.product_id : `${row.branch_id}-${row.product_id}`}
+                    className="border-t border-brand-muted/30"
+                  >
+                    {isAllBranchesView ? null : (
+                      <td className="px-3 py-2 whitespace-nowrap">{row.branch_name}</td>
+                    )}
                     <td className="min-w-[10rem] px-3 py-2">{row.product_name}</td>
                     <td className="px-3 py-2 font-semibold">{row.on_hand}</td>
-                    {isAdmin ? (
+                    {isAdmin && !isAllBranchesView ? (
                       <td className="min-w-[16rem] px-3 py-2">
                         <StockAdjustControls
                           branchId={row.branch_id}
@@ -322,6 +385,12 @@ export default function FlowerInventoryPage() {
               </tbody>
             </table>
           </div>
+
+          {isAdmin && isAllBranchesView ? (
+            <p className="mt-3 text-sm text-brand-brown/60">
+              Select a specific branch above to stock in, stock out, or transfer between branches.
+            </p>
+          ) : null}
 
           <RequireFlowerAdmin>
             <form onSubmit={handleTransfer} className="mt-6 rounded-2xl border border-brand-muted/40 bg-brand-cream/20 p-4">
