@@ -67,6 +67,7 @@ export default function FlowerOrdersPage() {
   const [selectedOrder, setSelectedOrder] = useState<FlowerOrder | null>(null);
   const [initialPickupIso, setInitialPickupIso] = useState<string | undefined>();
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [selectedDateKey, setSelectedDateKey] = useState<string | null>(null);
 
   useEffect(() => {
     window.localStorage.setItem('pp_orders_view', viewMode);
@@ -111,6 +112,20 @@ export default function FlowerOrdersPage() {
     () => getMonthMatrix(cursorMonth.getFullYear(), cursorMonth.getMonth()),
     [cursorMonth],
   );
+
+  function selectCalendarDate(date: Date) {
+    setSelectedDateKey(toDateKey(date));
+  }
+
+  function openNewOrderForSelectedDate() {
+    if (!selectedDateKey) {
+      openNewOrderForDate(new Date());
+      return;
+    }
+
+    const [year, month, day] = selectedDateKey.split('-').map(Number);
+    openNewOrderForDate(new Date(year, month - 1, day));
+  }
 
   function openNewOrderForDate(date: Date) {
     const pickup = new Date(date);
@@ -162,12 +177,31 @@ export default function FlowerOrdersPage() {
     year: 'numeric',
   });
 
+  const selectedDayOrders = useMemo(() => {
+    if (!selectedDateKey) {
+      return [];
+    }
+
+    return [...(ordersByDate.get(selectedDateKey) ?? [])].sort(
+      (left, right) =>
+        new Date(left.scheduled_for).getTime() - new Date(right.scheduled_for).getTime(),
+    );
+  }, [selectedDateKey, ordersByDate]);
+  const selectedDayLabel = selectedDateKey
+    ? new Date(`${selectedDateKey}T12:00:00`).toLocaleDateString('en-PH', {
+        weekday: 'long',
+        month: 'long',
+        day: 'numeric',
+        year: 'numeric',
+      })
+    : '';
+
   return (
     <div className="animate-fade-in">
       <FlowerPageHeader
         label="Daily Orders"
         title="Orders"
-        description="Calendar-first scheduling with list view. Click a date to encode an order — all fields required."
+        description="Calendar-first scheduling with list view. Tap a date to see that day's orders, then open one or add new."
       />
 
       <div className="mt-4 flex flex-wrap items-center gap-2">
@@ -258,41 +292,32 @@ export default function FlowerOrdersPage() {
 
               const dayOrders = ordersByDate.get(cell.key) ?? [];
               const hasOrders = dayOrders.length > 0;
+              const isSelected = selectedDateKey === cell.key;
 
               return (
                 <button
                   key={cell.key}
                   type="button"
-                  onClick={() => openNewOrderForDate(cell.date as Date)}
-                  className={`min-h-[88px] rounded-xl border p-1.5 text-left transition hover:border-brand-accent ${
-                    hasOrders
-                      ? 'border-brand-brown/50 bg-brand-beige/50 hover:bg-brand-beige/70'
-                      : 'border-brand-muted/40 bg-white hover:bg-brand-beige/20'
+                  onClick={() => selectCalendarDate(cell.date as Date)}
+                  className={`min-h-[72px] rounded-xl border p-1.5 text-left transition sm:min-h-[88px] ${
+                    isSelected
+                      ? 'border-brand-brown bg-brand-beige ring-2 ring-brand-brown/30'
+                      : hasOrders
+                        ? 'border-brand-brown/50 bg-brand-beige/50 hover:border-brand-accent hover:bg-brand-beige/70'
+                        : 'border-brand-muted/40 bg-white hover:border-brand-accent hover:bg-brand-beige/20'
                   }`}
                 >
-                  <span
-                    className={`inline-flex min-w-[1.25rem] items-center justify-center rounded-full text-xs font-semibold ${
-                      hasOrders ? 'bg-brand-brown px-1.5 text-white' : 'text-brand-dark'
-                    }`}
-                  >
-                    {cell.date.getDate()}
-                  </span>
-                  <div className="mt-1 space-y-1">
-                    {dayOrders.slice(0, 2).map((order) => (
-                      <span
-                        key={order.id}
-                        onClick={(event) => {
-                          event.stopPropagation();
-                          openExistingOrder(order);
-                        }}
-                        className="block truncate rounded-md bg-brand-brown px-1.5 py-0.5 text-[10px] font-semibold text-white shadow-sm"
-                      >
-                        {order.receiver}
-                      </span>
-                    ))}
-                    {dayOrders.length > 2 ? (
-                      <span className="block text-[10px] font-medium text-brand-brown">
-                        +{dayOrders.length - 2} more
+                  <div className="flex items-start justify-between gap-1">
+                    <span
+                      className={`inline-flex min-w-[1.25rem] items-center justify-center rounded-full text-xs font-semibold ${
+                        hasOrders || isSelected ? 'bg-brand-brown px-1.5 text-white' : 'text-brand-dark'
+                      }`}
+                    >
+                      {cell.date.getDate()}
+                    </span>
+                    {hasOrders ? (
+                      <span className="rounded-full bg-brand-brown/15 px-1.5 py-0.5 text-[10px] font-semibold text-brand-brown">
+                        {dayOrders.length}
                       </span>
                     ) : null}
                   </div>
@@ -300,6 +325,80 @@ export default function FlowerOrdersPage() {
               );
             })}
           </div>
+
+          {selectedDateKey ? (
+            <div className="mt-5 rounded-2xl border border-brand-muted/40 bg-white">
+              <div className="flex flex-wrap items-start justify-between gap-3 border-b border-brand-muted/30 px-4 py-3">
+                <div>
+                  <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-brand-accent">
+                    Selected date
+                  </p>
+                  <h3 className="font-serif text-lg font-semibold text-brand-dark">{selectedDayLabel}</h3>
+                  <p className="mt-0.5 text-sm text-brand-brown/70">
+                    {selectedDayOrders.length === 0
+                      ? 'No orders scheduled for this day.'
+                      : `${selectedDayOrders.length} order${selectedDayOrders.length === 1 ? '' : 's'} scheduled`}
+                  </p>
+                </div>
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    className="flower-btn-secondary px-3 py-2 text-xs"
+                    onClick={() => setSelectedDateKey(null)}
+                  >
+                    Close
+                  </button>
+                  <button
+                    type="button"
+                    className="flower-btn-primary px-3 py-2 text-xs"
+                    onClick={openNewOrderForSelectedDate}
+                  >
+                    New order
+                  </button>
+                </div>
+              </div>
+
+              {selectedDayOrders.length > 0 ? (
+                <ul className="divide-y divide-brand-muted/30">
+                  {selectedDayOrders.map((order) => (
+                    <li key={order.id}>
+                      <button
+                        type="button"
+                        onClick={() => openExistingOrder(order)}
+                        className="flex w-full flex-col gap-2 px-4 py-3 text-left transition hover:bg-brand-beige/30 sm:flex-row sm:items-center sm:justify-between"
+                      >
+                        <div className="min-w-0 flex-1">
+                          <p className="font-semibold text-brand-dark">{order.receiver}</p>
+                          <p className="mt-0.5 text-sm text-brand-brown/70">
+                            {formatPickupDateTimeLocal(order.scheduled_for)} · {order.branch_name}
+                          </p>
+                          <p className="mt-1 truncate text-xs text-brand-brown/60">
+                            {summarizeFlowerLines(order.items)}
+                          </p>
+                        </div>
+                        <div className="flex shrink-0 items-center gap-3 sm:flex-col sm:items-end sm:gap-1">
+                          <span className="rounded-full bg-brand-beige px-2.5 py-1 text-xs font-semibold text-brand-brown">
+                            {ORDER_STATUS_LABELS[order.status]}
+                          </span>
+                          <span className="text-sm font-semibold text-brand-dark">
+                            {PRICE_FORMATTER.format(order.total_amount)}
+                          </span>
+                        </div>
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <div className="px-4 py-8 text-center">
+                  <p className="text-sm text-brand-brown/60">Tap &quot;New order&quot; to schedule one for this day.</p>
+                </div>
+              )}
+            </div>
+          ) : (
+            <p className="mt-4 text-center text-sm text-brand-brown/60">
+              Tap a date on the calendar to view or add orders for that day.
+            </p>
+          )}
         </div>
       ) : (
         <div className="mt-5 overflow-x-auto rounded-2xl border border-brand-muted/40">
