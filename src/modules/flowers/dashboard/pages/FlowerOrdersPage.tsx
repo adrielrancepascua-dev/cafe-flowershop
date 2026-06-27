@@ -137,6 +137,15 @@ function DayOrdersPanelHeader({
 type MobileSheetPhase = 'closed' | 'peek' | 'expanded';
 
 const MOBILE_SHEET_PEEK_HEIGHT = 168;
+const MOBILE_SHEET_MEDIA_QUERY = '(max-width: 1023px)';
+
+function isMobileSheetViewport(): boolean {
+  if (typeof window === 'undefined') {
+    return false;
+  }
+
+  return window.matchMedia(MOBILE_SHEET_MEDIA_QUERY).matches;
+}
 
 function getMobileSheetExpandedHeight(): number {
   if (typeof window === 'undefined') {
@@ -218,7 +227,7 @@ function MobileDayOrdersSheet({
   }, [phase, selectedDayLabel]);
 
   useEffect(() => {
-    if (phase === 'closed') {
+    if (phase === 'closed' || !isMobileSheetViewport()) {
       return;
     }
 
@@ -477,7 +486,7 @@ export default function FlowerOrdersPage() {
 
   function selectCalendarDate(date: Date) {
     setSelectedDateKey(toDateKey(date));
-    setMobileSheetPhase('peek');
+    setMobileSheetPhase(isMobileSheetViewport() ? 'peek' : 'closed');
   }
 
   function closeDaySheet() {
@@ -726,16 +735,18 @@ export default function FlowerOrdersPage() {
                 <DayOrderList orders={selectedDayOrders} onSelectOrder={openExistingOrder} />
               </div>
 
-              <MobileDayOrdersSheet
-                phase={mobileSheetPhase}
-                selectedDayLabel={selectedDayLabel}
-                orders={selectedDayOrders}
-                onClose={closeDaySheet}
-                onExpand={expandMobileDaySheet}
-                onCollapse={collapseMobileDaySheet}
-                onNewOrder={openNewOrderForSelectedDate}
-                onSelectOrder={openExistingOrder}
-              />
+              {mobileSheetPhase !== 'closed' ? (
+                <MobileDayOrdersSheet
+                  phase={mobileSheetPhase}
+                  selectedDayLabel={selectedDayLabel}
+                  orders={selectedDayOrders}
+                  onClose={closeDaySheet}
+                  onExpand={expandMobileDaySheet}
+                  onCollapse={collapseMobileDaySheet}
+                  onNewOrder={openNewOrderForSelectedDate}
+                  onSelectOrder={openExistingOrder}
+                />
+              ) : null}
             </>
           ) : (
             <p className="mt-4 text-center text-sm text-brand-brown/60">
