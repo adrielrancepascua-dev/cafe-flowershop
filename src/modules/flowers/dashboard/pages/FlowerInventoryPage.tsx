@@ -6,10 +6,8 @@ import {
   listFlowerInventoryStock,
   transferFlowerInventory,
 } from '../../../../services/flowers/inventory';
-import { listFlowerProducts } from '../../../../services/flowers/products';
 import { useFlowerAuth } from '../../../../lib/auth/FlowerAuthContext';
 import type { FlowerBranchOption, FlowerInventoryMovementRow, FlowerInventoryStockRow } from '../../shared/types/flower-inventory';
-import type { FlowerProduct } from '../../shared/types/flower-product';
 import FlowerPageHeader from '../../shared/components/FlowerPageHeader';
 import { RequireFlowerAdmin } from '../components/RequireFlowerAuth';
 import { Minus, Plus, ArrowLeftRight, Package } from 'lucide-react';
@@ -168,7 +166,6 @@ type InventoryTab = 'stock' | 'transfer';
 export default function FlowerInventoryPage() {
   const { isAdmin } = useFlowerAuth();
   const [branches, setBranches] = useState<FlowerBranchOption[]>([]);
-  const [products, setProducts] = useState<FlowerProduct[]>([]);
   const [selectedBranchId, setSelectedBranchId] = useState('all');
   const [stockRows, setStockRows] = useState<FlowerInventoryStockRow[]>([]);
   const [movementRows, setMovementRows] = useState<FlowerInventoryMovementRow[]>([]);
@@ -183,6 +180,8 @@ export default function FlowerInventoryPage() {
   const [transferProductId, setTransferProductId] = useState('');
   const [transferQty, setTransferQty] = useState('1');
   const [activeTab, setActiveTab] = useState<InventoryTab>('stock');
+  const [fromBranchStock, setFromBranchStock] = useState<FlowerInventoryStockRow[]>([]);
+  const [fromBranchStockLoading, setFromBranchStockLoading] = useState(false);
 
   async function loadData() {
     setLoading(true);
@@ -190,14 +189,12 @@ export default function FlowerInventoryPage() {
       const stockBranchId = selectedBranchId === 'all' ? undefined : selectedBranchId;
       const movementBranchId =
         activeTab === 'transfer' ? undefined : stockBranchId;
-      const [branchList, productList, stocks, movements] = await Promise.all([
+      const [branchList, stocks, movements] = await Promise.all([
         listFlowerBranches(),
-        listFlowerProducts(),
         listFlowerInventoryStock({ branchId: stockBranchId }),
         listFlowerInventoryMovements({ branchId: movementBranchId, limit: 30 }),
       ]);
       setBranches(branchList);
-      setProducts(productList.filter((product) => product.is_active));
       setStockRows(stocks);
       setMovementRows(movements);
     } catch (error) {
@@ -210,6 +207,21 @@ export default function FlowerInventoryPage() {
   useEffect(() => {
     void loadData();
   }, [selectedBranchId, activeTab]);
+
+  useEffect(() => {
+    if (!fromBranchId) {
+      setFromBranchStock([]);
+      setFromBranchStockLoading(false);
+      return;
+    }
+
+    setFromBranchStockLoading(true);
+    void listFlowerInventoryStock({ branchId: fromBranchId })
+      .then(setFromBranchStock)
+      .finally(() => {
+        setFromBranchStockLoading(false);
+      });
+  }, [fromBranchId]);
 
   const isAllBranchesView = selectedBranchId === 'all';
 
@@ -237,6 +249,37 @@ export default function FlowerInventoryPage() {
       ),
     [movementRows],
   );
+
+  const fromBranchName = branches.find((branch) => branch.id === fromBranchId)?.name ?? '';
+
+  const transferAvailableProducts = useMemo(
+    () =>
+      fromBranchStock
+        .filter((row) => row.product_is_active && row.on_hand > 0)
+        .sort((left, right) => left.product_name.localeCompare(right.product_name)),
+    [fromBranchStock],
+  );
+
+  const selectedTransferAvailability = useMemo(() => {
+    if (!transferProductId) {
+      return null;
+    }
+
+    return transferAvailableProducts.find((row) => row.product_id === transferProductId)?.on_hand ?? 0;
+  }, [transferAvailableProducts, transferProductId]);
+
+  function clampTransferQty(rawValue: string, maxQuantity: number): string {
+    const digits = rawValue.replace(/[^\d]/g, '');
+    if (!digits) {
+      return '';
+    }
+
+    if (maxQuantity <= 0) {
+      return '0';
+    }
+
+    return String(Math.min(maxQuantity, Math.max(1, Number(digits))));
+  }
 
   async function handleAdjust(
     branchId: string,
@@ -273,7 +316,12 @@ export default function FlowerInventoryPage() {
       setTransferMessage('Transfer completed.');
       setTransferErrorMessage('');
       setMessage('');
+      setTransferQty('1');
       await loadData();
+      if (fromBranchId) {
+        const refreshedStock = await listFlowerInventoryStock({ branchId: fromBranchId });
+        setFromBranchStock(refreshedStock);
+      }
     } catch (error) {
       setTransferErrorMessage(error instanceof Error ? error.message : 'Transfer failed.');
       setTransferMessage('');
@@ -349,6 +397,8 @@ export default function FlowerInventoryPage() {
                     value={fromBranchId}
                     onChange={(e) => {
                       setFromBranchId(e.target.value);
+                      setTransferProductId('');
+                      setTransferQty('1');
                       clearTransferFeedback();
                     }}
                     className="flower-input mt-1.5"
@@ -382,17 +432,41 @@ export default function FlowerInventoryPage() {
                   <select
                     value={transferProductId}
                     onChange={(e) => {
-                      setTransferProductId(e.target.value);
+                      const nextProductId = e.target.value;
+                      setTransferProductId(nextProductId);
+                      const maxQuantity =
+                        transferAvailableProducts.find((row) => row.product_id === nextProductId)?.on_hand ?? 0;
+                      setTransferQty((current) => clampTransferQty(current || '1', maxQuantity));
                       clearTransferFeedback();
                     }}
                     className="flower-input mt-1.5"
                     required
+                    disabled={!fromBranchId || fromBranchStockLoading}
                   >
-                    <option value="">Select flower</option>
-                    {products.map((p) => (
-                      <option key={p.id} value={p.id}>{p.name}</option>
+                    <option value="">
+                      {!fromBranchId
+                        ? 'Select source branch first'
+                        : fromBranchStockLoading
+                          ? 'Loading stock...'
+                          : transferAvailableProducts.length === 0
+                            ? 'No flowers in stock at this branch'
+                            : 'Select flower'}
+                    </option>
+                    {transferAvailableProducts.map((row) => (
+                      <option key={row.product_id} value={row.product_id}>
+                        {row.product_name} ({row.on_hand} available)
+                      </option>
                     ))}
                   </select>
+                  {transferProductId && selectedTransferAvailability !== null ? (
+                    <p className="mt-1.5 text-xs text-brand-brown/70">
+                      {selectedTransferAvailability} available at {fromBranchName}
+                    </p>
+                  ) : fromBranchId && !fromBranchStockLoading && transferAvailableProducts.length === 0 ? (
+                    <p className="mt-1.5 text-xs text-brand-brown/60">
+                      No active flowers with stock at {fromBranchName}.
+                    </p>
+                  ) : null}
                 </label>
                 <label className="block text-sm font-medium text-brand-brown">
                   Quantity
@@ -401,12 +475,19 @@ export default function FlowerInventoryPage() {
                     inputMode="numeric"
                     value={transferQty}
                     onChange={(e) => {
-                      setTransferQty(e.target.value.replace(/[^\d]/g, ''));
+                      const maxQuantity = selectedTransferAvailability ?? 0;
+                      setTransferQty(clampTransferQty(e.target.value, maxQuantity));
                       clearTransferFeedback();
                     }}
                     className="flower-input mt-1.5"
                     required
+                    disabled={!transferProductId || selectedTransferAvailability === 0}
                   />
+                  {transferProductId && selectedTransferAvailability !== null && selectedTransferAvailability > 0 ? (
+                    <p className="mt-1.5 text-xs text-brand-brown/70">
+                      Max {selectedTransferAvailability}
+                    </p>
+                  ) : null}
                 </label>
                 <div className="flex items-end sm:col-span-2 lg:col-span-2">
                   <button type="submit" className="flower-btn-primary w-full sm:w-auto">
