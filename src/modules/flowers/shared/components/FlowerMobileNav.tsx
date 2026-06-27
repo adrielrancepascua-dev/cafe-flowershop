@@ -7,8 +7,8 @@ const BASE_LINKS = [
   { label: 'Orders', to: '/dashboard/flowers/orders', icon: CalendarDays, end: false, adminOnly: false },
   { label: 'Stock', to: '/dashboard/flowers/inventory', icon: Package, end: false, adminOnly: false },
   { label: 'Expenses', to: '/dashboard/flowers/expenses', icon: Receipt, end: false, adminOnly: false },
+  { label: 'Reports', to: '/dashboard/flowers/reports', icon: BarChart3, end: false, adminOnly: false },
   { label: 'Products', to: '/dashboard/flowers/products', icon: Sprout, end: false, adminOnly: true },
-  { label: 'Reports', to: '/dashboard/flowers/reports', icon: BarChart3, end: false, adminOnly: true },
 ];
 
 export default function FlowerMobileNav() {

@@ -7,8 +7,8 @@ const FLOWER_LINKS = [
   { label: 'Orders', to: '/dashboard/flowers/orders' },
   { label: 'Inventory', to: '/dashboard/flowers/inventory' },
   { label: 'Expenses', to: '/dashboard/flowers/expenses' },
+  { label: 'Reports', to: '/dashboard/flowers/reports' },
   { label: 'Products', to: '/dashboard/flowers/products', adminOnly: true },
-  { label: 'Reports', to: '/dashboard/flowers/reports', adminOnly: true },
 ];
 
 export default function DashboardLayout() {
