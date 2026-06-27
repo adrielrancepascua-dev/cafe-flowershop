@@ -451,9 +451,9 @@ export default function FlowerOrderFormModal({
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end justify-center bg-brand-dark/40 p-0 sm:items-center sm:p-4">
-      <div className="flower-card flex max-h-[92vh] w-full max-w-3xl flex-col overflow-hidden sm:max-h-[90vh]">
-        <div className="flex items-center justify-between border-b border-brand-muted/40 px-4 py-3 sm:px-6">
+    <div className="fixed inset-0 z-[100] flex items-end justify-center bg-brand-dark/40 p-0 sm:items-center sm:p-4">
+      <div className="flower-card flex h-[100dvh] max-h-[100dvh] w-full max-w-3xl flex-col overflow-hidden sm:h-auto sm:max-h-[90vh]">
+        <div className="flex shrink-0 items-center justify-between border-b border-brand-muted/40 px-4 py-3 sm:px-6">
           <div>
             <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-brand-accent">
               {existingOrder ? 'Edit order' : 'New order'}
@@ -467,7 +467,7 @@ export default function FlowerOrderFormModal({
           </button>
         </div>
 
-        <form onSubmit={handleSubmit} className="flower-scroll flex-1 overflow-y-auto px-4 py-4 sm:px-6">
+        <form onSubmit={handleSubmit} className="flower-scroll min-h-0 flex-1 overflow-y-auto px-4 py-4 sm:px-6">
           <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
             <label className="block text-sm font-medium text-brand-brown md:col-span-2">
               Date &amp; time of pick up
@@ -767,7 +767,7 @@ export default function FlowerOrderFormModal({
           ) : null}
         </form>
 
-        <div className="flex gap-2 border-t border-brand-muted/40 px-4 py-3 sm:px-6">
+        <div className="flex shrink-0 gap-2 border-t border-brand-muted/40 bg-white px-4 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:px-6">
           <button type="button" onClick={onClose} className="flower-btn-secondary flex-1">
             Cancel
           </button>
