@@ -92,6 +92,7 @@ export default function FlowerOrderFormModal({
   const [downpaymentDraft, setDownpaymentDraft] = useState('');
   const [totalAmountDraft, setTotalAmountDraft] = useState('');
   const [stockByProductId, setStockByProductId] = useState<Record<string, number>>({});
+  const [stockLoading, setStockLoading] = useState(false);
   const [statusDraft, setStatusDraft] = useState<FlowerOrderStatus>('not_started');
   const [statusMessage, setStatusMessage] = useState('');
   const [errorMessage, setErrorMessage] = useState('');
@@ -150,16 +151,22 @@ export default function FlowerOrderFormModal({
   useEffect(() => {
     if (!open || !form.branch_id) {
       setStockByProductId({});
+      setStockLoading(false);
       return;
     }
 
-    void listFlowerInventoryStock({ branchId: form.branch_id }).then((rows) => {
-      const nextStock: Record<string, number> = {};
-      for (const row of rows) {
-        nextStock[row.product_id] = row.on_hand;
-      }
-      setStockByProductId(nextStock);
-    });
+    setStockLoading(true);
+    void listFlowerInventoryStock({ branchId: form.branch_id })
+      .then((rows) => {
+        const nextStock: Record<string, number> = {};
+        for (const row of rows) {
+          nextStock[row.product_id] = row.on_hand;
+        }
+        setStockByProductId(nextStock);
+      })
+      .finally(() => {
+        setStockLoading(false);
+      });
   }, [open, form.branch_id]);
 
   const creditByProductId = useMemo(() => {
@@ -176,8 +183,12 @@ export default function FlowerOrderFormModal({
   }, [existingOrder, form.branch_id]);
 
   function getMaxQuantityForLine(rowId: string, productId: string): number {
-    if (!productId || !form.branch_id) {
+    if (!productId) {
       return 0;
+    }
+
+    if (!form.branch_id || stockLoading) {
+      return 9999;
     }
 
     const onHand = stockByProductId[productId] ?? 0;
@@ -232,7 +243,7 @@ export default function FlowerOrderFormModal({
   }
 
   useEffect(() => {
-    if (!open || !form.branch_id) {
+    if (!open || !form.branch_id || stockLoading) {
       return;
     }
 
@@ -261,7 +272,7 @@ export default function FlowerOrderFormModal({
         return { ...row, quantity: String(max) };
       }),
     );
-  }, [stockByProductId, creditByProductId, form.branch_id, open]);
+  }, [stockByProductId, creditByProductId, form.branch_id, open, stockLoading]);
 
   const balance = useMemo(() => {
     const total = totalAmountDraft === '' ? 0 : Number(totalAmountDraft);
@@ -322,6 +333,11 @@ export default function FlowerOrderFormModal({
 
     if (!form.branch_id) {
       setErrorMessage('Branch is required.');
+      return null;
+    }
+
+    if (stockLoading) {
+      setErrorMessage('Branch stock is still loading. Please wait a moment.');
       return null;
     }
 
@@ -452,7 +468,7 @@ export default function FlowerOrderFormModal({
 
   return (
     <div className="fixed inset-0 z-[100] flex items-end justify-center bg-brand-dark/40 p-0 sm:items-center sm:p-4">
-      <div className="flower-card flex h-[100dvh] max-h-[100dvh] w-full max-w-3xl flex-col overflow-hidden sm:h-auto sm:max-h-[90vh]">
+      <div className="flower-card flex h-[100dvh] max-h-[100dvh] w-full max-w-3xl min-h-0 flex-col sm:h-auto sm:max-h-[90vh]">
         <div className="flex shrink-0 items-center justify-between border-b border-brand-muted/40 px-4 py-3 sm:px-6">
           <div>
             <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-brand-accent">
@@ -600,25 +616,33 @@ export default function FlowerOrderFormModal({
               </button>
             </div>
 
+            {!form.branch_id ? (
+              <p className="mb-2 text-xs text-amber-800">
+                Select a branch above to load stock limits for each flower type.
+              </p>
+            ) : stockLoading ? (
+              <p className="mb-2 text-xs text-brand-brown/60">Loading branch stock...</p>
+            ) : null}
+
             <div className="space-y-2">
               {lineDrafts.map((row) => {
                 const maxQty = row.productId ? getMaxQuantityForLine(row.rowId, row.productId) : 0;
+                const showStockHint = Boolean(form.branch_id && !stockLoading && row.productId);
 
                 return (
                 <div key={row.rowId}>
-                  <div className="grid grid-cols-[1fr_100px_auto] gap-2">
+                  <div className="grid grid-cols-1 gap-2 sm:grid-cols-[1fr_100px_auto]">
                   <select
                     value={row.productId}
                     onChange={(event) => updateLineProduct(row.rowId, event.target.value)}
-                    className="flower-input"
+                    className="flower-input min-w-0"
                     required
-                    disabled={!form.branch_id}
                   >
                     <option value="">Flower type</option>
                     {activeProducts.map((product) => (
                       <option key={product.id} value={product.id}>
                         {product.name}
-                        {form.branch_id
+                        {form.branch_id && !stockLoading
                           ? ` (${(stockByProductId[product.id] ?? 0) + (creditByProductId[product.id] ?? 0)} avail.)`
                           : ''}
                       </option>
@@ -633,12 +657,12 @@ export default function FlowerOrderFormModal({
                     }
                     className="flower-input"
                     required
-                    disabled={!row.productId || maxQty <= 0}
+                    disabled={!row.productId || (showStockHint && maxQty <= 0)}
                     placeholder="Qty"
                   />
                   <button
                     type="button"
-                    className="flower-btn-secondary px-3"
+                    className="flower-btn-secondary px-3 sm:min-w-[5.5rem]"
                     onClick={() =>
                       setLineDrafts((rows) =>
                         rows.length === 1 ? rows : rows.filter((entry) => entry.rowId !== row.rowId),
@@ -648,7 +672,7 @@ export default function FlowerOrderFormModal({
                     Remove
                   </button>
                   </div>
-                  {row.productId ? (
+                  {showStockHint ? (
                     <p className="mt-1 text-xs text-brand-brown/70">
                       Max for this line: {maxQty}
                       {maxQty <= 0 ? ' — out of stock at this branch' : ''}
