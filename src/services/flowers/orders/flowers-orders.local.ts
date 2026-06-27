@@ -13,6 +13,7 @@ import { buildOrderId } from '../../orders/order-id';
 import {
   deductFlowerInventoryForOrderLocal,
   listFlowerBranchesLocal,
+  validateFlowerOrderStockLocal,
 } from '../inventory/flowers-inventory.local';
 
 const ORDERS_STORAGE_KEY = 'papers_petals_flower_orders_v2';
@@ -137,6 +138,8 @@ export async function createFlowerOrderLocal(input: CreateFlowerOrderInput): Pro
     throw new Error('Branch not found.');
   }
 
+  await validateFlowerOrderStockLocal(input.branch_id, input.items);
+
   const created = buildOrderFromInput(input, branch.name);
   const orders = readOrdersFromStorage();
   writeOrdersToStorage([created, ...orders]);
@@ -161,10 +164,30 @@ export async function updateFlowerOrderLocal(input: UpdateFlowerOrderInput): Pro
   }
 
   const updated = buildOrderFromInput(input, branch.name, existing);
+
+  const creditByProductId =
+    existing.inventory_deducted && existing.branch_id === input.branch_id
+      ? buildCreditFromOrderItems(existing.items)
+      : {};
+
+  await validateFlowerOrderStockLocal(input.branch_id, updated.items, creditByProductId);
+
   orders[index] = updated;
   writeOrdersToStorage(orders);
 
   return updated;
+}
+
+function buildCreditFromOrderItems(
+  items: Array<{ product_id: string; quantity: number }>,
+): Record<string, number> {
+  const credit: Record<string, number> = {};
+
+  for (const item of items) {
+    credit[item.product_id] = (credit[item.product_id] ?? 0) + item.quantity;
+  }
+
+  return credit;
 }
 
 export async function updateFlowerOrderStatusLocal(
@@ -178,21 +201,27 @@ export async function updateFlowerOrderStatusLocal(
     throw new Error('Order not found.');
   }
 
-  const order = orders[index];
-  order.status = status;
+  const current = orders[index];
 
-  if (status === 'completed' && !order.inventory_deducted) {
-    for (const item of order.items) {
+  if (status === 'completed' && !current.inventory_deducted) {
+    await validateFlowerOrderStockLocal(current.branch_id, current.items);
+
+    for (const item of current.items) {
       await deductFlowerInventoryForOrderLocal({
-        branchId: order.branch_id,
+        branchId: current.branch_id,
         productId: item.product_id,
         quantity: item.quantity,
-        orderId: order.id,
+        orderId: current.id,
       });
     }
-
-    order.inventory_deducted = true;
   }
+
+  const order: FlowerOrder = {
+    ...current,
+    status,
+    inventory_deducted: status === 'completed' ? true : current.inventory_deducted,
+    items: current.items.map((item) => ({ ...item })),
+  };
 
   orders[index] = order;
   writeOrdersToStorage(orders);

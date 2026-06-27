@@ -264,6 +264,46 @@ export async function transferFlowerInventoryLocal(
   }
 }
 
+export async function getFlowerStockLevelLocal(branchId: string, productId: string): Promise<number> {
+  const stock = readStockFromStorage();
+  return stock[branchId]?.[productId] ?? 0;
+}
+
+export async function validateFlowerOrderStockLocal(
+  branchId: string,
+  items: Array<{ product_id: string; item_name: string; quantity: number }>,
+  creditByProductId: Record<string, number> = {},
+): Promise<void> {
+  const stock = readStockFromStorage();
+  const branchStock = stock[branchId] ?? {};
+  const neededByProduct = new Map<string, { name: string; qty: number }>();
+
+  for (const item of items) {
+    const existing = neededByProduct.get(item.product_id);
+    if (existing) {
+      existing.qty += item.quantity;
+      continue;
+    }
+
+    neededByProduct.set(item.product_id, {
+      name: item.item_name,
+      qty: item.quantity,
+    });
+  }
+
+  for (const [productId, { name, qty }] of neededByProduct) {
+    const onHand = branchStock[productId] ?? 0;
+    const credit = creditByProductId[productId] ?? 0;
+    const available = onHand + credit;
+
+    if (qty > available) {
+      throw new Error(
+        `Insufficient stock for ${name}. Available: ${available}, requested: ${qty}.`,
+      );
+    }
+  }
+}
+
 /** @deprecated use deductFlowerInventoryForOrderLocal */
 export async function deductFlowerInventoryLocal(input: {
   branchId: string;

@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { X } from 'lucide-react';
+import { listFlowerInventoryStock } from '../../../../services/flowers/inventory';
 import type { FlowerProduct } from '../../shared/types/flower-product';
 import type { FlowerBranchOption } from '../../shared/types/flower-inventory';
 import type {
@@ -90,6 +91,9 @@ export default function FlowerOrderFormModal({
   const [lineDrafts, setLineDrafts] = useState<LineDraft[]>([createLineDraft()]);
   const [downpaymentDraft, setDownpaymentDraft] = useState('');
   const [totalAmountDraft, setTotalAmountDraft] = useState('');
+  const [stockByProductId, setStockByProductId] = useState<Record<string, number>>({});
+  const [statusDraft, setStatusDraft] = useState<FlowerOrderStatus>('not_started');
+  const [statusMessage, setStatusMessage] = useState('');
   const [errorMessage, setErrorMessage] = useState('');
 
   useEffect(() => {
@@ -129,6 +133,8 @@ export default function FlowerOrderFormModal({
       );
       setDownpaymentDraft(String(existingOrder.downpayment));
       setTotalAmountDraft(String(existingOrder.total_amount));
+      setStatusDraft(existingOrder.status);
+      setStatusMessage('');
       return;
     }
 
@@ -136,8 +142,126 @@ export default function FlowerOrderFormModal({
     setLineDrafts([createLineDraft()]);
     setDownpaymentDraft('');
     setTotalAmountDraft('');
+    setStatusDraft('not_started');
+    setStatusMessage('');
     setErrorMessage('');
   }, [open, existingOrder, initialPickupIso, staffId, staffName]);
+
+  useEffect(() => {
+    if (!open || !form.branch_id) {
+      setStockByProductId({});
+      return;
+    }
+
+    void listFlowerInventoryStock({ branchId: form.branch_id }).then((rows) => {
+      const nextStock: Record<string, number> = {};
+      for (const row of rows) {
+        nextStock[row.product_id] = row.on_hand;
+      }
+      setStockByProductId(nextStock);
+    });
+  }, [open, form.branch_id]);
+
+  const creditByProductId = useMemo(() => {
+    if (!existingOrder?.inventory_deducted || existingOrder.branch_id !== form.branch_id) {
+      return {};
+    }
+
+    const credit: Record<string, number> = {};
+    for (const item of existingOrder.items) {
+      credit[item.product_id] = (credit[item.product_id] ?? 0) + item.quantity;
+    }
+
+    return credit;
+  }, [existingOrder, form.branch_id]);
+
+  function getMaxQuantityForLine(rowId: string, productId: string): number {
+    if (!productId || !form.branch_id) {
+      return 0;
+    }
+
+    const onHand = stockByProductId[productId] ?? 0;
+    const credit = creditByProductId[productId] ?? 0;
+    const usedElsewhere = lineDrafts
+      .filter((row) => row.rowId !== rowId && row.productId === productId)
+      .reduce((sum, row) => sum + (Number(row.quantity) || 0), 0);
+
+    return Math.max(0, onHand + credit - usedElsewhere);
+  }
+
+  function clampQuantity(rowId: string, productId: string, rawValue: string): string {
+    const digits = rawValue.replace(/[^\d]/g, '');
+    if (!digits) {
+      return '';
+    }
+
+    const max = getMaxQuantityForLine(rowId, productId);
+    if (max <= 0) {
+      return '0';
+    }
+
+    return String(Math.min(max, Math.max(1, Number(digits))));
+  }
+
+  function updateLineProduct(rowId: string, productId: string) {
+    setLineDrafts((rows) =>
+      rows.map((entry) => {
+        if (entry.rowId !== rowId) {
+          return entry;
+        }
+
+        const nextQuantity = entry.quantity
+          ? clampQuantity(rowId, productId, entry.quantity)
+          : productId
+            ? '1'
+            : '';
+
+        return { ...entry, productId, quantity: nextQuantity };
+      }),
+    );
+  }
+
+  function updateLineQuantity(rowId: string, productId: string, rawValue: string) {
+    setLineDrafts((rows) =>
+      rows.map((entry) =>
+        entry.rowId === rowId
+          ? { ...entry, quantity: clampQuantity(rowId, productId, rawValue) }
+          : entry,
+      ),
+    );
+  }
+
+  useEffect(() => {
+    if (!open || !form.branch_id) {
+      return;
+    }
+
+    setLineDrafts((rows) =>
+      rows.map((row) => {
+        if (!row.productId) {
+          return row;
+        }
+
+        const onHand = stockByProductId[row.productId] ?? 0;
+        const credit = creditByProductId[row.productId] ?? 0;
+        const usedElsewhere = rows
+          .filter((entry) => entry.rowId !== row.rowId && entry.productId === row.productId)
+          .reduce((sum, entry) => sum + (Number(entry.quantity) || 0), 0);
+        const max = Math.max(0, onHand + credit - usedElsewhere);
+
+        if (max <= 0) {
+          return { ...row, quantity: '0' };
+        }
+
+        const current = Number(row.quantity) || 0;
+        if (current <= max) {
+          return row;
+        }
+
+        return { ...row, quantity: String(max) };
+      }),
+    );
+  }, [stockByProductId, creditByProductId, form.branch_id, open]);
 
   const balance = useMemo(() => {
     const total = totalAmountDraft === '' ? 0 : Number(totalAmountDraft);
@@ -221,6 +345,31 @@ export default function FlowerOrderFormModal({
       return null;
     }
 
+    const neededByProduct = new Map<string, { name: string; qty: number }>();
+    for (const item of items) {
+      const existingQty = neededByProduct.get(item.product_id);
+      if (existingQty) {
+        existingQty.qty += item.quantity;
+      } else {
+        neededByProduct.set(item.product_id, { name: item.item_name, qty: item.quantity });
+      }
+    }
+
+    for (const [productId, { name, qty }] of neededByProduct) {
+      const available = (stockByProductId[productId] ?? 0) + (creditByProductId[productId] ?? 0);
+      if (qty > available) {
+        setErrorMessage(
+          `Insufficient stock for ${name}. Available: ${available}, requested: ${qty}.`,
+        );
+        return null;
+      }
+    }
+
+    if (items.some((item) => item.quantity <= 0)) {
+      setErrorMessage('Each flower line must have at least 1 in stock.');
+      return null;
+    }
+
     const requiredTextFields: Array<[string, string]> = [
       ['Wrapper color', form.wrapper_color],
       ['Greeting card', form.greeting_card],
@@ -275,7 +424,30 @@ export default function FlowerOrderFormModal({
       return;
     }
 
-    await onSubmit(payload);
+    try {
+      await onSubmit(payload);
+      setErrorMessage('');
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : 'Failed to save order.');
+    }
+  }
+
+  async function handleStatusSelect(nextStatus: FlowerOrderStatus) {
+    if (!existingOrder || !onStatusChange) {
+      return;
+    }
+
+    setStatusDraft(nextStatus);
+    setStatusMessage('');
+
+    try {
+      await onStatusChange(existingOrder.id, nextStatus);
+    } catch (error) {
+      setStatusDraft(existingOrder.status);
+      setStatusMessage(
+        error instanceof Error ? error.message : 'Could not update order status.',
+      );
+    }
   }
 
   return (
@@ -312,9 +484,9 @@ export default function FlowerOrderFormModal({
               <label className="block text-sm font-medium text-brand-brown md:col-span-2">
                 Status
                 <select
-                  value={existingOrder.status}
+                  value={statusDraft}
                   onChange={(event) =>
-                    void onStatusChange(existingOrder.id, event.target.value as FlowerOrderStatus)
+                    void handleStatusSelect(event.target.value as FlowerOrderStatus)
                   }
                   className="flower-input mt-1.5"
                 >
@@ -324,6 +496,9 @@ export default function FlowerOrderFormModal({
                     </option>
                   ))}
                 </select>
+                {statusMessage ? (
+                  <span className="mt-1 block text-xs text-red-700">{statusMessage}</span>
+                ) : null}
               </label>
             ) : null}
 
@@ -426,45 +601,40 @@ export default function FlowerOrderFormModal({
             </div>
 
             <div className="space-y-2">
-              {lineDrafts.map((row) => (
-                <div key={row.rowId} className="grid grid-cols-[1fr_100px_auto] gap-2">
+              {lineDrafts.map((row) => {
+                const maxQty = row.productId ? getMaxQuantityForLine(row.rowId, row.productId) : 0;
+
+                return (
+                <div key={row.rowId}>
+                  <div className="grid grid-cols-[1fr_100px_auto] gap-2">
                   <select
                     value={row.productId}
-                    onChange={(event) =>
-                      setLineDrafts((rows) =>
-                        rows.map((entry) =>
-                          entry.rowId === row.rowId
-                            ? { ...entry, productId: event.target.value }
-                            : entry,
-                        ),
-                      )
-                    }
+                    onChange={(event) => updateLineProduct(row.rowId, event.target.value)}
                     className="flower-input"
                     required
+                    disabled={!form.branch_id}
                   >
                     <option value="">Flower type</option>
                     {activeProducts.map((product) => (
                       <option key={product.id} value={product.id}>
                         {product.name}
+                        {form.branch_id
+                          ? ` (${(stockByProductId[product.id] ?? 0) + (creditByProductId[product.id] ?? 0)} avail.)`
+                          : ''}
                       </option>
                     ))}
                   </select>
                   <input
-                    type="number"
-                    min="1"
-                    step="1"
+                    type="text"
+                    inputMode="numeric"
                     value={row.quantity}
                     onChange={(event) =>
-                      setLineDrafts((rows) =>
-                        rows.map((entry) =>
-                          entry.rowId === row.rowId
-                            ? { ...entry, quantity: event.target.value }
-                            : entry,
-                        ),
-                      )
+                      updateLineQuantity(row.rowId, row.productId, event.target.value)
                     }
                     className="flower-input"
                     required
+                    disabled={!row.productId || maxQty <= 0}
+                    placeholder="Qty"
                   />
                   <button
                     type="button"
@@ -477,8 +647,16 @@ export default function FlowerOrderFormModal({
                   >
                     Remove
                   </button>
+                  </div>
+                  {row.productId ? (
+                    <p className="mt-1 text-xs text-brand-brown/70">
+                      Max for this line: {maxQty}
+                      {maxQty <= 0 ? ' — out of stock at this branch' : ''}
+                    </p>
+                  ) : null}
                 </div>
-              ))}
+              );
+              })}
             </div>
           </div>
 
