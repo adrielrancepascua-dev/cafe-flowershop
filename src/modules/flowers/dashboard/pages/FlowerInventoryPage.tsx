@@ -149,6 +149,8 @@ export default function FlowerInventoryPage() {
   const [loading, setLoading] = useState(true);
   const [message, setMessage] = useState('');
   const [errorMessage, setErrorMessage] = useState('');
+  const [transferMessage, setTransferMessage] = useState('');
+  const [transferErrorMessage, setTransferErrorMessage] = useState('');
 
   const [fromBranchId, setFromBranchId] = useState('');
   const [toBranchId, setToBranchId] = useState('');
@@ -203,7 +205,8 @@ export default function FlowerInventoryPage() {
     const quantity = Number(transferQty);
 
     if (!fromBranchId || !toBranchId || !transferProductId || quantity <= 0) {
-      setErrorMessage('Complete all transfer fields.');
+      setTransferErrorMessage('Complete all transfer fields.');
+      setTransferMessage('');
       return;
     }
 
@@ -213,12 +216,19 @@ export default function FlowerInventoryPage() {
         toBranchId,
         items: [{ productId: transferProductId, quantity }],
       });
-      setMessage('Transfer completed.');
-      setErrorMessage('');
+      setTransferMessage('Transfer completed.');
+      setTransferErrorMessage('');
+      setMessage('');
       await loadData();
     } catch (error) {
-      setErrorMessage(error instanceof Error ? error.message : 'Transfer failed.');
+      setTransferErrorMessage(error instanceof Error ? error.message : 'Transfer failed.');
+      setTransferMessage('');
     }
+  }
+
+  function clearTransferFeedback() {
+    setTransferErrorMessage('');
+    setTransferMessage('');
   }
 
   return (
@@ -317,27 +327,71 @@ export default function FlowerInventoryPage() {
             <form onSubmit={handleTransfer} className="mt-6 rounded-2xl border border-brand-muted/40 bg-brand-cream/20 p-4">
               <h3 className="text-sm font-semibold text-brand-dark">Inter-branch transfer</h3>
               <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-5">
-                <select value={fromBranchId} onChange={(e) => setFromBranchId(e.target.value)} className="flower-input" required>
+                <select
+                  value={fromBranchId}
+                  onChange={(e) => {
+                    setFromBranchId(e.target.value);
+                    clearTransferFeedback();
+                  }}
+                  className="flower-input"
+                  required
+                >
                   <option value="">From branch</option>
                   {branches.map((b) => (
                     <option key={b.id} value={b.id}>{b.name}</option>
                   ))}
                 </select>
-                <select value={toBranchId} onChange={(e) => setToBranchId(e.target.value)} className="flower-input" required>
+                <select
+                  value={toBranchId}
+                  onChange={(e) => {
+                    setToBranchId(e.target.value);
+                    clearTransferFeedback();
+                  }}
+                  className="flower-input"
+                  required
+                >
                   <option value="">To branch</option>
                   {branches.map((b) => (
                     <option key={b.id} value={b.id}>{b.name}</option>
                   ))}
                 </select>
-                <select value={transferProductId} onChange={(e) => setTransferProductId(e.target.value)} className="flower-input" required>
+                <select
+                  value={transferProductId}
+                  onChange={(e) => {
+                    setTransferProductId(e.target.value);
+                    clearTransferFeedback();
+                  }}
+                  className="flower-input"
+                  required
+                >
                   <option value="">Flower type</option>
                   {products.map((p) => (
                     <option key={p.id} value={p.id}>{p.name}</option>
                   ))}
                 </select>
-                <input type="text" inputMode="numeric" value={transferQty} onChange={(e) => setTransferQty(e.target.value.replace(/[^\d]/g, ''))} className="flower-input" required />
+                <input
+                  type="text"
+                  inputMode="numeric"
+                  value={transferQty}
+                  onChange={(e) => {
+                    setTransferQty(e.target.value.replace(/[^\d]/g, ''));
+                    clearTransferFeedback();
+                  }}
+                  className="flower-input"
+                  required
+                />
                 <button type="submit" className="flower-btn-primary">Transfer</button>
               </div>
+              {transferErrorMessage ? (
+                <p className="mt-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+                  {transferErrorMessage}
+                </p>
+              ) : null}
+              {transferMessage ? (
+                <p className="mt-3 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-800">
+                  {transferMessage}
+                </p>
+              ) : null}
             </form>
           </RequireFlowerAdmin>
 

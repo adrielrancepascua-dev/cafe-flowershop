@@ -289,6 +289,15 @@ export default function FlowerOrderFormModal({
     [products],
   );
 
+  const requiresDownpaymentProof = useMemo(() => {
+    if (downpaymentDraft.trim() === '') {
+      return false;
+    }
+
+    const downpayment = Number(downpaymentDraft);
+    return Number.isFinite(downpayment) && downpayment > 0;
+  }, [downpaymentDraft]);
+
   if (!open) {
     return null;
   }
@@ -386,26 +395,6 @@ export default function FlowerOrderFormModal({
       return null;
     }
 
-    const requiredTextFields: Array<[string, string]> = [
-      ['Wrapper color', form.wrapper_color],
-      ['Greeting card', form.greeting_card],
-      ['Instructions', form.special_instructions],
-      ['Reference #', form.payment_reference],
-      ['Note', form.notes],
-    ];
-
-    for (const [label, value] of requiredTextFields) {
-      if (!value.trim()) {
-        setErrorMessage(`${label} is required.`);
-        return null;
-      }
-    }
-
-    if (!form.photo_inspo_data_url || !form.proof_dp_data_url || !form.order_form_ss_data_url) {
-      setErrorMessage('All photo uploads are required.');
-      return null;
-    }
-
     if (downpaymentDraft.trim() === '') {
       setErrorMessage('Downpayment is required (use 0 if none).');
       return null;
@@ -426,6 +415,36 @@ export default function FlowerOrderFormModal({
 
     if (downpayment > total_amount) {
       setErrorMessage('Downpayment cannot exceed total amount.');
+      return null;
+    }
+
+    const requiresProof = downpayment > 0;
+
+    const requiredTextFields: Array<[string, string]> = [
+      ['Wrapper color', form.wrapper_color],
+      ['Greeting card', form.greeting_card],
+      ['Instructions', form.special_instructions],
+      ['Note', form.notes],
+    ];
+
+    if (requiresProof) {
+      requiredTextFields.push(['Reference #', form.payment_reference]);
+    }
+
+    for (const [label, value] of requiredTextFields) {
+      if (!value.trim()) {
+        setErrorMessage(`${label} is required.`);
+        return null;
+      }
+    }
+
+    if (!form.photo_inspo_data_url || !form.order_form_ss_data_url) {
+      setErrorMessage('Photo of order / inspo and SS of order form are required.');
+      return null;
+    }
+
+    if (requiresProof && !form.proof_dp_data_url) {
+      setErrorMessage('Proof of DP is required when downpayment is greater than 0.');
       return null;
     }
 
@@ -692,10 +711,11 @@ export default function FlowerOrderFormModal({
                 inputMode="decimal"
                 value={downpaymentDraft}
                 onChange={(event) => setDownpaymentDraft(event.target.value.replace(/[^\d.]/g, ''))}
-                placeholder="0.00"
+                placeholder="0"
                 className="flower-input mt-1.5"
                 required
               />
+              <span className="mt-1 block text-xs text-brand-brown/60">Use 0 if no downpayment yet.</span>
             </label>
             <label className="block text-sm font-medium text-brand-brown">
               Total amount
@@ -722,12 +742,15 @@ export default function FlowerOrderFormModal({
 
           <label className="mt-3 block text-sm font-medium text-brand-brown">
             Reference #
+            {requiresDownpaymentProof ? null : (
+              <span className="ml-1 text-xs font-normal text-brand-brown/60">(optional when DP is 0)</span>
+            )}
             <input
               type="text"
               value={form.payment_reference}
               onChange={(event) => updateField('payment_reference', event.target.value)}
               className="flower-input mt-1.5"
-              required
+              required={requiresDownpaymentProof}
             />
           </label>
 
@@ -756,6 +779,9 @@ export default function FlowerOrderFormModal({
             </label>
             <label className="block text-sm font-medium text-brand-brown">
               Proof of DP
+              {requiresDownpaymentProof ? null : (
+                <span className="ml-1 text-xs font-normal text-brand-brown/60">(optional when DP is 0)</span>
+              )}
               <input
                 type="file"
                 accept="image/*"
@@ -763,7 +789,7 @@ export default function FlowerOrderFormModal({
                   void handleFileChange('proof_dp_data_url', event.target.files?.[0] ?? null)
                 }
                 className="mt-1.5 block w-full text-xs"
-                required={!form.proof_dp_data_url}
+                required={requiresDownpaymentProof && !form.proof_dp_data_url}
               />
             </label>
             <label className="block text-sm font-medium text-brand-brown">
