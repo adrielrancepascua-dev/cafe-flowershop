@@ -136,6 +136,16 @@ function DayOrdersPanelHeader({
 
 type MobileSheetPhase = 'closed' | 'peek' | 'expanded';
 
+const MOBILE_SHEET_PEEK_HEIGHT = 168;
+
+function getMobileSheetExpandedHeight(): number {
+  if (typeof window === 'undefined') {
+    return 600;
+  }
+
+  return Math.min(window.innerHeight * 0.78, 640);
+}
+
 function MobileDayOrdersSheet({
   phase,
   selectedDayLabel,
@@ -155,44 +165,161 @@ function MobileDayOrdersSheet({
   onNewOrder: () => void;
   onSelectOrder: (order: FlowerOrder) => void;
 }) {
-  const dragStartY = useRef<number | null>(null);
+  const sheetRef = useRef<HTMLDivElement>(null);
+  const dragZoneRef = useRef<HTMLDivElement>(null);
+  const [dragY, setDragY] = useState(0);
+  const [isDragging, setIsDragging] = useState(false);
+  const [hasEntered, setHasEntered] = useState(false);
+  const [expandedHeight, setExpandedHeight] = useState(getMobileSheetExpandedHeight);
 
-  if (phase === 'closed') {
-    return null;
-  }
+  const dragYRef = useRef(0);
+  const isDraggingRef = useRef(false);
+  const phaseRef = useRef(phase);
+  const dragStart = useRef({ y: 0, dragY: 0 });
+  const onCloseRef = useRef(onClose);
+  const onExpandRef = useRef(onExpand);
+  const onCollapseRef = useRef(onCollapse);
+
+  phaseRef.current = phase;
+  dragYRef.current = dragY;
+  onCloseRef.current = onClose;
+  onExpandRef.current = onExpand;
+  onCollapseRef.current = onCollapse;
 
   const isExpanded = phase === 'expanded';
+  const hiddenOffset = Math.max(0, expandedHeight - MOBILE_SHEET_PEEK_HEIGHT);
+  const snapOffset = isExpanded ? 0 : hiddenOffset;
+  const translateY = hasEntered ? snapOffset + dragY : expandedHeight + 32;
+
+  const dragProgress =
+    hiddenOffset <= 0 ? 1 : Math.min(1, Math.max(0, 1 - translateY / hiddenOffset));
+  const backdropOpacity = 0.16 + dragProgress * 0.32;
+
   const previewNames = orders
     .slice(0, 2)
     .map((order) => order.receiver)
     .join(' · ');
   const remainingCount = Math.max(0, orders.length - 2);
 
-  function handleTouchStart(event: React.TouchEvent) {
-    dragStartY.current = event.touches[0]?.clientY ?? null;
-  }
-
-  function handleTouchEnd(event: React.TouchEvent) {
-    if (dragStartY.current === null) {
+  useEffect(() => {
+    if (phase === 'closed') {
+      setHasEntered(false);
+      setDragY(0);
       return;
     }
 
-    const endY = event.changedTouches[0]?.clientY ?? dragStartY.current;
-    const delta = dragStartY.current - endY;
-    dragStartY.current = null;
+    setExpandedHeight(getMobileSheetExpandedHeight());
+    setHasEntered(false);
+    const frame = requestAnimationFrame(() => {
+      requestAnimationFrame(() => setHasEntered(true));
+    });
 
-    if (delta > 48) {
-      onExpand();
+    return () => cancelAnimationFrame(frame);
+  }, [phase, selectedDayLabel]);
+
+  useEffect(() => {
+    if (phase === 'closed') {
       return;
     }
 
-    if (delta < -48) {
-      if (isExpanded) {
-        onCollapse();
-      } else {
-        onClose();
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+
+    return () => {
+      document.body.style.overflow = previousOverflow;
+    };
+  }, [phase]);
+
+  useEffect(() => {
+    setDragY(0);
+    dragYRef.current = 0;
+  }, [phase]);
+
+  useEffect(() => {
+    const dragZone = dragZoneRef.current;
+    if (!dragZone || phase === 'closed') {
+      return;
+    }
+
+    const hidden = Math.max(0, getMobileSheetExpandedHeight() - MOBILE_SHEET_PEEK_HEIGHT);
+
+    function clampDrag(next: number, currentPhase: MobileSheetPhase) {
+      if (currentPhase === 'peek') {
+        return Math.min(Math.max(next, -hidden), 140);
       }
+
+      return Math.min(Math.max(next, -24), hidden + 120);
     }
+
+    function finishDrag() {
+      isDraggingRef.current = false;
+      setIsDragging(false);
+
+      const currentDragY = dragYRef.current;
+      const currentPhase = phaseRef.current;
+
+      if (currentPhase === 'peek') {
+        if (currentDragY < -hidden * 0.28) {
+          setDragY(0);
+          onExpandRef.current();
+          return;
+        }
+
+        if (currentDragY > 72) {
+          setDragY(0);
+          onCloseRef.current();
+          return;
+        }
+      } else if (currentDragY > hidden * 0.32) {
+        setDragY(0);
+        onCollapseRef.current();
+        return;
+      } else if (currentDragY > hidden + 72) {
+        setDragY(0);
+        onCloseRef.current();
+        return;
+      }
+
+      setDragY(0);
+      dragYRef.current = 0;
+    }
+
+    function onTouchStart(event: TouchEvent) {
+      isDraggingRef.current = true;
+      setIsDragging(true);
+      dragStart.current = {
+        y: event.touches[0]?.clientY ?? 0,
+        dragY: dragYRef.current,
+      };
+    }
+
+    function onTouchMove(event: TouchEvent) {
+      if (!isDraggingRef.current) {
+        return;
+      }
+
+      event.preventDefault();
+      const delta = (event.touches[0]?.clientY ?? dragStart.current.y) - dragStart.current.y;
+      const next = clampDrag(dragStart.current.dragY + delta, phaseRef.current);
+      dragYRef.current = next;
+      setDragY(next);
+    }
+
+    dragZone.addEventListener('touchstart', onTouchStart, { passive: true });
+    dragZone.addEventListener('touchmove', onTouchMove, { passive: false });
+    dragZone.addEventListener('touchend', finishDrag);
+    dragZone.addEventListener('touchcancel', finishDrag);
+
+    return () => {
+      dragZone.removeEventListener('touchstart', onTouchStart);
+      dragZone.removeEventListener('touchmove', onTouchMove);
+      dragZone.removeEventListener('touchend', finishDrag);
+      dragZone.removeEventListener('touchcancel', finishDrag);
+    };
+  }, [phase]);
+
+  if (phase === 'closed') {
+    return null;
   }
 
   function handleBackdropClick() {
@@ -205,39 +332,64 @@ function MobileDayOrdersSheet({
   }
 
   return (
-    <div className="fixed inset-0 z-[90] lg:hidden">
+    <div className="fixed inset-0 z-[90] overscroll-none lg:hidden">
       <button
         type="button"
         aria-label="Close day preview"
-        className={`absolute inset-0 transition-colors duration-300 ${
-          isExpanded ? 'bg-brand-dark/45' : 'bg-brand-dark/20'
-        }`}
+        className="absolute inset-0 transition-[background-color] duration-300"
+        style={{ backgroundColor: `rgba(62, 39, 35, ${isDragging ? backdropOpacity : isExpanded ? 0.45 : 0.2})` }}
         onClick={handleBackdropClick}
       />
 
       <div
-        className={`absolute inset-x-0 bottom-0 flex flex-col overflow-hidden rounded-t-[1.35rem] border-t border-brand-muted/30 bg-white shadow-[0_-8px_32px_rgba(62,39,35,0.14)] transition-[max-height] duration-300 ease-out ${
-          isExpanded
-            ? 'max-h-[min(78dvh,640px)]'
-            : 'max-h-[10.5rem] pb-[calc(0.5rem+env(safe-area-inset-bottom))]'
-        }`}
+        ref={sheetRef}
+        className="absolute inset-x-0 bottom-0 flex touch-none flex-col overflow-hidden rounded-t-[1.35rem] border-t border-brand-muted/30 bg-white shadow-[0_-8px_32px_rgba(62,39,35,0.14)] will-change-transform"
+        style={{
+          height: expandedHeight,
+          transform: `translateY(${translateY}px)`,
+          transition: isDragging
+            ? 'none'
+            : 'transform 0.38s cubic-bezier(0.32, 0.72, 0, 1), box-shadow 0.38s ease',
+        }}
       >
-        <button
-          type="button"
-          aria-label={isExpanded ? 'Swipe down to minimize' : 'Swipe up to view all orders'}
-          className="flex w-full shrink-0 flex-col items-center px-4 pt-3 pb-2 touch-pan-y"
-          onClick={() => (isExpanded ? onCollapse() : onExpand())}
-          onTouchStart={handleTouchStart}
-          onTouchEnd={handleTouchEnd}
-        >
-          <div className="h-1.5 w-14 rounded-full bg-brand-muted/80 shadow-[inset_0_1px_2px_rgba(62,39,35,0.12)]" />
-          <div className="mt-2 flex items-center gap-1 text-[11px] font-medium text-brand-brown/55">
-            <ChevronUp
-              className={`h-3.5 w-3.5 transition-transform duration-300 ${isExpanded ? 'rotate-180' : ''}`}
-            />
-            {isExpanded ? 'Swipe down to minimize' : 'Swipe up to view orders'}
-          </div>
-        </button>
+        <div ref={dragZoneRef} className="shrink-0 touch-none select-none">
+          <button
+            type="button"
+            aria-label={isExpanded ? 'Swipe down to minimize' : 'Swipe up to view all orders'}
+            className="flex w-full flex-col items-center px-4 pt-3 pb-2"
+            onClick={() => (isExpanded ? onCollapse() : onExpand())}
+          >
+            <div className="h-1.5 w-14 rounded-full bg-brand-muted/80 shadow-[inset_0_1px_2px_rgba(62,39,35,0.12)]" />
+            <div className="mt-2 flex items-center gap-1 text-[11px] font-medium text-brand-brown/55">
+              <ChevronUp
+                className={`h-3.5 w-3.5 transition-transform duration-300 ${isExpanded ? 'rotate-180' : ''}`}
+              />
+              {isExpanded ? 'Swipe down to minimize' : 'Swipe up to view orders'}
+            </div>
+          </button>
+
+          {!isExpanded ? (
+            <div className="px-4 pb-[calc(0.75rem+env(safe-area-inset-bottom))] text-left">
+              <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-brand-accent">
+                Selected date
+              </p>
+              <p className="mt-0.5 font-serif text-base font-semibold leading-snug text-brand-dark">
+                {selectedDayLabel}
+              </p>
+              <p className="mt-1 text-sm font-semibold text-brand-brown">
+                {orders.length === 0
+                  ? 'No orders yet — swipe up to add one'
+                  : `${orders.length} order${orders.length === 1 ? '' : 's'} scheduled`}
+              </p>
+              {orders.length > 0 ? (
+                <p className="mt-1 truncate text-xs text-brand-brown/65">
+                  {previewNames}
+                  {remainingCount > 0 ? ` · +${remainingCount} more` : ''}
+                </p>
+              ) : null}
+            </div>
+          ) : null}
+        </div>
 
         {isExpanded ? (
           <>
@@ -247,35 +399,11 @@ function MobileDayOrdersSheet({
               onClose={onClose}
               onNewOrder={onNewOrder}
             />
-            <div className="flower-scroll min-h-0 flex-1 overflow-y-auto pb-[calc(4.5rem+env(safe-area-inset-bottom))]">
+            <div className="flower-scroll min-h-0 flex-1 touch-pan-y overflow-y-auto overscroll-contain pb-[calc(4.5rem+env(safe-area-inset-bottom))]">
               <DayOrderList orders={orders} onSelectOrder={onSelectOrder} />
             </div>
           </>
-        ) : (
-          <button
-            type="button"
-            className="px-4 pb-3 text-left"
-            onClick={onExpand}
-          >
-            <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-brand-accent">
-              Selected date
-            </p>
-            <p className="mt-0.5 font-serif text-base font-semibold leading-snug text-brand-dark">
-              {selectedDayLabel}
-            </p>
-            <p className="mt-1 text-sm font-semibold text-brand-brown">
-              {orders.length === 0
-                ? 'No orders yet — swipe up to add one'
-                : `${orders.length} order${orders.length === 1 ? '' : 's'} scheduled`}
-            </p>
-            {orders.length > 0 ? (
-              <p className="mt-1 truncate text-xs text-brand-brown/65">
-                {previewNames}
-                {remainingCount > 0 ? ` · +${remainingCount} more` : ''}
-              </p>
-            ) : null}
-          </button>
-        )}
+        ) : null}
       </div>
     </div>
   );
