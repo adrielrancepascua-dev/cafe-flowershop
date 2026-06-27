@@ -1,6 +1,5 @@
 import {
-  FLOWER_PRODUCTS_CATALOG_MOCK,
-  toFlowerProduct,
+  FLOWER_STEMS_MOCK,
 } from '../../../modules/flowers/shared/data/flowers.mock';
 import type {
   CreateFlowerProductInput,
@@ -8,118 +7,112 @@ import type {
   UpdateFlowerProductInput,
 } from '../../../modules/flowers/shared/types/flower-product';
 
-const PRODUCTS_STORAGE_KEY = 'stay_awhile_flower_products_v1';
+const PRODUCTS_STORAGE_KEY = 'papers_petals_flower_stems_v2';
+const PRODUCTS_SEEDED_KEY = 'papers_petals_flower_stems_seeded_v2';
 
-function cloneCatalog() {
-  return FLOWER_PRODUCTS_CATALOG_MOCK.map((item) => ({ ...item }));
-}
-
-function readCatalogFromStorage() {
+function readProductsFromStorage(): FlowerProduct[] {
   if (typeof window === 'undefined') {
-    return cloneCatalog();
+    return FLOWER_STEMS_MOCK.map((product) => ({ ...product }));
   }
 
   try {
+    const seeded = window.localStorage.getItem(PRODUCTS_SEEDED_KEY);
     const raw = window.localStorage.getItem(PRODUCTS_STORAGE_KEY);
+
+    if (!seeded) {
+      const seed = FLOWER_STEMS_MOCK.map((product) => ({ ...product }));
+      window.localStorage.setItem(PRODUCTS_STORAGE_KEY, JSON.stringify(seed));
+      window.localStorage.setItem(PRODUCTS_SEEDED_KEY, 'true');
+      return seed;
+    }
+
     if (!raw) {
-      return cloneCatalog();
+      return [];
     }
 
-    const parsed = JSON.parse(raw) as typeof FLOWER_PRODUCTS_CATALOG_MOCK;
-    if (!Array.isArray(parsed) || parsed.length === 0) {
-      return cloneCatalog();
-    }
-
-    return parsed;
+    const parsed = JSON.parse(raw) as FlowerProduct[];
+    return Array.isArray(parsed) ? parsed : [];
   } catch {
-    return cloneCatalog();
+    return FLOWER_STEMS_MOCK.map((product) => ({ ...product }));
   }
 }
 
-function writeCatalogToStorage(catalog: typeof FLOWER_PRODUCTS_CATALOG_MOCK) {
+function writeProductsToStorage(products: FlowerProduct[]) {
   if (typeof window === 'undefined') {
     return;
   }
 
-  window.localStorage.setItem(PRODUCTS_STORAGE_KEY, JSON.stringify(catalog));
+  window.localStorage.setItem(PRODUCTS_STORAGE_KEY, JSON.stringify(products));
 }
 
-function getCatalog() {
-  const catalog = readCatalogFromStorage();
-  writeCatalogToStorage(catalog);
-  return catalog;
+export async function listFlowerStemsLocal(): Promise<FlowerProduct[]> {
+  return readProductsFromStorage().sort((a, b) => a.name.localeCompare(b.name));
 }
 
-export async function listFlowerProductsLocal(): Promise<FlowerProduct[]> {
-  return getCatalog().map(toFlowerProduct);
-}
-
-export async function createFlowerProductLocal(input: CreateFlowerProductInput): Promise<FlowerProduct> {
-  const catalog = getCatalog();
-  const created = {
-    id: `fp-${Date.now()}`,
+export async function createFlowerStemLocal(input: CreateFlowerProductInput): Promise<FlowerProduct> {
+  const products = readProductsFromStorage();
+  const created: FlowerProduct = {
+    id: `stem-${Date.now()}`,
     name: input.name.trim(),
-    base_price: input.base_price,
+    unit_cost: input.unit_cost,
     is_active: input.is_active ?? true,
     created_at: new Date().toISOString(),
-    category: 'Custom',
-    description: 'Custom flower product.',
-    image: 'https://images.unsplash.com/photo-1490750967868-88aa4486c946?auto=format&fit=crop&w=600&q=80',
   };
 
-  catalog.unshift(created);
-  writeCatalogToStorage(catalog);
-
-  return toFlowerProduct(created);
+  writeProductsToStorage([created, ...products]);
+  return created;
 }
 
-export async function updateFlowerProductLocal(
+export async function updateFlowerStemLocal(
   productId: string,
   input: UpdateFlowerProductInput,
 ): Promise<FlowerProduct> {
-  const catalog = getCatalog();
-  const target = catalog.find((product) => product.id === productId);
+  const products = readProductsFromStorage();
+  const index = products.findIndex((product) => product.id === productId);
 
-  if (!target) {
+  if (index === -1) {
     throw new Error('Product not found.');
   }
 
-  target.name = input.name.trim();
-  target.base_price = input.base_price;
-  writeCatalogToStorage(catalog);
+  products[index] = {
+    ...products[index],
+    name: input.name.trim(),
+    unit_cost: input.unit_cost,
+  };
 
-  return toFlowerProduct(target);
+  writeProductsToStorage(products);
+  return products[index];
 }
 
-export async function toggleFlowerProductActiveLocal(
+export async function toggleFlowerStemActiveLocal(
   productId: string,
   isActive: boolean,
 ): Promise<FlowerProduct> {
-  const catalog = getCatalog();
-  const target = catalog.find((product) => product.id === productId);
+  const products = readProductsFromStorage();
+  const index = products.findIndex((product) => product.id === productId);
 
-  if (!target) {
+  if (index === -1) {
     throw new Error('Product not found.');
   }
 
-  target.is_active = isActive;
-  writeCatalogToStorage(catalog);
-
-  return toFlowerProduct(target);
+  products[index] = { ...products[index], is_active: isActive };
+  writeProductsToStorage(products);
+  return products[index];
 }
 
-export async function deleteFlowerProductLocal(productId: string): Promise<void> {
-  const catalog = getCatalog();
-  const nextCatalog = catalog.filter((product) => product.id !== productId);
-
-  if (nextCatalog.length === catalog.length) {
-    throw new Error('Product not found.');
-  }
-
-  writeCatalogToStorage(nextCatalog);
+export async function deleteFlowerStemLocal(productId: string): Promise<void> {
+  const products = readProductsFromStorage();
+  writeProductsToStorage(products.filter((product) => product.id !== productId));
 }
 
+/** @deprecated use listFlowerStemsLocal */
 export async function listFlowerPosCatalogLocal() {
-  const catalog = getCatalog();
-  return catalog.filter((product) => product.is_active);
+  const stems = await listFlowerStemsLocal();
+  return stems.map((stem) => ({
+    ...stem,
+    base_price: stem.unit_cost,
+    category: 'Stems',
+    description: '',
+    image: '',
+  }));
 }

@@ -1,8 +1,11 @@
+import { FlowerAuthProvider } from './lib/auth/FlowerAuthContext';
 import AppRouter from './app/router/AppRouter';
 
 function App() {
   return (
-    <AppRouter />
+    <FlowerAuthProvider>
+      <AppRouter />
+    </FlowerAuthProvider>
   );
 }
 

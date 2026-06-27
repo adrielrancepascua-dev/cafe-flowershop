@@ -162,7 +162,7 @@ export async function getFlowerReportsSupabase(options: FlowerReportsOptions = {
       order_id: order.id,
       branch_id: order.branch_id,
       branch_name: branchNameById.get(order.branch_id) ?? order.branch_id,
-      customer_name: order.customer_name,
+      receiver: (order as { receiver?: string }).receiver ?? order.customer_name ?? '',
       scheduled_for: order.scheduled_for as string,
       created_at: order.created_at,
       status: order.status,
@@ -174,5 +174,11 @@ export async function getFlowerReportsSupabase(options: FlowerReportsOptions = {
     daily_summary: dailySummary,
     monthly_summary: monthlySummary,
     advance_orders: advanceOrders,
+    financial: {
+      total_sales: 0,
+      staff_expenses: 0,
+      supplier_costs: 0,
+      net_income: 0,
+    },
   };
 }

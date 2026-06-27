@@ -1,35 +1,27 @@
 import type {
   AdjustFlowerInventoryInput,
-  FlowerBranchOption,
-  FlowerInventoryMovementRow,
-  FlowerInventoryStockRow,
-  ListFlowerInventoryOptions,
+  TransferFlowerInventoryInput,
 } from '../../../modules/flowers/shared/types/flower-inventory';
+import { getFlowerStorageMode, shouldUseFlowerSupabase } from '../storage-mode';
 import {
   adjustFlowerInventoryLocal,
   listFlowerBranchesLocal,
   listFlowerInventoryMovementsLocal,
   listFlowerInventoryStockLocal,
+  transferFlowerInventoryLocal,
 } from './flowers-inventory.local';
-import {
-  adjustFlowerInventorySupabase,
-  listFlowerBranchesSupabase,
-  listFlowerInventoryMovementsSupabase,
-  listFlowerInventoryStockSupabase,
-} from './flowers-inventory.supabase';
-import { getFlowerStorageMode, shouldUseFlowerSupabase } from '../storage-mode';
 
-export async function listFlowerBranches(): Promise<FlowerBranchOption[]> {
+export async function listFlowerBranches() {
   const mode = getFlowerStorageMode();
 
   if (shouldUseFlowerSupabase(mode)) {
     try {
+      const { listFlowerBranchesSupabase } = await import('./flowers-inventory.supabase');
       return await listFlowerBranchesSupabase();
     } catch (error) {
       if (mode === 'supabase') {
         throw error;
       }
-      console.warn('Falling back to local flower inventory after Supabase branch read failure.', error);
     }
   }
 
@@ -37,18 +29,18 @@ export async function listFlowerBranches(): Promise<FlowerBranchOption[]> {
 }
 
 export async function listFlowerInventoryStock(
-  options: ListFlowerInventoryOptions = {},
-): Promise<FlowerInventoryStockRow[]> {
+  options: Parameters<typeof listFlowerInventoryStockLocal>[0] = {},
+) {
   const mode = getFlowerStorageMode();
 
   if (shouldUseFlowerSupabase(mode)) {
     try {
+      const { listFlowerInventoryStockSupabase } = await import('./flowers-inventory.supabase');
       return await listFlowerInventoryStockSupabase(options);
     } catch (error) {
       if (mode === 'supabase') {
         throw error;
       }
-      console.warn('Falling back to local flower inventory after Supabase stock read failure.', error);
     }
   }
 
@@ -56,18 +48,18 @@ export async function listFlowerInventoryStock(
 }
 
 export async function listFlowerInventoryMovements(
-  options: ListFlowerInventoryOptions & { limit?: number } = {},
-): Promise<FlowerInventoryMovementRow[]> {
+  options: Parameters<typeof listFlowerInventoryMovementsLocal>[0] = {},
+) {
   const mode = getFlowerStorageMode();
 
   if (shouldUseFlowerSupabase(mode)) {
     try {
+      const { listFlowerInventoryMovementsSupabase } = await import('./flowers-inventory.supabase');
       return await listFlowerInventoryMovementsSupabase(options);
     } catch (error) {
       if (mode === 'supabase') {
         throw error;
       }
-      console.warn('Falling back to local flower inventory after Supabase movement read failure.', error);
     }
   }
 
@@ -79,14 +71,18 @@ export async function adjustFlowerInventory(input: AdjustFlowerInventoryInput): 
 
   if (shouldUseFlowerSupabase(mode)) {
     try {
+      const { adjustFlowerInventorySupabase } = await import('./flowers-inventory.supabase');
       return await adjustFlowerInventorySupabase(input);
     } catch (error) {
       if (mode === 'supabase') {
         throw error;
       }
-      console.warn('Falling back to local flower inventory after Supabase adjust failure.', error);
     }
   }
 
   return adjustFlowerInventoryLocal(input);
+}
+
+export async function transferFlowerInventory(input: TransferFlowerInventoryInput): Promise<void> {
+  return transferFlowerInventoryLocal(input);
 }

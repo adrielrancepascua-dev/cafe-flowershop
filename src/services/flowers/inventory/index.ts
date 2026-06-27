@@ -3,4 +3,5 @@ export {
   listFlowerBranches,
   listFlowerInventoryMovements,
   listFlowerInventoryStock,
+  transferFlowerInventory,
 } from './flowers-inventory.service';

@@ -1,24 +1,50 @@
-export type FlowerOrderStatus = 'encoded' | 'fulfilled' | 'cancelled';
+export type FlowerOrderStatus =
+  | 'not_started'
+  | 'ready'
+  | 'picked_up'
+  | 'delivered'
+  | 'completed'
+  | 'cancelled';
+
+export type FlowerClaimMode = 'pickup' | 'delivery';
+
+export const FLOWER_ORDER_TERMINAL_STATUSES: FlowerOrderStatus[] = [
+  'picked_up',
+  'delivered',
+  'completed',
+];
 
 export interface FlowerOrderItem {
   id?: number;
   product_id: string;
   item_name: string;
   quantity: number;
-  unit_price: number;
-  line_total: number;
 }
 
 export interface FlowerOrder {
   id: string;
   branch_id: string;
   branch_name: string;
-  customer_name: string | null;
-  scheduled_for: string | null;
+  receiver: string;
+  customer_social: string;
+  scheduled_for: string;
   status: FlowerOrderStatus;
+  claim_mode: FlowerClaimMode;
+  wrapper_color: string;
+  greeting_card: string;
+  special_instructions: string;
+  downpayment: number;
+  payment_reference: string;
   total_amount: number;
+  balance: number;
   notes: string;
+  photo_inspo_data_url: string;
+  proof_dp_data_url: string;
+  order_form_ss_data_url: string;
   created_at: string;
+  created_by_id: string;
+  created_by_name: string;
+  inventory_deducted: boolean;
   items: FlowerOrderItem[];
 }
 
@@ -26,20 +52,35 @@ export interface CreateFlowerOrderItemInput {
   product_id: string;
   item_name: string;
   quantity: number;
-  unit_price: number;
-  line_total: number;
 }
 
 export interface CreateFlowerOrderInput {
   branch_id: string;
-  customer_name?: string;
-  scheduled_for?: string | null;
+  receiver: string;
+  customer_social: string;
+  scheduled_for: string;
+  claim_mode: FlowerClaimMode;
+  wrapper_color: string;
+  greeting_card: string;
+  special_instructions: string;
+  downpayment: number;
+  payment_reference: string;
   total_amount: number;
-  notes?: string;
+  notes: string;
+  photo_inspo_data_url: string;
+  proof_dp_data_url: string;
+  order_form_ss_data_url: string;
+  created_by_id: string;
+  created_by_name: string;
   items: CreateFlowerOrderItemInput[];
+}
+
+export interface UpdateFlowerOrderInput extends CreateFlowerOrderInput {
+  id: string;
 }
 
 export interface ListFlowerOrdersOptions {
   branchId?: string;
-  scheduledOnly?: boolean;
+  scheduledFrom?: string;
+  scheduledTo?: string;
 }

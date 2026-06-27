@@ -1,7 +1,7 @@
 import {
   FLOWER_BRANCHES_MOCK,
   FLOWER_INVENTORY_SEED,
-  FLOWER_PRODUCTS_CATALOG_MOCK,
+  FLOWER_STEMS_MOCK,
 } from '../../../modules/flowers/shared/data/flowers.mock';
 import type {
   AdjustFlowerInventoryInput,
@@ -9,11 +9,12 @@ import type {
   FlowerInventoryMovementRow,
   FlowerInventoryStockRow,
   ListFlowerInventoryOptions,
+  TransferFlowerInventoryInput,
 } from '../../../modules/flowers/shared/types/flower-inventory';
-import { listFlowerPosCatalogLocal } from '../products/flowers-products.local';
+import { listFlowerStemsLocal } from '../products/flowers-products.local';
 
-const INVENTORY_STORAGE_KEY = 'stay_awhile_flower_inventory_v1';
-const MOVEMENTS_STORAGE_KEY = 'stay_awhile_flower_inventory_movements_v1';
+const INVENTORY_STORAGE_KEY = 'papers_petals_flower_inventory_v2';
+const MOVEMENTS_STORAGE_KEY = 'papers_petals_flower_inventory_movements_v2';
 
 type StockMap = Record<string, Record<string, number>>;
 
@@ -88,9 +89,19 @@ function getBranchName(branchId: string): string {
 }
 
 function getProductName(productId: string): string {
-  return (
-    FLOWER_PRODUCTS_CATALOG_MOCK.find((product) => product.id === productId)?.name ?? productId
-  );
+  return FLOWER_STEMS_MOCK.find((product) => product.id === productId)?.name ?? productId;
+}
+
+function appendMovement(
+  movement: Omit<FlowerInventoryMovementRow, 'id'>,
+): FlowerInventoryMovementRow {
+  const movements = readMovementsFromStorage();
+  const next: FlowerInventoryMovementRow = {
+    ...movement,
+    id: movements.length > 0 ? Math.max(...movements.map((row) => row.id)) + 1 : 1,
+  };
+  writeMovementsToStorage([next, ...movements]);
+  return next;
 }
 
 export async function listFlowerBranchesLocal(): Promise<FlowerBranchOption[]> {
@@ -101,7 +112,7 @@ export async function listFlowerInventoryStockLocal(
   options: ListFlowerInventoryOptions = {},
 ): Promise<FlowerInventoryStockRow[]> {
   const stock = readStockFromStorage();
-  const catalog = await listFlowerPosCatalogLocal();
+  const catalog = await listFlowerStemsLocal();
   const rows: FlowerInventoryStockRow[] = [];
 
   for (const [branchId, products] of Object.entries(stock)) {
@@ -152,60 +163,118 @@ export async function listFlowerInventoryMovementsLocal(
     .slice(0, limit);
 }
 
-export async function adjustFlowerInventoryLocal(input: AdjustFlowerInventoryInput): Promise<void> {
+async function applyStockChange(input: {
+  branchId: string;
+  productId: string;
+  delta: number;
+  movementType: FlowerInventoryMovementRow['movement_type'];
+  note: string;
+}): Promise<{ previousOnHand: number; newOnHand: number }> {
   const stock = readStockFromStorage();
   const branchStock = stock[input.branchId] ?? {};
   const previousOnHand = branchStock[input.productId] ?? 0;
-  const delta = input.movementType === 'stock_in' ? input.quantity : -input.quantity;
-  const newOnHand = previousOnHand + delta;
+  const newOnHand = previousOnHand + input.delta;
 
   if (newOnHand < 0) {
-    throw new Error('Insufficient stock. Stock out would result in negative balance.');
+    throw new Error(
+      `Insufficient stock for ${getProductName(input.productId)}. Available: ${previousOnHand}.`,
+    );
   }
 
   branchStock[input.productId] = newOnHand;
   stock[input.branchId] = branchStock;
   writeStockToStorage(stock);
 
-  const movements = readMovementsFromStorage();
-  const nextMovement: FlowerInventoryMovementRow = {
-    id: movements.length + 1,
+  appendMovement({
     branch_id: input.branchId,
     branch_name: getBranchName(input.branchId),
     product_id: input.productId,
     product_name: getProductName(input.productId),
     movement_type: input.movementType,
-    quantity: input.quantity,
+    quantity: Math.abs(input.delta),
     previous_on_hand: previousOnHand,
     new_on_hand: newOnHand,
-    note: input.note?.trim() ?? '',
+    note: input.note,
     created_at: new Date().toISOString(),
-  };
+  });
 
-  writeMovementsToStorage([nextMovement, ...movements]);
+  return { previousOnHand, newOnHand };
 }
 
+export async function adjustFlowerInventoryLocal(input: AdjustFlowerInventoryInput): Promise<void> {
+  const delta = input.movementType === 'stock_in' ? input.quantity : -input.quantity;
+
+  await applyStockChange({
+    branchId: input.branchId,
+    productId: input.productId,
+    delta,
+    movementType: input.movementType,
+    note: input.note?.trim() ?? '',
+  });
+}
+
+export async function deductFlowerInventoryForOrderLocal(input: {
+  branchId: string;
+  productId: string;
+  quantity: number;
+  orderId: string;
+}): Promise<void> {
+  await applyStockChange({
+    branchId: input.branchId,
+    productId: input.productId,
+    delta: -input.quantity,
+    movementType: 'order_deduct',
+    note: `Order ${input.orderId} completed`,
+  });
+}
+
+export async function transferFlowerInventoryLocal(
+  input: TransferFlowerInventoryInput,
+): Promise<void> {
+  if (input.fromBranchId === input.toBranchId) {
+    throw new Error('Source and destination branches must be different.');
+  }
+
+  if (input.items.length === 0) {
+    throw new Error('Add at least one product to transfer.');
+  }
+
+  const note = input.note?.trim() || `Transfer to ${getBranchName(input.toBranchId)}`;
+
+  for (const item of input.items) {
+    if (item.quantity <= 0) {
+      continue;
+    }
+
+    await applyStockChange({
+      branchId: input.fromBranchId,
+      productId: item.productId,
+      delta: -item.quantity,
+      movementType: 'transfer_out',
+      note,
+    });
+
+    await applyStockChange({
+      branchId: input.toBranchId,
+      productId: item.productId,
+      delta: item.quantity,
+      movementType: 'transfer_in',
+      note: `From ${getBranchName(input.fromBranchId)}`,
+    });
+  }
+}
+
+/** @deprecated use deductFlowerInventoryForOrderLocal */
 export async function deductFlowerInventoryLocal(input: {
   branchId: string;
   productId: string;
   quantity: number;
 }): Promise<void> {
-  const stock = readStockFromStorage();
-  const branchStock = stock[input.branchId] ?? {};
-  const previousOnHand = branchStock[input.productId] ?? 0;
-
-  if (previousOnHand < input.quantity) {
-    const productName = getProductName(input.productId);
-    throw new Error(
-      `Insufficient stock for ${productName}. Available: ${previousOnHand}, required: ${input.quantity}.`,
-    );
-  }
-
   await adjustFlowerInventoryLocal({
     branchId: input.branchId,
     productId: input.productId,
     movementType: 'stock_out',
     quantity: input.quantity,
-    note: 'POS order deduction',
+    note: 'Legacy deduction',
   });
 }

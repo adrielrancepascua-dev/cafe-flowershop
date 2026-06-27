@@ -1,73 +1,36 @@
-# React + TypeScript + Vite
+# Papers & Petals — Flower Back Office
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+Flowers-only operations system for **Papers & Petals** (Dagupan, San Carlos, Urdaneta).
 
-Currently, two official plugins are available:
+## Features
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+- Staff/admin login
+- Calendar + list order views with full Notion-style order form
+- Flower type + quantity lines, manual total price, auto balance
+- Per-branch inventory with admin stock in/out and inter-branch transfers
+- Stock deducts when orders are marked **completed**
+- Staff expenses + admin supplier costs
+- Reports with net income; staff reports gated until pickup day is closed
 
-## React Compiler
+## Demo login (local mode)
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+| Role | Email | Password |
+|------|-------|----------|
+| Admin | admin@papersandpetals.ph | admin1234 |
+| Staff | staff1@papersandpetals.ph | staff1234 |
 
-## Expanding the ESLint configuration
+## Run locally
 
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
-
-```js
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-
-      // Remove tseslint.configs.recommended and replace with this
-      tseslint.configs.recommendedTypeChecked,
-      // Alternatively, use this for stricter rules
-      tseslint.configs.strictTypeChecked,
-      // Optionally, add this for stylistic rules
-      tseslint.configs.stylisticTypeChecked,
-
-      // Other configs...
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+```bash
+npm install
+npm run dev
 ```
 
-You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
+Set `VITE_APP_MODE=flower_demo` (default on Vercel via `vercel.json`).
 
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
+## Supabase (optional)
 
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-      // Enable lint rules for React
-      reactX.configs['recommended-typescript'],
-      // Enable lint rules for React DOM
-      reactDom.configs.recommended,
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
-```
+1. Run `supabase/schema_flowers_v2.sql`
+2. Set `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY`
+
+Without Supabase, the app uses browser local storage (demo-friendly).

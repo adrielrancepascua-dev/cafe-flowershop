@@ -16,7 +16,7 @@ export interface FlowerAdvanceOrderOverviewRow {
   order_id: string;
   branch_id: string;
   branch_name: string;
-  customer_name: string | null;
+  receiver: string;
   scheduled_for: string;
   created_at: string;
   status: FlowerOrderStatus;
@@ -24,10 +24,18 @@ export interface FlowerAdvanceOrderOverviewRow {
   item_count: number;
 }
 
+export interface FlowerFinancialSummary {
+  total_sales: number;
+  staff_expenses: number;
+  supplier_costs: number;
+  net_income: number;
+}
+
 export interface FlowerReportsData {
   daily_summary: FlowerDailySalesSummaryRow[];
   monthly_summary: FlowerMonthlySalesSummaryRow[];
   advance_orders: FlowerAdvanceOrderOverviewRow[];
+  financial: FlowerFinancialSummary;
 }
 
 export interface FlowerReportsOptions {
@@ -35,4 +43,12 @@ export interface FlowerReportsOptions {
   dailyDays?: number;
   monthlyMonths?: number;
   advanceLimit?: number;
+  reportDate?: string;
+}
+
+export interface FlowerDayCloseStatus {
+  date: string;
+  total_orders: number;
+  open_orders: number;
+  is_closed: boolean;
 }

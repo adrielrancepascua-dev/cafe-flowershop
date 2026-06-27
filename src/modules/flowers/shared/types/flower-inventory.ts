@@ -1,5 +1,11 @@
 export type FlowerInventoryAdjustmentType = 'stock_in' | 'stock_out';
 
+export type FlowerInventoryMovementType =
+  | FlowerInventoryAdjustmentType
+  | 'transfer_in'
+  | 'transfer_out'
+  | 'order_deduct';
+
 export interface FlowerBranchOption {
   id: string;
   name: string;
@@ -22,7 +28,7 @@ export interface FlowerInventoryMovementRow {
   branch_name: string;
   product_id: string;
   product_name: string;
-  movement_type: FlowerInventoryAdjustmentType;
+  movement_type: FlowerInventoryMovementType;
   quantity: number;
   previous_on_hand: number;
   new_on_hand: number;
@@ -39,5 +45,12 @@ export interface AdjustFlowerInventoryInput {
   productId: string;
   movementType: FlowerInventoryAdjustmentType;
   quantity: number;
+  note?: string;
+}
+
+export interface TransferFlowerInventoryInput {
+  fromBranchId: string;
+  toBranchId: string;
+  items: { productId: string; quantity: number }[];
   note?: string;
 }

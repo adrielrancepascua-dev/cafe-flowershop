@@ -2,8 +2,11 @@ import type {
   FlowerReportsData,
   FlowerReportsOptions,
 } from '../../../modules/flowers/shared/types/flower-report';
-import type { FlowerOrderStatus } from '../../../modules/flowers/shared/types/flower-order';
 import { listFlowerOrdersLocal } from '../orders/flowers-orders.local';
+import {
+  sumStaffExpensesForPeriodLocal,
+  sumSupplierCostsForPeriodLocal,
+} from '../expenses/flowers-expenses.local';
 
 function formatDateKeyUtc(date: Date): string {
   return date.toISOString().slice(0, 10);
@@ -13,8 +16,8 @@ function formatMonthKeyUtc(date: Date): string {
   return date.toISOString().slice(0, 7);
 }
 
-function isSalesIncluded(status: FlowerOrderStatus): boolean {
-  return status !== 'cancelled';
+function isSalesIncluded(status: string): boolean {
+  return status === 'completed' || status === 'picked_up' || status === 'delivered';
 }
 
 function buildDailySkeleton(days: number) {
@@ -56,6 +59,7 @@ export async function getFlowerReportsLocal(
   const dailyDays = options.dailyDays ?? 14;
   const monthlyMonths = options.monthlyMonths ?? 6;
   const advanceLimit = options.advanceLimit ?? 25;
+  const reportDate = options.reportDate ?? formatDateKeyUtc(new Date());
 
   const orders = await listFlowerOrdersLocal({
     branchId: options.branchId,
@@ -70,24 +74,29 @@ export async function getFlowerReportsLocal(
 
   const now = Date.now();
   const advanceOrders = [];
+  let totalSales = 0;
 
   for (const order of orders) {
     if (!isSalesIncluded(order.status)) {
       continue;
     }
 
-    const createdDate = formatDateKeyUtc(new Date(order.created_at));
-    const dailyRow = dailyByKey.get(createdDate);
+    const pickupDate = order.scheduled_for.slice(0, 10);
+    const dailyRow = dailyByKey.get(pickupDate);
     if (dailyRow) {
       dailyRow.order_count += 1;
       dailyRow.sales_total += order.total_amount;
     }
 
-    const createdMonth = formatMonthKeyUtc(new Date(order.created_at));
-    const monthlyRow = monthlyByKey.get(createdMonth);
+    const pickupMonth = pickupDate.slice(0, 7);
+    const monthlyRow = monthlyByKey.get(pickupMonth);
     if (monthlyRow) {
       monthlyRow.order_count += 1;
       monthlyRow.sales_total += order.total_amount;
+    }
+
+    if (pickupDate === reportDate) {
+      totalSales += order.total_amount;
     }
 
     if (
@@ -99,7 +108,7 @@ export async function getFlowerReportsLocal(
         order_id: order.id,
         branch_id: order.branch_id,
         branch_name: order.branch_name,
-        customer_name: order.customer_name,
+        receiver: order.receiver,
         scheduled_for: order.scheduled_for,
         created_at: order.created_at,
         status: order.status,
@@ -109,11 +118,29 @@ export async function getFlowerReportsLocal(
     }
   }
 
+  const staffExpenses = await sumStaffExpensesForPeriodLocal({
+    branchId: options.branchId,
+    fromDate: reportDate,
+    toDate: reportDate,
+  });
+
+  const supplierCosts = await sumSupplierCostsForPeriodLocal({
+    branchId: options.branchId,
+    fromDate: reportDate,
+    toDate: reportDate,
+  });
+
   return {
     daily_summary: [...dailyByKey.values()],
     monthly_summary: [...monthlyByKey.values()],
     advance_orders: advanceOrders.sort(
       (a, b) => new Date(a.scheduled_for).getTime() - new Date(b.scheduled_for).getTime(),
     ),
+    financial: {
+      total_sales: totalSales,
+      staff_expenses: staffExpenses,
+      supplier_costs: supplierCosts,
+      net_income: totalSales - staffExpenses - supplierCosts,
+    },
   };
 }

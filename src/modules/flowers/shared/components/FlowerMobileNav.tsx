@@ -1,22 +1,27 @@
 import { NavLink } from 'react-router-dom';
-import { BarChart3, Flower2, Home, Package, ShoppingBag, ShoppingCart } from 'lucide-react';
+import { BarChart3, CalendarDays, Flower2, Home, Package, Receipt, Sprout } from 'lucide-react';
+import { useFlowerAuth } from '../../../../lib/auth/FlowerAuthContext';
 
-const MOBILE_LINKS = [
-  { label: 'Home', to: '/dashboard/flowers', icon: Home, end: true },
-  { label: 'POS', to: '/dashboard/flowers/pos', icon: ShoppingCart, end: false },
-  { label: 'Orders', to: '/dashboard/flowers/orders', icon: ShoppingBag, end: false },
-  { label: 'Stock', to: '/dashboard/flowers/inventory', icon: Package, end: false },
-  { label: 'Reports', to: '/dashboard/flowers/reports', icon: BarChart3, end: false },
+const BASE_LINKS = [
+  { label: 'Home', to: '/dashboard/flowers', icon: Home, end: true, adminOnly: false },
+  { label: 'Orders', to: '/dashboard/flowers/orders', icon: CalendarDays, end: false, adminOnly: false },
+  { label: 'Stock', to: '/dashboard/flowers/inventory', icon: Package, end: false, adminOnly: false },
+  { label: 'Expenses', to: '/dashboard/flowers/expenses', icon: Receipt, end: false, adminOnly: false },
+  { label: 'Products', to: '/dashboard/flowers/products', icon: Sprout, end: false, adminOnly: true },
+  { label: 'Reports', to: '/dashboard/flowers/reports', icon: BarChart3, end: false, adminOnly: true },
 ];
 
 export default function FlowerMobileNav() {
+  const { isAdmin } = useFlowerAuth();
+  const links = BASE_LINKS.filter((link) => !link.adminOnly || isAdmin);
+
   return (
     <nav
-      className="fixed inset-x-0 bottom-0 z-50 border-t border-brand-muted/50 bg-white/95 px-2 pb-[env(safe-area-inset-bottom)] pt-1 backdrop-blur-md lg:hidden"
+      className="fixed inset-x-0 bottom-0 z-50 border-t border-brand-muted/50 bg-white/95 px-1 pb-[env(safe-area-inset-bottom)] pt-1 backdrop-blur-md lg:hidden"
       aria-label="Mobile navigation"
     >
       <ul className="mx-auto flex max-w-lg items-stretch justify-around">
-        {MOBILE_LINKS.map((link) => (
+        {links.map((link) => (
           <li key={link.to} className="flex-1">
             <NavLink
               to={link.to}
@@ -56,7 +61,7 @@ export function FlowerDesktopSidebarHeader() {
         </span>
         <div>
           <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-brand-accent">
-            Stay Awhile
+            Papers &amp; Petals
           </p>
           <p className="font-serif text-sm font-semibold text-brand-dark">Flower Shop</p>
         </div>

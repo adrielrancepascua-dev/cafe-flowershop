@@ -1,18 +1,21 @@
 export interface FlowerProduct {
   id: string;
   name: string;
-  base_price: number;
+  unit_cost: number;
   is_active: boolean;
   created_at: string;
 }
 
 export interface CreateFlowerProductInput {
   name: string;
-  base_price: number;
+  unit_cost: number;
   is_active?: boolean;
 }
 
 export interface UpdateFlowerProductInput {
   name: string;
-  base_price: number;
+  unit_cost: number;
 }
+
+/** @deprecated use unit_cost */
+export type FlowerProductLegacy = FlowerProduct & { base_price?: number };

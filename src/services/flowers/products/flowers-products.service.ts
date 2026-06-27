@@ -3,92 +3,68 @@ import type {
   FlowerProduct,
   UpdateFlowerProductInput,
 } from '../../../modules/flowers/shared/types/flower-product';
-import {
-  createFlowerProductLocal,
-  deleteFlowerProductLocal,
-  listFlowerProductsLocal,
-  toggleFlowerProductActiveLocal,
-  updateFlowerProductLocal,
-} from './flowers-products.local';
-import {
-  createFlowerProductSupabase,
-  deleteFlowerProductSupabase,
-  listFlowerProductsSupabase,
-  toggleFlowerProductActiveSupabase,
-  updateFlowerProductSupabase,
-} from './flowers-products.supabase';
 import { getFlowerStorageMode, shouldUseFlowerSupabase } from '../storage-mode';
-
-function validateName(name: string) {
-  if (!name.trim()) {
-    throw new Error('Product name is required.');
-  }
-}
-
-function validateBasePrice(basePrice: number) {
-  if (!Number.isFinite(basePrice) || basePrice < 0) {
-    throw new Error('Base price must be 0 or greater.');
-  }
-}
+import {
+  createFlowerStemLocal,
+  deleteFlowerStemLocal,
+  listFlowerStemsLocal,
+  toggleFlowerStemActiveLocal,
+  updateFlowerStemLocal,
+} from './flowers-products.local';
 
 export async function listFlowerProducts(): Promise<FlowerProduct[]> {
   const mode = getFlowerStorageMode();
 
   if (shouldUseFlowerSupabase(mode)) {
     try {
+      const { listFlowerProductsSupabase } = await import('./flowers-products.supabase');
       return await listFlowerProductsSupabase();
     } catch (error) {
       if (mode === 'supabase') {
         throw error;
       }
-      console.warn('Falling back to local flower product storage after Supabase read failure.', error);
+      console.warn('Falling back to local flower products.', error);
     }
   }
 
-  return listFlowerProductsLocal();
+  return listFlowerStemsLocal();
 }
 
 export async function createFlowerProduct(input: CreateFlowerProductInput): Promise<FlowerProduct> {
-  validateName(input.name);
-  validateBasePrice(input.base_price);
-
   const mode = getFlowerStorageMode();
 
   if (shouldUseFlowerSupabase(mode)) {
     try {
+      const { createFlowerProductSupabase } = await import('./flowers-products.supabase');
       return await createFlowerProductSupabase(input);
     } catch (error) {
       if (mode === 'supabase') {
         throw error;
       }
-      console.warn('Falling back to local flower product storage after Supabase write failure.', error);
     }
   }
 
-  return createFlowerProductLocal(input);
+  return createFlowerStemLocal(input);
 }
 
 export async function updateFlowerProduct(
   productId: string,
   input: UpdateFlowerProductInput,
 ): Promise<FlowerProduct> {
-  validateName(input.name);
-  validateBasePrice(input.base_price);
-
   const mode = getFlowerStorageMode();
 
   if (shouldUseFlowerSupabase(mode)) {
     try {
+      const { updateFlowerProductSupabase } = await import('./flowers-products.supabase');
       return await updateFlowerProductSupabase(productId, input);
     } catch (error) {
       if (mode === 'supabase') {
         throw error;
       }
-      console.warn('Falling back to local flower product storage after Supabase update failure.', error);
     }
   }
 
-  return updateFlowerProductLocal(productId, input);
+  return updateFlowerStemLocal(productId, input);
 }
 
 export async function toggleFlowerProductActive(
@@ -99,35 +75,31 @@ export async function toggleFlowerProductActive(
 
   if (shouldUseFlowerSupabase(mode)) {
     try {
+      const { toggleFlowerProductActiveSupabase } = await import('./flowers-products.supabase');
       return await toggleFlowerProductActiveSupabase(productId, isActive);
     } catch (error) {
       if (mode === 'supabase') {
         throw error;
       }
-      console.warn('Falling back to local flower product storage after Supabase toggle failure.', error);
     }
   }
 
-  return toggleFlowerProductActiveLocal(productId, isActive);
+  return toggleFlowerStemActiveLocal(productId, isActive);
 }
 
 export async function deleteFlowerProduct(productId: string): Promise<void> {
-  if (!productId.trim()) {
-    throw new Error('Product ID is required.');
-  }
-
   const mode = getFlowerStorageMode();
 
   if (shouldUseFlowerSupabase(mode)) {
     try {
+      const { deleteFlowerProductSupabase } = await import('./flowers-products.supabase');
       return await deleteFlowerProductSupabase(productId);
     } catch (error) {
       if (mode === 'supabase') {
         throw error;
       }
-      console.warn('Falling back to local flower product storage after Supabase delete failure.', error);
     }
   }
 
-  return deleteFlowerProductLocal(productId);
+  return deleteFlowerStemLocal(productId);
 }

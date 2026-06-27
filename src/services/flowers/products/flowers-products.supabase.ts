@@ -8,7 +8,8 @@ import type {
 type FlowerProductRow = {
   id: string;
   name: string;
-  base_price: number;
+  unit_cost?: number;
+  base_price?: number;
   is_active: boolean;
   created_at: string;
 };
@@ -26,7 +27,7 @@ function rowToFlowerProduct(row: FlowerProductRow): FlowerProduct {
   return {
     id: row.id,
     name: row.name,
-    base_price: Number(row.base_price),
+    unit_cost: Number(row.unit_cost ?? row.base_price ?? 0),
     is_active: Boolean(row.is_active),
     created_at: row.created_at,
   };
@@ -37,7 +38,7 @@ export async function listFlowerProductsSupabase(): Promise<FlowerProduct[]> {
 
   const { data, error } = await supabase
     .from('flower_products')
-    .select('id, name, base_price, is_active, created_at')
+    .select('id, name, unit_cost, base_price, is_active, created_at')
     .order('created_at', { ascending: false });
 
   if (error) {
@@ -53,11 +54,12 @@ export async function createFlowerProductSupabase(input: CreateFlowerProductInpu
   const { data, error } = await supabase
     .from('flower_products')
     .insert({
+      id: `stem-${Date.now()}`,
       name: input.name.trim(),
-      base_price: input.base_price,
+      unit_cost: input.unit_cost,
       is_active: input.is_active ?? true,
     })
-    .select('id, name, base_price, is_active, created_at')
+    .select('id, name, unit_cost, is_active, created_at')
     .single();
 
   if (error) {
@@ -77,10 +79,10 @@ export async function updateFlowerProductSupabase(
     .from('flower_products')
     .update({
       name: input.name.trim(),
-      base_price: input.base_price,
+      unit_cost: input.unit_cost,
     })
     .eq('id', productId)
-    .select('id, name, base_price, is_active, created_at')
+    .select('id, name, unit_cost, is_active, created_at')
     .single();
 
   if (error) {
@@ -98,11 +100,9 @@ export async function toggleFlowerProductActiveSupabase(
 
   const { data, error } = await supabase
     .from('flower_products')
-    .update({
-      is_active: isActive,
-    })
+    .update({ is_active: isActive })
     .eq('id', productId)
-    .select('id, name, base_price, is_active, created_at')
+    .select('id, name, unit_cost, is_active, created_at')
     .single();
 
   if (error) {

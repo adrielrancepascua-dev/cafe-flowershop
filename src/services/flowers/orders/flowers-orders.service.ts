@@ -1,83 +1,71 @@
 import type {
   CreateFlowerOrderInput,
   FlowerOrder,
+  FlowerOrderStatus,
   ListFlowerOrdersOptions,
+  UpdateFlowerOrderInput,
 } from '../../../modules/flowers/shared/types/flower-order';
-import { createFlowerOrderLocal, listFlowerOrdersLocal } from './flowers-orders.local';
-import {
-  createFlowerOrderSupabase,
-  listFlowerOrdersSupabase,
-} from './flowers-orders.supabase';
 import { getFlowerStorageMode, shouldUseFlowerSupabase } from '../storage-mode';
-
-function validateOrderInput(input: CreateFlowerOrderInput) {
-  if (!input.branch_id) {
-    throw new Error('Branch is required.');
-  }
-
-  if (!Array.isArray(input.items) || input.items.length === 0) {
-    throw new Error('At least one order item is required.');
-  }
-
-  if (!Number.isFinite(input.total_amount) || input.total_amount < 0) {
-    throw new Error('Total amount must be 0 or greater.');
-  }
-
-  for (const item of input.items) {
-    if (!item.product_id) {
-      throw new Error('Order item product is required.');
-    }
-
-    if (!item.item_name.trim()) {
-      throw new Error('Order item name is required.');
-    }
-
-    if (!Number.isFinite(item.quantity) || item.quantity <= 0 || !Number.isInteger(item.quantity)) {
-      throw new Error('Order item quantity must be a whole number greater than 0.');
-    }
-
-    if (!Number.isFinite(item.unit_price) || item.unit_price < 0) {
-      throw new Error('Order item unit price must be 0 or greater.');
-    }
-
-    if (!Number.isFinite(item.line_total) || item.line_total < 0) {
-      throw new Error('Order item line total must be 0 or greater.');
-    }
-  }
-}
+import {
+  createFlowerOrderLocal,
+  getFlowerDayCloseStatusLocal,
+  getFlowerOrderLocal,
+  listFlowerOrdersLocal,
+  updateFlowerOrderLocal,
+  updateFlowerOrderStatusLocal,
+} from './flowers-orders.local';
 
 export async function listFlowerOrders(options: ListFlowerOrdersOptions = {}): Promise<FlowerOrder[]> {
   const mode = getFlowerStorageMode();
 
   if (shouldUseFlowerSupabase(mode)) {
     try {
+      const { listFlowerOrdersSupabase } = await import('./flowers-orders.supabase');
       return await listFlowerOrdersSupabase(options);
     } catch (error) {
       if (mode === 'supabase') {
         throw error;
       }
-      console.warn('Falling back to local flower order storage after Supabase read failure.', error);
+      console.warn('Falling back to local flower orders.', error);
     }
   }
 
   return listFlowerOrdersLocal(options);
 }
 
-export async function createFlowerOrder(input: CreateFlowerOrderInput): Promise<FlowerOrder> {
-  validateOrderInput(input);
+export async function getFlowerOrder(orderId: string): Promise<FlowerOrder | null> {
+  return getFlowerOrderLocal(orderId);
+}
 
+export async function createFlowerOrder(input: CreateFlowerOrderInput): Promise<FlowerOrder> {
   const mode = getFlowerStorageMode();
 
   if (shouldUseFlowerSupabase(mode)) {
     try {
+      const { createFlowerOrderSupabase } = await import('./flowers-orders.supabase');
       return await createFlowerOrderSupabase(input);
     } catch (error) {
       if (mode === 'supabase') {
         throw error;
       }
-      console.warn('Falling back to local flower order storage after Supabase write failure.', error);
+      console.warn('Falling back to local flower order create.', error);
     }
   }
 
   return createFlowerOrderLocal(input);
+}
+
+export async function updateFlowerOrder(input: UpdateFlowerOrderInput): Promise<FlowerOrder> {
+  return updateFlowerOrderLocal(input);
+}
+
+export async function updateFlowerOrderStatus(
+  orderId: string,
+  status: FlowerOrderStatus,
+): Promise<FlowerOrder> {
+  return updateFlowerOrderStatusLocal(orderId, status);
+}
+
+export async function getFlowerDayCloseStatus(dateKey: string) {
+  return getFlowerDayCloseStatusLocal(dateKey);
 }

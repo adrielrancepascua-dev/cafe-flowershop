@@ -1,0 +1,589 @@
+import { useEffect, useMemo, useState } from 'react';
+import { X } from 'lucide-react';
+import type { FlowerProduct } from '../../shared/types/flower-product';
+import type { FlowerBranchOption } from '../../shared/types/flower-inventory';
+import type {
+  CreateFlowerOrderInput,
+  FlowerClaimMode,
+  FlowerOrder,
+  FlowerOrderStatus,
+} from '../../shared/types/flower-order';
+import {
+  ORDER_STATUS_LABELS,
+  PRICE_FORMATTER,
+  fromDateInputValue,
+  readFileAsDataUrl,
+  toDateInputValue,
+} from '../../shared/utils/flower-format';
+
+type LineDraft = {
+  rowId: string;
+  productId: string;
+  quantity: string;
+};
+
+type OrderFormProps = {
+  open: boolean;
+  onClose: () => void;
+  onSubmit: (input: CreateFlowerOrderInput) => Promise<void>;
+  onStatusChange?: (orderId: string, status: FlowerOrderStatus) => Promise<void>;
+  branches: FlowerBranchOption[];
+  products: FlowerProduct[];
+  initialPickupIso?: string;
+  existingOrder?: FlowerOrder | null;
+  staffId: string;
+  staffName: string;
+  isSubmitting?: boolean;
+};
+
+function createLineDraft(): LineDraft {
+  return {
+    rowId: `${Date.now()}-${Math.random()}`,
+    productId: '',
+    quantity: '1',
+  };
+}
+
+function emptyForm(
+  pickupIso: string,
+  staffId: string,
+  staffName: string,
+): CreateFlowerOrderInput {
+  return {
+    branch_id: '',
+    receiver: '',
+    customer_social: '',
+    scheduled_for: pickupIso,
+    claim_mode: 'pickup',
+    wrapper_color: '',
+    greeting_card: '',
+    special_instructions: '',
+    downpayment: 0,
+    payment_reference: '',
+    total_amount: 0,
+    notes: '',
+    photo_inspo_data_url: '',
+    proof_dp_data_url: '',
+    order_form_ss_data_url: '',
+    created_by_id: staffId,
+    created_by_name: staffName,
+    items: [],
+  };
+}
+
+export default function FlowerOrderFormModal({
+  open,
+  onClose,
+  onSubmit,
+  onStatusChange,
+  branches,
+  products,
+  initialPickupIso,
+  existingOrder,
+  staffId,
+  staffName,
+  isSubmitting = false,
+}: OrderFormProps) {
+  const [form, setForm] = useState<CreateFlowerOrderInput>(() =>
+    emptyForm(initialPickupIso ?? new Date().toISOString(), staffId, staffName),
+  );
+  const [lineDrafts, setLineDrafts] = useState<LineDraft[]>([createLineDraft()]);
+  const [errorMessage, setErrorMessage] = useState('');
+
+  useEffect(() => {
+    if (!open) {
+      return;
+    }
+
+    if (existingOrder) {
+      setForm({
+        branch_id: existingOrder.branch_id,
+        receiver: existingOrder.receiver,
+        customer_social: existingOrder.customer_social,
+        scheduled_for: existingOrder.scheduled_for,
+        claim_mode: existingOrder.claim_mode,
+        wrapper_color: existingOrder.wrapper_color,
+        greeting_card: existingOrder.greeting_card,
+        special_instructions: existingOrder.special_instructions,
+        downpayment: existingOrder.downpayment,
+        payment_reference: existingOrder.payment_reference,
+        total_amount: existingOrder.total_amount,
+        notes: existingOrder.notes,
+        photo_inspo_data_url: existingOrder.photo_inspo_data_url,
+        proof_dp_data_url: existingOrder.proof_dp_data_url,
+        order_form_ss_data_url: existingOrder.order_form_ss_data_url,
+        created_by_id: existingOrder.created_by_id,
+        created_by_name: existingOrder.created_by_name,
+        items: existingOrder.items.map((item) => ({ ...item })),
+      });
+      setLineDrafts(
+        existingOrder.items.length > 0
+          ? existingOrder.items.map((item) => ({
+              rowId: `${item.product_id}-${item.quantity}`,
+              productId: item.product_id,
+              quantity: String(item.quantity),
+            }))
+          : [createLineDraft()],
+      );
+      return;
+    }
+
+    setForm(emptyForm(initialPickupIso ?? new Date().toISOString(), staffId, staffName));
+    setLineDrafts([createLineDraft()]);
+    setErrorMessage('');
+  }, [open, existingOrder, initialPickupIso, staffId, staffName]);
+
+  const balance = useMemo(
+    () => Math.max(0, form.total_amount - form.downpayment),
+    [form.total_amount, form.downpayment],
+  );
+
+  const activeProducts = useMemo(
+    () => products.filter((product) => product.is_active),
+    [products],
+  );
+
+  if (!open) {
+    return null;
+  }
+
+  function updateField<K extends keyof CreateFlowerOrderInput>(
+    key: K,
+    value: CreateFlowerOrderInput[K],
+  ) {
+    setForm((current) => ({ ...current, [key]: value }));
+  }
+
+  async function handleFileChange(
+    key: 'photo_inspo_data_url' | 'proof_dp_data_url' | 'order_form_ss_data_url',
+    file: File | null,
+  ) {
+    if (!file) {
+      updateField(key, '');
+      return;
+    }
+
+    const dataUrl = await readFileAsDataUrl(file);
+    updateField(key, dataUrl);
+  }
+
+  function validateForm(): CreateFlowerOrderInput | null {
+    const items = lineDrafts
+      .map((row) => {
+        const product = activeProducts.find((entry) => entry.id === row.productId);
+        const quantity = Number(row.quantity);
+
+        if (!product || !Number.isFinite(quantity) || quantity <= 0) {
+          return null;
+        }
+
+        return {
+          product_id: product.id,
+          item_name: product.name,
+          quantity,
+        };
+      })
+      .filter((item): item is NonNullable<typeof item> => item !== null);
+
+    if (!form.branch_id) {
+      setErrorMessage('Branch is required.');
+      return null;
+    }
+
+    if (!form.receiver.trim()) {
+      setErrorMessage('Receiver is required.');
+      return null;
+    }
+
+    if (!form.customer_social.trim()) {
+      setErrorMessage('FB/IG name is required.');
+      return null;
+    }
+
+    if (!form.scheduled_for) {
+      setErrorMessage('Pickup date and time is required.');
+      return null;
+    }
+
+    if (items.length === 0) {
+      setErrorMessage('Add at least one flower type with quantity.');
+      return null;
+    }
+
+    const requiredTextFields: Array<[string, string]> = [
+      ['Wrapper color', form.wrapper_color],
+      ['Greeting card', form.greeting_card],
+      ['Instructions', form.special_instructions],
+      ['Reference #', form.payment_reference],
+      ['Note', form.notes],
+    ];
+
+    for (const [label, value] of requiredTextFields) {
+      if (!value.trim()) {
+        setErrorMessage(`${label} is required.`);
+        return null;
+      }
+    }
+
+    if (!form.photo_inspo_data_url || !form.proof_dp_data_url || !form.order_form_ss_data_url) {
+      setErrorMessage('All photo uploads are required.');
+      return null;
+    }
+
+    if (!Number.isFinite(form.total_amount) || form.total_amount <= 0) {
+      setErrorMessage('Total amount must be greater than 0.');
+      return null;
+    }
+
+    if (!Number.isFinite(form.downpayment) || form.downpayment < 0) {
+      setErrorMessage('Downpayment must be 0 or greater.');
+      return null;
+    }
+
+    if (form.downpayment > form.total_amount) {
+      setErrorMessage('Downpayment cannot exceed total amount.');
+      return null;
+    }
+
+    setErrorMessage('');
+    return { ...form, items };
+  }
+
+  async function handleSubmit(event: React.FormEvent) {
+    event.preventDefault();
+    const payload = validateForm();
+    if (!payload) {
+      return;
+    }
+
+    await onSubmit(payload);
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-end justify-center bg-brand-dark/40 p-0 sm:items-center sm:p-4">
+      <div className="flower-card flex max-h-[92vh] w-full max-w-3xl flex-col overflow-hidden sm:max-h-[90vh]">
+        <div className="flex items-center justify-between border-b border-brand-muted/40 px-4 py-3 sm:px-6">
+          <div>
+            <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-brand-accent">
+              {existingOrder ? 'Edit order' : 'New order'}
+            </p>
+            <h2 className="font-serif text-lg font-semibold text-brand-dark">
+              Papers &amp; Petals — Daily Order
+            </h2>
+          </div>
+          <button type="button" onClick={onClose} className="rounded-lg p-2 hover:bg-brand-beige/60">
+            <X className="h-5 w-5" />
+          </button>
+        </div>
+
+        <form onSubmit={handleSubmit} className="flower-scroll flex-1 overflow-y-auto px-4 py-4 sm:px-6">
+          <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+            <label className="block text-sm font-medium text-brand-brown md:col-span-2">
+              Date &amp; time of pick up
+              <input
+                type="datetime-local"
+                value={toDateInputValue(form.scheduled_for)}
+                onChange={(event) => updateField('scheduled_for', fromDateInputValue(event.target.value))}
+                className="flower-input mt-1.5"
+                required
+              />
+            </label>
+
+            {existingOrder && onStatusChange ? (
+              <label className="block text-sm font-medium text-brand-brown md:col-span-2">
+                Status
+                <select
+                  value={existingOrder.status}
+                  onChange={(event) =>
+                    void onStatusChange(existingOrder.id, event.target.value as FlowerOrderStatus)
+                  }
+                  className="flower-input mt-1.5"
+                >
+                  {Object.entries(ORDER_STATUS_LABELS).map(([value, label]) => (
+                    <option key={value} value={value}>
+                      {label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            ) : null}
+
+            <label className="block text-sm font-medium text-brand-brown">
+              Receiver
+              <input
+                type="text"
+                value={form.receiver}
+                onChange={(event) => updateField('receiver', event.target.value)}
+                className="flower-input mt-1.5"
+                required
+              />
+            </label>
+
+            <label className="block text-sm font-medium text-brand-brown">
+              FB/IG Name
+              <input
+                type="text"
+                value={form.customer_social}
+                onChange={(event) => updateField('customer_social', event.target.value)}
+                className="flower-input mt-1.5"
+                required
+              />
+            </label>
+
+            <label className="block text-sm font-medium text-brand-brown">
+              Branch
+              <select
+                value={form.branch_id}
+                onChange={(event) => updateField('branch_id', event.target.value)}
+                className="flower-input mt-1.5"
+                required
+              >
+                <option value="">Select branch</option>
+                {branches.map((branch) => (
+                  <option key={branch.id} value={branch.id}>
+                    {branch.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+
+            <label className="block text-sm font-medium text-brand-brown">
+              Mode of claiming
+              <select
+                value={form.claim_mode}
+                onChange={(event) => updateField('claim_mode', event.target.value as FlowerClaimMode)}
+                className="flower-input mt-1.5"
+                required
+              >
+                <option value="pickup">Pick up</option>
+                <option value="delivery">Delivery</option>
+              </select>
+            </label>
+
+            <label className="block text-sm font-medium text-brand-brown">
+              Wrapper color
+              <input
+                type="text"
+                value={form.wrapper_color}
+                onChange={(event) => updateField('wrapper_color', event.target.value)}
+                className="flower-input mt-1.5"
+                required
+              />
+            </label>
+
+            <label className="block text-sm font-medium text-brand-brown">
+              Greeting card
+              <input
+                type="text"
+                value={form.greeting_card}
+                onChange={(event) => updateField('greeting_card', event.target.value)}
+                className="flower-input mt-1.5"
+                required
+              />
+            </label>
+
+            <label className="block text-sm font-medium text-brand-brown md:col-span-2">
+              Instructions
+              <input
+                type="text"
+                value={form.special_instructions}
+                onChange={(event) => updateField('special_instructions', event.target.value)}
+                className="flower-input mt-1.5"
+                required
+              />
+            </label>
+          </div>
+
+          <div className="mt-5">
+            <div className="mb-2 flex items-center justify-between">
+              <h3 className="text-sm font-semibold text-brand-dark">Flowers &amp; fillers (type + qty)</h3>
+              <button
+                type="button"
+                className="text-xs font-semibold text-brand-brown underline"
+                onClick={() => setLineDrafts((rows) => [...rows, createLineDraft()])}
+              >
+                Add row
+              </button>
+            </div>
+
+            <div className="space-y-2">
+              {lineDrafts.map((row) => (
+                <div key={row.rowId} className="grid grid-cols-[1fr_100px_auto] gap-2">
+                  <select
+                    value={row.productId}
+                    onChange={(event) =>
+                      setLineDrafts((rows) =>
+                        rows.map((entry) =>
+                          entry.rowId === row.rowId
+                            ? { ...entry, productId: event.target.value }
+                            : entry,
+                        ),
+                      )
+                    }
+                    className="flower-input"
+                    required
+                  >
+                    <option value="">Flower type</option>
+                    {activeProducts.map((product) => (
+                      <option key={product.id} value={product.id}>
+                        {product.name}
+                      </option>
+                    ))}
+                  </select>
+                  <input
+                    type="number"
+                    min="1"
+                    step="1"
+                    value={row.quantity}
+                    onChange={(event) =>
+                      setLineDrafts((rows) =>
+                        rows.map((entry) =>
+                          entry.rowId === row.rowId
+                            ? { ...entry, quantity: event.target.value }
+                            : entry,
+                        ),
+                      )
+                    }
+                    className="flower-input"
+                    required
+                  />
+                  <button
+                    type="button"
+                    className="flower-btn-secondary px-3"
+                    onClick={() =>
+                      setLineDrafts((rows) =>
+                        rows.length === 1 ? rows : rows.filter((entry) => entry.rowId !== row.rowId),
+                      )
+                    }
+                  >
+                    Remove
+                  </button>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <div className="mt-5 grid grid-cols-1 gap-3 md:grid-cols-3">
+            <label className="block text-sm font-medium text-brand-brown">
+              Downpayment
+              <input
+                type="number"
+                min="0"
+                step="0.01"
+                value={form.downpayment}
+                onChange={(event) => updateField('downpayment', Number(event.target.value))}
+                className="flower-input mt-1.5"
+                required
+              />
+            </label>
+            <label className="block text-sm font-medium text-brand-brown">
+              Total amount
+              <input
+                type="number"
+                min="0"
+                step="0.01"
+                value={form.total_amount}
+                onChange={(event) => updateField('total_amount', Number(event.target.value))}
+                className="flower-input mt-1.5"
+                required
+              />
+            </label>
+            <label className="block text-sm font-medium text-brand-brown">
+              Balance
+              <input
+                type="text"
+                value={PRICE_FORMATTER.format(balance)}
+                readOnly
+                className="flower-input mt-1.5 bg-brand-beige/30"
+              />
+            </label>
+          </div>
+
+          <label className="mt-3 block text-sm font-medium text-brand-brown">
+            Reference #
+            <input
+              type="text"
+              value={form.payment_reference}
+              onChange={(event) => updateField('payment_reference', event.target.value)}
+              className="flower-input mt-1.5"
+              required
+            />
+          </label>
+
+          <label className="mt-3 block text-sm font-medium text-brand-brown">
+            Note
+            <textarea
+              value={form.notes}
+              onChange={(event) => updateField('notes', event.target.value)}
+              className="flower-input mt-1.5 min-h-[72px]"
+              required
+            />
+          </label>
+
+          <div className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-3">
+            <label className="block text-sm font-medium text-brand-brown">
+              Photo of order / inspo
+              <input
+                type="file"
+                accept="image/*"
+                onChange={(event) =>
+                  void handleFileChange('photo_inspo_data_url', event.target.files?.[0] ?? null)
+                }
+                className="mt-1.5 block w-full text-xs"
+                required={!form.photo_inspo_data_url}
+              />
+            </label>
+            <label className="block text-sm font-medium text-brand-brown">
+              Proof of DP
+              <input
+                type="file"
+                accept="image/*"
+                onChange={(event) =>
+                  void handleFileChange('proof_dp_data_url', event.target.files?.[0] ?? null)
+                }
+                className="mt-1.5 block w-full text-xs"
+                required={!form.proof_dp_data_url}
+              />
+            </label>
+            <label className="block text-sm font-medium text-brand-brown">
+              SS of order form
+              <input
+                type="file"
+                accept="image/*"
+                onChange={(event) =>
+                  void handleFileChange('order_form_ss_data_url', event.target.files?.[0] ?? null)
+                }
+                className="mt-1.5 block w-full text-xs"
+                required={!form.order_form_ss_data_url}
+              />
+            </label>
+          </div>
+
+          <p className="mt-3 text-xs text-brand-brown/70">
+            Input by: {form.created_by_name}
+          </p>
+
+          {errorMessage ? (
+            <p className="mt-4 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+              {errorMessage}
+            </p>
+          ) : null}
+        </form>
+
+        <div className="flex gap-2 border-t border-brand-muted/40 px-4 py-3 sm:px-6">
+          <button type="button" onClick={onClose} className="flower-btn-secondary flex-1">
+            Cancel
+          </button>
+          <button
+            type="submit"
+            disabled={isSubmitting}
+            onClick={handleSubmit}
+            className="flower-btn-primary flex-1"
+          >
+            {isSubmitting ? 'Saving...' : existingOrder ? 'Update order' : 'Save order'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
