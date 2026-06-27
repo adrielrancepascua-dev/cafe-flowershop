@@ -8,7 +8,7 @@ const STAFF_LINKS = [
   { label: 'Orders', to: '/dashboard/flowers/orders', icon: CalendarDays, description: 'Calendar & list order entry' },
   { label: 'Inventory', to: '/dashboard/flowers/inventory', icon: Package, description: 'View branch stock levels' },
   { label: 'My Expenses', to: '/dashboard/flowers/expenses', icon: Receipt, description: 'Log your daily expenses' },
-  { label: 'Reports', to: '/dashboard/flowers/reports', icon: BarChart3, description: 'Sales & net income after the day is closed' },
+  { label: 'Reports', to: '/dashboard/flowers/reports', icon: BarChart3, description: "Today's sales & net income after all orders are closed" },
 ];
 
 const ADMIN_LINKS = [

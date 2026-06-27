@@ -10,6 +10,15 @@ import FlowerPageHeader from '../../shared/components/FlowerPageHeader';
 import { PRICE_FORMATTER, toDateKey } from '../../shared/utils/flower-format';
 import { RequireFlowerAdmin } from '../components/RequireFlowerAuth';
 
+function formatReportDateLabel(dateKey: string): string {
+  return new Date(`${dateKey}T12:00:00`).toLocaleDateString('en-PH', {
+    weekday: 'long',
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric',
+  });
+}
+
 function emptyReports(): FlowerReportsData {
   return {
     daily_summary: [],
@@ -36,6 +45,9 @@ export default function FlowerReportsPage() {
   const [supplierDescription, setSupplierDescription] = useState('');
   const [supplierBranchId, setSupplierBranchId] = useState('');
 
+  const staffReportDate = toDateKey(new Date());
+  const effectiveReportDate = isAdmin ? reportDate : staffReportDate;
+
   async function loadReports() {
     if (!user) {
       return;
@@ -46,11 +58,13 @@ export default function FlowerReportsPage() {
 
     try {
       if (!isAdmin) {
-        const allowed = await canStaffAccessReports(reportDate);
+        const allowed = await canStaffAccessReports(effectiveReportDate);
         if (!allowed) {
-          const closeStatus = await getFlowerDayCloseStatus(reportDate);
+          const closeStatus = await getFlowerDayCloseStatus(effectiveReportDate);
           setBlockedMessage(
-            `Reports locked — ${closeStatus.open_orders} order(s) still open for ${reportDate}. Mark all as picked up/delivered/completed first.`,
+            closeStatus.total_orders === 0
+              ? `Reports unlock after today (${formatReportDateLabel(effectiveReportDate)}) once orders are scheduled and all are marked picked up, delivered, or completed.`
+              : `Reports locked — ${closeStatus.open_orders} order(s) still open for today. Mark all as picked up/delivered/completed first.`,
           );
           setReportsData(emptyReports());
           return;
@@ -59,7 +73,10 @@ export default function FlowerReportsPage() {
 
       const data = await getFlowerReports({
         branchId: branchFilter === 'all' ? undefined : branchFilter,
-        reportDate,
+        reportDate: effectiveReportDate,
+        dailyDays: isAdmin ? undefined : 1,
+        monthlyMonths: isAdmin ? undefined : 0,
+        advanceLimit: isAdmin ? undefined : 0,
       });
       setReportsData(data);
     } catch (error) {
@@ -80,7 +97,7 @@ export default function FlowerReportsPage() {
 
   useEffect(() => {
     void loadReports();
-  }, [branchFilter, reportDate, user, isAdmin]);
+  }, [branchFilter, effectiveReportDate, user, isAdmin]);
 
   async function handleSupplierCost(event: React.FormEvent) {
     event.preventDefault();
@@ -97,7 +114,7 @@ export default function FlowerReportsPage() {
       branch_id: supplierBranchId,
       amount,
       description: supplierDescription,
-      cost_date: reportDate,
+      cost_date: effectiveReportDate,
       created_by_id: user.id,
       created_by_name: user.display_name,
     });
@@ -112,11 +129,26 @@ export default function FlowerReportsPage() {
       <FlowerPageHeader
         label="Sales & Finance"
         title="Reports"
-        description="Net income = total sales − staff expenses − supplier costs. Staff access unlocks after the pickup day is fully closed."
+        description={
+          isAdmin
+            ? 'Net income = total sales − staff expenses − supplier costs. Pick any date to review history.'
+            : `Today's totals only. Unlocks after all orders for ${formatReportDateLabel(staffReportDate)} are closed.`
+        }
       />
 
-      <div className="mt-4 flex flex-wrap gap-2">
-        <input type="date" value={reportDate} onChange={(e) => setReportDate(e.target.value)} className="flower-input max-w-[180px]" />
+      <div className="mt-4 flex flex-wrap items-center gap-2">
+        {isAdmin ? (
+          <input
+            type="date"
+            value={reportDate}
+            onChange={(e) => setReportDate(e.target.value)}
+            className="flower-input max-w-[180px]"
+          />
+        ) : (
+          <p className="rounded-xl border border-brand-muted/40 bg-brand-cream/30 px-3 py-2 text-sm font-medium text-brand-dark">
+            {formatReportDateLabel(staffReportDate)}
+          </p>
+        )}
         <select value={branchFilter} onChange={(e) => setBranchFilter(e.target.value)} className="flower-input max-w-[180px]">
           <option value="all">All branches</option>
           {branches.map((branch) => (
@@ -158,30 +190,32 @@ export default function FlowerReportsPage() {
             </form>
           </RequireFlowerAdmin>
 
-          <div className="mt-6 grid grid-cols-1 gap-4 lg:grid-cols-2">
-            <section className="rounded-2xl border border-brand-muted/40 p-4">
-              <h3 className="text-sm font-semibold text-brand-dark">Daily summary</h3>
-              <ul className="mt-2 space-y-1 text-sm">
-                {reportsData.daily_summary.map((row) => (
-                  <li key={row.date} className="flex justify-between">
-                    <span>{row.date}</span>
-                    <span>{row.order_count} orders · {PRICE_FORMATTER.format(row.sales_total)}</span>
-                  </li>
-                ))}
-              </ul>
-            </section>
-            <section className="rounded-2xl border border-brand-muted/40 p-4">
-              <h3 className="text-sm font-semibold text-brand-dark">Monthly summary</h3>
-              <ul className="mt-2 space-y-1 text-sm">
-                {reportsData.monthly_summary.map((row) => (
-                  <li key={row.month} className="flex justify-between">
-                    <span>{row.month}</span>
-                    <span>{row.order_count} orders · {PRICE_FORMATTER.format(row.sales_total)}</span>
-                  </li>
-                ))}
-              </ul>
-            </section>
-          </div>
+          {isAdmin ? (
+            <div className="mt-6 grid grid-cols-1 gap-4 lg:grid-cols-2">
+              <section className="rounded-2xl border border-brand-muted/40 p-4">
+                <h3 className="text-sm font-semibold text-brand-dark">Daily summary</h3>
+                <ul className="mt-2 space-y-1 text-sm">
+                  {reportsData.daily_summary.map((row) => (
+                    <li key={row.date} className="flex justify-between">
+                      <span>{row.date}</span>
+                      <span>{row.order_count} orders · {PRICE_FORMATTER.format(row.sales_total)}</span>
+                    </li>
+                  ))}
+                </ul>
+              </section>
+              <section className="rounded-2xl border border-brand-muted/40 p-4">
+                <h3 className="text-sm font-semibold text-brand-dark">Monthly summary</h3>
+                <ul className="mt-2 space-y-1 text-sm">
+                  {reportsData.monthly_summary.map((row) => (
+                    <li key={row.month} className="flex justify-between">
+                      <span>{row.month}</span>
+                      <span>{row.order_count} orders · {PRICE_FORMATTER.format(row.sales_total)}</span>
+                    </li>
+                  ))}
+                </ul>
+              </section>
+            </div>
+          ) : null}
         </>
       ) : null}
     </div>
