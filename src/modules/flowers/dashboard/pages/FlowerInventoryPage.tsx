@@ -12,7 +12,7 @@ import type { FlowerBranchOption, FlowerInventoryMovementRow, FlowerInventorySto
 import type { FlowerProduct } from '../../shared/types/flower-product';
 import FlowerPageHeader from '../../shared/components/FlowerPageHeader';
 import { RequireFlowerAdmin } from '../components/RequireFlowerAuth';
-import { Minus, Plus } from 'lucide-react';
+import { Minus, Plus, ArrowLeftRight, Package } from 'lucide-react';
 
 function aggregateStockByProduct(rows: FlowerInventoryStockRow[]): FlowerInventoryStockRow[] {
   const totals = new Map<string, FlowerInventoryStockRow>();
@@ -163,6 +163,8 @@ function StockAdjustControls({
   );
 }
 
+type InventoryTab = 'stock' | 'transfer';
+
 export default function FlowerInventoryPage() {
   const { isAdmin } = useFlowerAuth();
   const [branches, setBranches] = useState<FlowerBranchOption[]>([]);
@@ -180,16 +182,19 @@ export default function FlowerInventoryPage() {
   const [toBranchId, setToBranchId] = useState('');
   const [transferProductId, setTransferProductId] = useState('');
   const [transferQty, setTransferQty] = useState('1');
+  const [activeTab, setActiveTab] = useState<InventoryTab>('stock');
 
   async function loadData() {
     setLoading(true);
     try {
-      const branchId = selectedBranchId === 'all' ? undefined : selectedBranchId;
+      const stockBranchId = selectedBranchId === 'all' ? undefined : selectedBranchId;
+      const movementBranchId =
+        activeTab === 'transfer' ? undefined : stockBranchId;
       const [branchList, productList, stocks, movements] = await Promise.all([
         listFlowerBranches(),
         listFlowerProducts(),
-        listFlowerInventoryStock({ branchId }),
-        listFlowerInventoryMovements({ branchId, limit: 30 }),
+        listFlowerInventoryStock({ branchId: stockBranchId }),
+        listFlowerInventoryMovements({ branchId: movementBranchId, limit: 30 }),
       ]);
       setBranches(branchList);
       setProducts(productList.filter((product) => product.is_active));
@@ -204,7 +209,7 @@ export default function FlowerInventoryPage() {
 
   useEffect(() => {
     void loadData();
-  }, [selectedBranchId]);
+  }, [selectedBranchId, activeTab]);
 
   const isAllBranchesView = selectedBranchId === 'all';
 
@@ -223,6 +228,15 @@ export default function FlowerInventoryPage() {
 
   const selectedBranchName =
     branches.find((branch) => branch.id === selectedBranchId)?.name ?? 'All branches';
+
+  const transferMovements = useMemo(
+    () =>
+      movementRows.filter(
+        (movement) =>
+          movement.movement_type === 'transfer_in' || movement.movement_type === 'transfer_out',
+      ),
+    [movementRows],
+  );
 
   async function handleAdjust(
     branchId: string,
@@ -287,33 +301,172 @@ export default function FlowerInventoryPage() {
         }
       />
 
-      <div className="mt-4">
-        <select
-          value={selectedBranchId}
-          onChange={(event) => setSelectedBranchId(event.target.value)}
-          className="flower-input max-w-xs"
-        >
-          <option value="all">All branches</option>
-          {branches.map((branch) => (
-            <option key={branch.id} value={branch.id}>
-              {branch.name}
-            </option>
-          ))}
-        </select>
-        <p className="mt-2 text-sm text-brand-brown/70">
-          {isAllBranchesView
-            ? `Showing combined totals for all branches (${totalUnitsOnHand} units on hand).`
-            : `Showing stock for ${selectedBranchName} (${totalUnitsOnHand} units on hand).`}
-        </p>
-      </div>
+      {isAdmin ? (
+        <div className="mt-4 inline-flex rounded-xl border border-brand-muted/50 bg-white p-1">
+          <button
+            type="button"
+            onClick={() => setActiveTab('stock')}
+            className={`flower-pill flex items-center gap-1.5 ${activeTab === 'stock' ? 'flower-pill-active' : 'flower-pill-inactive'}`}
+          >
+            <Package className="h-3.5 w-3.5" />
+            Stock levels
+          </button>
+          <button
+            type="button"
+            onClick={() => setActiveTab('transfer')}
+            className={`flower-pill flex items-center gap-1.5 ${activeTab === 'transfer' ? 'flower-pill-active' : 'flower-pill-inactive'}`}
+          >
+            <ArrowLeftRight className="h-3.5 w-3.5" />
+            Inter-branch transfer
+          </button>
+        </div>
+      ) : null}
 
-      {message ? <p className="mt-3 text-sm text-emerald-700">{message}</p> : null}
-      {errorMessage ? <p className="mt-3 text-sm text-red-700">{errorMessage}</p> : null}
+      {message && (activeTab === 'stock' || !isAdmin) ? (
+        <p className="mt-3 text-sm text-emerald-700">{message}</p>
+      ) : null}
+      {errorMessage && (activeTab === 'stock' || !isAdmin) ? (
+        <p className="mt-3 text-sm text-red-700">{errorMessage}</p>
+      ) : null}
 
       {loading ? (
         <p className="mt-6 text-sm text-brand-brown/60">Loading inventory...</p>
+      ) : activeTab === 'transfer' && isAdmin ? (
+        <>
+          <RequireFlowerAdmin>
+            <form
+              onSubmit={handleTransfer}
+              className="mt-5 rounded-2xl border border-brand-muted/40 bg-brand-cream/20 p-4 sm:p-5"
+            >
+              <h3 className="text-sm font-semibold text-brand-dark">Inter-branch transfer</h3>
+              <p className="mt-1 text-sm text-brand-brown/70">
+                Move flowers from one branch to another. Stock is deducted from the source branch and added to the destination.
+              </p>
+              <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                <label className="block text-sm font-medium text-brand-brown">
+                  From branch
+                  <select
+                    value={fromBranchId}
+                    onChange={(e) => {
+                      setFromBranchId(e.target.value);
+                      clearTransferFeedback();
+                    }}
+                    className="flower-input mt-1.5"
+                    required
+                  >
+                    <option value="">Select branch</option>
+                    {branches.map((b) => (
+                      <option key={b.id} value={b.id}>{b.name}</option>
+                    ))}
+                  </select>
+                </label>
+                <label className="block text-sm font-medium text-brand-brown">
+                  To branch
+                  <select
+                    value={toBranchId}
+                    onChange={(e) => {
+                      setToBranchId(e.target.value);
+                      clearTransferFeedback();
+                    }}
+                    className="flower-input mt-1.5"
+                    required
+                  >
+                    <option value="">Select branch</option>
+                    {branches.map((b) => (
+                      <option key={b.id} value={b.id}>{b.name}</option>
+                    ))}
+                  </select>
+                </label>
+                <label className="block text-sm font-medium text-brand-brown">
+                  Flower type
+                  <select
+                    value={transferProductId}
+                    onChange={(e) => {
+                      setTransferProductId(e.target.value);
+                      clearTransferFeedback();
+                    }}
+                    className="flower-input mt-1.5"
+                    required
+                  >
+                    <option value="">Select flower</option>
+                    {products.map((p) => (
+                      <option key={p.id} value={p.id}>{p.name}</option>
+                    ))}
+                  </select>
+                </label>
+                <label className="block text-sm font-medium text-brand-brown">
+                  Quantity
+                  <input
+                    type="text"
+                    inputMode="numeric"
+                    value={transferQty}
+                    onChange={(e) => {
+                      setTransferQty(e.target.value.replace(/[^\d]/g, ''));
+                      clearTransferFeedback();
+                    }}
+                    className="flower-input mt-1.5"
+                    required
+                  />
+                </label>
+                <div className="flex items-end sm:col-span-2 lg:col-span-2">
+                  <button type="submit" className="flower-btn-primary w-full sm:w-auto">
+                    Transfer stock
+                  </button>
+                </div>
+              </div>
+              {transferErrorMessage ? (
+                <p className="mt-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+                  {transferErrorMessage}
+                </p>
+              ) : null}
+              {transferMessage ? (
+                <p className="mt-3 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-800">
+                  {transferMessage}
+                </p>
+              ) : null}
+            </form>
+          </RequireFlowerAdmin>
+
+          <div className="mt-6">
+            <h3 className="text-sm font-semibold text-brand-dark">Recent transfers</h3>
+            <ul className="mt-2 space-y-2 text-sm text-brand-brown/80">
+              {transferMovements.length > 0 ? (
+                transferMovements.map((movement) => (
+                  <li key={movement.id} className="rounded-lg border border-brand-muted/30 px-3 py-2">
+                    {movement.branch_name} · {movement.product_name} · {movement.movement_type} ·{' '}
+                    {movement.quantity} · {movement.note}
+                  </li>
+                ))
+              ) : (
+                <li className="rounded-lg border border-brand-muted/30 px-3 py-2 text-brand-brown/60">
+                  No transfers recorded yet.
+                </li>
+              )}
+            </ul>
+          </div>
+        </>
       ) : (
         <>
+          <div className="mt-4">
+            <select
+              value={selectedBranchId}
+              onChange={(event) => setSelectedBranchId(event.target.value)}
+              className="flower-input max-w-xs"
+            >
+              <option value="all">All branches</option>
+              {branches.map((branch) => (
+                <option key={branch.id} value={branch.id}>
+                  {branch.name}
+                </option>
+              ))}
+            </select>
+            <p className="mt-2 text-sm text-brand-brown/70">
+              {isAllBranchesView
+                ? `Showing combined totals for all branches (${totalUnitsOnHand} units on hand).`
+                : `Showing stock for ${selectedBranchName} (${totalUnitsOnHand} units on hand).`}
+            </p>
+          </div>
+
           <div className="mt-5 space-y-3 md:hidden">
             {displayStock.map((row) => (
               <div
@@ -388,81 +541,9 @@ export default function FlowerInventoryPage() {
 
           {isAdmin && isAllBranchesView ? (
             <p className="mt-3 text-sm text-brand-brown/60">
-              Select a specific branch above to stock in, stock out, or transfer between branches.
+              Select a specific branch above to stock in or stock out. Use the Inter-branch transfer tab to move stock between branches.
             </p>
           ) : null}
-
-          <RequireFlowerAdmin>
-            <form onSubmit={handleTransfer} className="mt-6 rounded-2xl border border-brand-muted/40 bg-brand-cream/20 p-4">
-              <h3 className="text-sm font-semibold text-brand-dark">Inter-branch transfer</h3>
-              <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-5">
-                <select
-                  value={fromBranchId}
-                  onChange={(e) => {
-                    setFromBranchId(e.target.value);
-                    clearTransferFeedback();
-                  }}
-                  className="flower-input"
-                  required
-                >
-                  <option value="">From branch</option>
-                  {branches.map((b) => (
-                    <option key={b.id} value={b.id}>{b.name}</option>
-                  ))}
-                </select>
-                <select
-                  value={toBranchId}
-                  onChange={(e) => {
-                    setToBranchId(e.target.value);
-                    clearTransferFeedback();
-                  }}
-                  className="flower-input"
-                  required
-                >
-                  <option value="">To branch</option>
-                  {branches.map((b) => (
-                    <option key={b.id} value={b.id}>{b.name}</option>
-                  ))}
-                </select>
-                <select
-                  value={transferProductId}
-                  onChange={(e) => {
-                    setTransferProductId(e.target.value);
-                    clearTransferFeedback();
-                  }}
-                  className="flower-input"
-                  required
-                >
-                  <option value="">Flower type</option>
-                  {products.map((p) => (
-                    <option key={p.id} value={p.id}>{p.name}</option>
-                  ))}
-                </select>
-                <input
-                  type="text"
-                  inputMode="numeric"
-                  value={transferQty}
-                  onChange={(e) => {
-                    setTransferQty(e.target.value.replace(/[^\d]/g, ''));
-                    clearTransferFeedback();
-                  }}
-                  className="flower-input"
-                  required
-                />
-                <button type="submit" className="flower-btn-primary">Transfer</button>
-              </div>
-              {transferErrorMessage ? (
-                <p className="mt-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
-                  {transferErrorMessage}
-                </p>
-              ) : null}
-              {transferMessage ? (
-                <p className="mt-3 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-800">
-                  {transferMessage}
-                </p>
-              ) : null}
-            </form>
-          </RequireFlowerAdmin>
 
           <div className="mt-6">
             <h3 className="text-sm font-semibold text-brand-dark">Recent movements</h3>
