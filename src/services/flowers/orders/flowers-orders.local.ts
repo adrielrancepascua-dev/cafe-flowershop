@@ -57,7 +57,21 @@ function writeOrdersToStorage(orders: FlowerOrder[]) {
     return;
   }
 
-  window.localStorage.setItem(ORDERS_STORAGE_KEY, JSON.stringify(orders));
+  try {
+    window.localStorage.setItem(ORDERS_STORAGE_KEY, JSON.stringify(orders));
+  } catch (error) {
+    const isQuotaError =
+      error instanceof DOMException &&
+      (error.name === 'QuotaExceededError' || error.code === 22);
+
+    if (isQuotaError) {
+      throw new Error(
+        'This browser has run out of demo storage space. Delete a few old orders or clear site data for this app, then try again. Production will store photos in cloud storage instead of the browser.',
+      );
+    }
+
+    throw error;
+  }
 }
 
 function getPickupDateKey(iso: string): string {

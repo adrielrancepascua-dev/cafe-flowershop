@@ -1,19 +1,67 @@
 export async function readFileAsDataUrl(file: File): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => {
-      if (typeof reader.result === 'string') {
-        resolve(reader.result);
-        return;
-      }
+  return readFileAsCompressedDataUrl(file);
+}
 
-      reject(new Error('Failed to read file.'));
-    };
-    reader.onerror = () => reject(new Error('Failed to read file.'));
-    reader.readAsDataURL(file);
+/** Resize and compress images so demo orders fit in browser localStorage (~5MB cap). */
+export async function readFileAsCompressedDataUrl(
+  file: File,
+  options: { maxWidth?: number; maxHeight?: number; quality?: number; maxBytes?: number } = {},
+): Promise<string> {
+  const { maxWidth = 1280, maxHeight = 1280, quality = 0.72, maxBytes = 350_000 } = options;
+
+  if (!file.type.startsWith('image/')) {
+    throw new Error('Please upload an image file.');
+  }
+
+  const objectUrl = URL.createObjectURL(file);
+
+  try {
+    const image = await loadImage(objectUrl);
+    const canvas = document.createElement('canvas');
+    const scale = Math.min(1, maxWidth / image.width, maxHeight / image.height);
+    canvas.width = Math.max(1, Math.round(image.width * scale));
+    canvas.height = Math.max(1, Math.round(image.height * scale));
+
+    const context = canvas.getContext('2d');
+    if (!context) {
+      throw new Error('Could not process image.');
+    }
+
+    context.drawImage(image, 0, 0, canvas.width, canvas.height);
+
+    let currentQuality = quality;
+    let dataUrl = canvas.toDataURL('image/jpeg', currentQuality);
+
+    while (estimateDataUrlBytes(dataUrl) > maxBytes && currentQuality > 0.45) {
+      currentQuality -= 0.08;
+      dataUrl = canvas.toDataURL('image/jpeg', currentQuality);
+    }
+
+    if (estimateDataUrlBytes(dataUrl) > maxBytes) {
+      throw new Error(
+        'Image is still too large after compression. Try a smaller photo or screenshot.',
+      );
+    }
+
+    return dataUrl;
+  } finally {
+    URL.revokeObjectURL(objectUrl);
+  }
+}
+
+function loadImage(src: string): Promise<HTMLImageElement> {
+  return new Promise((resolve, reject) => {
+    const image = new Image();
+    image.onload = () => resolve(image);
+    image.onerror = () => reject(new Error('Could not load image.'));
+    image.src = src;
   });
 }
 
+function estimateDataUrlBytes(dataUrl: string): number {
+  const base64 = dataUrl.split(',')[1] ?? '';
+  return Math.ceil((base64.length * 3) / 4);
+}
 export function formatPickupDateTimeLocal(iso: string): string {
   if (!iso) {
     return '';
