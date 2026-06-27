@@ -8,7 +8,6 @@ import type { FlowerReportsData } from '../../shared/types/flower-report';
 import type { FlowerBranchOption } from '../../shared/types/flower-inventory';
 import FlowerPageHeader from '../../shared/components/FlowerPageHeader';
 import { PRICE_FORMATTER, toDateKey } from '../../shared/utils/flower-format';
-import { RequireFlowerAdmin } from '../components/RequireFlowerAuth';
 
 function formatReportDateLabel(dateKey: string): string {
   return new Date(`${dateKey}T12:00:00`).toLocaleDateString('en-PH', {
@@ -174,7 +173,7 @@ export default function FlowerReportsPage() {
             <MetricCard label="Net income" value={PRICE_FORMATTER.format(reportsData.financial.net_income)} accent />
           </div>
 
-          <RequireFlowerAdmin>
+          {isAdmin ? (
             <form onSubmit={handleSupplierCost} className="mt-6 rounded-2xl border border-brand-muted/40 bg-brand-cream/20 p-4">
               <h3 className="text-sm font-semibold text-brand-dark">Log supplier cost (admin)</h3>
               <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-4">
@@ -188,7 +187,7 @@ export default function FlowerReportsPage() {
                 <button type="submit" className="flower-btn-primary">Add supplier cost</button>
               </div>
             </form>
-          </RequireFlowerAdmin>
+          ) : null}
 
           {isAdmin ? (
             <div className="mt-6 grid grid-cols-1 gap-4 lg:grid-cols-2">
