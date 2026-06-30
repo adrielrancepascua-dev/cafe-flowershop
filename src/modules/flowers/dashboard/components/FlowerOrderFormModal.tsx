@@ -12,6 +12,7 @@ import type {
 import {
   ORDER_STATUS_LABELS,
   PRICE_FORMATTER,
+  formatPickupDateTimeLocal,
   fromDateInputValue,
   readFileAsDataUrl,
   toDateInputValue,
@@ -97,49 +98,61 @@ export default function FlowerOrderFormModal({
   const [statusDraft, setStatusDraft] = useState<FlowerOrderStatus>('not_started');
   const [statusMessage, setStatusMessage] = useState('');
   const [errorMessage, setErrorMessage] = useState('');
+  const [isEditMode, setIsEditMode] = useState(false);
+
+  const isViewMode = Boolean(existingOrder && !isEditMode);
+  const readOnlyFieldClass = isViewMode ? 'bg-brand-beige/40 text-brand-brown/90' : '';
+
+  function loadExistingOrderIntoForm(order: FlowerOrder) {
+    setForm({
+      branch_id: order.branch_id,
+      receiver: order.receiver,
+      customer_social: order.customer_social,
+      scheduled_for: order.scheduled_for,
+      claim_mode: order.claim_mode,
+      wrapper_color: order.wrapper_color,
+      greeting_card: order.greeting_card,
+      special_instructions: order.special_instructions,
+      downpayment: order.downpayment,
+      payment_reference: order.payment_reference,
+      total_amount: order.total_amount,
+      notes: order.notes,
+      photo_inspo_data_url: order.photo_inspo_data_url,
+      proof_dp_data_url: order.proof_dp_data_url,
+      order_form_ss_data_url: order.order_form_ss_data_url,
+      created_by_id: order.created_by_id,
+      created_by_name: order.created_by_name,
+      items: order.items.map((item) => ({ ...item })),
+    });
+    setLineDrafts(
+      order.items.length > 0
+        ? order.items.map((item) => ({
+            rowId: `${item.product_id}-${item.quantity}`,
+            productId: item.product_id,
+            quantity: String(item.quantity),
+          }))
+        : [createLineDraft()],
+    );
+    setDownpaymentDraft(String(order.downpayment));
+    setTotalAmountDraft(String(order.total_amount));
+    setStatusDraft(order.status);
+    setStatusMessage('');
+    setErrorMessage('');
+  }
 
   useEffect(() => {
     if (!open) {
+      setIsEditMode(false);
       return;
     }
 
     if (existingOrder) {
-      setForm({
-        branch_id: existingOrder.branch_id,
-        receiver: existingOrder.receiver,
-        customer_social: existingOrder.customer_social,
-        scheduled_for: existingOrder.scheduled_for,
-        claim_mode: existingOrder.claim_mode,
-        wrapper_color: existingOrder.wrapper_color,
-        greeting_card: existingOrder.greeting_card,
-        special_instructions: existingOrder.special_instructions,
-        downpayment: existingOrder.downpayment,
-        payment_reference: existingOrder.payment_reference,
-        total_amount: existingOrder.total_amount,
-        notes: existingOrder.notes,
-        photo_inspo_data_url: existingOrder.photo_inspo_data_url,
-        proof_dp_data_url: existingOrder.proof_dp_data_url,
-        order_form_ss_data_url: existingOrder.order_form_ss_data_url,
-        created_by_id: existingOrder.created_by_id,
-        created_by_name: existingOrder.created_by_name,
-        items: existingOrder.items.map((item) => ({ ...item })),
-      });
-      setLineDrafts(
-        existingOrder.items.length > 0
-          ? existingOrder.items.map((item) => ({
-              rowId: `${item.product_id}-${item.quantity}`,
-              productId: item.product_id,
-              quantity: String(item.quantity),
-            }))
-          : [createLineDraft()],
-      );
-      setDownpaymentDraft(String(existingOrder.downpayment));
-      setTotalAmountDraft(String(existingOrder.total_amount));
-      setStatusDraft(existingOrder.status);
-      setStatusMessage('');
+      loadExistingOrderIntoForm(existingOrder);
+      setIsEditMode(false);
       return;
     }
 
+    setIsEditMode(true);
     setForm(emptyForm(initialPickupIso ?? new Date().toISOString(), staffId, staffName));
     setLineDrafts([createLineDraft()]);
     setDownpaymentDraft('');
@@ -150,7 +163,7 @@ export default function FlowerOrderFormModal({
   }, [open, existingOrder, initialPickupIso, staffId, staffName]);
 
   useEffect(() => {
-    if (!open || !form.branch_id) {
+    if (!open || !form.branch_id || isViewMode) {
       setStockByProductId({});
       setStockLoading(false);
       return;
@@ -168,7 +181,7 @@ export default function FlowerOrderFormModal({
       .finally(() => {
         setStockLoading(false);
       });
-  }, [open, form.branch_id]);
+  }, [open, form.branch_id, isViewMode]);
 
   const creditByProductId = useMemo(() => {
     if (!existingOrder || existingOrder.branch_id !== form.branch_id) {
@@ -462,6 +475,10 @@ export default function FlowerOrderFormModal({
 
   async function handleSubmit(event: React.FormEvent) {
     event.preventDefault();
+    if (isViewMode) {
+      return;
+    }
+
     const payload = validateForm();
     if (!payload) {
       return;
@@ -470,6 +487,9 @@ export default function FlowerOrderFormModal({
     try {
       await onSubmit(payload);
       setErrorMessage('');
+      if (existingOrder) {
+        setIsEditMode(false);
+      }
     } catch (error) {
       setErrorMessage(error instanceof Error ? error.message : 'Failed to save order.');
     }
@@ -493,13 +513,27 @@ export default function FlowerOrderFormModal({
     }
   }
 
+  function handleCancelEdit() {
+    if (existingOrder) {
+      loadExistingOrderIntoForm(existingOrder);
+      setIsEditMode(false);
+      return;
+    }
+
+    onClose();
+  }
+
+  const branchLabel =
+    branches.find((branch) => branch.id === form.branch_id)?.name ?? form.branch_id;
+  const claimModeLabel = form.claim_mode === 'delivery' ? 'Delivery' : 'Pick up';
+
   return (
     <div className="fixed inset-0 z-[100] flex items-end justify-center bg-brand-dark/40 p-0 sm:items-center sm:p-4">
       <div className="flower-card flex h-[100dvh] max-h-[100dvh] w-full max-w-3xl min-h-0 flex-col sm:h-auto sm:max-h-[90vh]">
         <div className="flex shrink-0 items-center justify-between border-b border-brand-muted/40 px-4 py-3 sm:px-6">
           <div>
             <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-brand-accent">
-              {existingOrder ? 'Edit order' : 'New order'}
+              {existingOrder ? (isViewMode ? 'View order' : 'Edit order') : 'New order'}
             </p>
             <h2 className="font-serif text-lg font-semibold text-brand-dark">
               Papers &amp; Petals — Daily Order
@@ -511,39 +545,84 @@ export default function FlowerOrderFormModal({
         </div>
 
         <form onSubmit={handleSubmit} className="flower-scroll min-h-0 flex-1 overflow-y-auto px-4 py-4 sm:px-6">
+          {isViewMode ? (
+            <p className="mb-4 rounded-xl border border-brand-muted/40 bg-brand-cream/30 px-3 py-2 text-sm text-brand-brown/80">
+              Viewing only — tap <span className="font-semibold">Edit order</span> below to change
+              details.
+            </p>
+          ) : null}
+
+          {existingOrder && onStatusChange ? (
+            <div className="mb-4 rounded-xl border border-brand-muted/40 bg-white p-3">
+              <p className="text-sm font-semibold text-brand-dark">Order status</p>
+              {isViewMode ? (
+                <p className="mt-1 text-sm text-brand-brown/80">
+                  Current:{' '}
+                  <span className="font-medium text-brand-dark">
+                    {ORDER_STATUS_LABELS[statusDraft]}
+                  </span>
+                </p>
+              ) : null}
+              <div className={`mt-2 ${isViewMode ? 'flex flex-col gap-2 sm:flex-row sm:items-end' : ''}`}>
+                <label className={`block text-sm font-medium text-brand-brown ${isViewMode ? 'flex-1' : 'md:col-span-2'}`}>
+                  {isViewMode ? 'Change status' : 'Status'}
+                  <select
+                    value={statusDraft}
+                    onChange={(event) => {
+                      const nextStatus = event.target.value as FlowerOrderStatus;
+                      if (isViewMode) {
+                        setStatusDraft(nextStatus);
+                        setStatusMessage('');
+                        return;
+                      }
+
+                      void handleStatusSelect(nextStatus);
+                    }}
+                    className="flower-input mt-1.5"
+                  >
+                    {Object.entries(ORDER_STATUS_LABELS).map(([value, label]) => (
+                      <option key={value} value={value}>
+                        {label}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                {isViewMode ? (
+                  <button
+                    type="button"
+                    className="flower-btn-secondary shrink-0 px-4 py-2.5 text-sm"
+                    disabled={statusDraft === existingOrder.status}
+                    onClick={() => void handleStatusSelect(statusDraft)}
+                  >
+                    Apply status
+                  </button>
+                ) : null}
+              </div>
+              {statusMessage ? (
+                <span className="mt-1 block text-xs text-red-700">{statusMessage}</span>
+              ) : null}
+            </div>
+          ) : null}
+
           <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
             <label className="block text-sm font-medium text-brand-brown md:col-span-2">
               Date &amp; time of pick up
-              <input
-                type="datetime-local"
-                value={toDateInputValue(form.scheduled_for)}
-                onChange={(event) => updateField('scheduled_for', fromDateInputValue(event.target.value))}
-                className="flower-input mt-1.5"
-                required
-              />
-            </label>
-
-            {existingOrder && onStatusChange ? (
-              <label className="block text-sm font-medium text-brand-brown md:col-span-2">
-                Status
-                <select
-                  value={statusDraft}
+              {isViewMode ? (
+                <p className={`flower-input mt-1.5 ${readOnlyFieldClass}`}>
+                  {formatPickupDateTimeLocal(form.scheduled_for)}
+                </p>
+              ) : (
+                <input
+                  type="datetime-local"
+                  value={toDateInputValue(form.scheduled_for)}
                   onChange={(event) =>
-                    void handleStatusSelect(event.target.value as FlowerOrderStatus)
+                    updateField('scheduled_for', fromDateInputValue(event.target.value))
                   }
                   className="flower-input mt-1.5"
-                >
-                  {Object.entries(ORDER_STATUS_LABELS).map(([value, label]) => (
-                    <option key={value} value={value}>
-                      {label}
-                    </option>
-                  ))}
-                </select>
-                {statusMessage ? (
-                  <span className="mt-1 block text-xs text-red-700">{statusMessage}</span>
-                ) : null}
-              </label>
-            ) : null}
+                  required
+                />
+              )}
+            </label>
 
             <label className="block text-sm font-medium text-brand-brown">
               Receiver
@@ -551,7 +630,8 @@ export default function FlowerOrderFormModal({
                 type="text"
                 value={form.receiver}
                 onChange={(event) => updateField('receiver', event.target.value)}
-                className="flower-input mt-1.5"
+                className={`flower-input mt-1.5 ${readOnlyFieldClass}`}
+                readOnly={isViewMode}
                 required
               />
             </label>
@@ -562,39 +642,48 @@ export default function FlowerOrderFormModal({
                 type="text"
                 value={form.customer_social}
                 onChange={(event) => updateField('customer_social', event.target.value)}
-                className="flower-input mt-1.5"
+                className={`flower-input mt-1.5 ${readOnlyFieldClass}`}
+                readOnly={isViewMode}
                 required
               />
             </label>
 
             <label className="block text-sm font-medium text-brand-brown">
               Branch
-              <select
-                value={form.branch_id}
-                onChange={(event) => updateField('branch_id', event.target.value)}
-                className="flower-input mt-1.5"
-                required
-              >
-                <option value="">Select branch</option>
-                {branches.map((branch) => (
-                  <option key={branch.id} value={branch.id}>
-                    {branch.name}
-                  </option>
-                ))}
-              </select>
+              {isViewMode ? (
+                <p className={`flower-input mt-1.5 ${readOnlyFieldClass}`}>{branchLabel}</p>
+              ) : (
+                <select
+                  value={form.branch_id}
+                  onChange={(event) => updateField('branch_id', event.target.value)}
+                  className="flower-input mt-1.5"
+                  required
+                >
+                  <option value="">Select branch</option>
+                  {branches.map((branch) => (
+                    <option key={branch.id} value={branch.id}>
+                      {branch.name}
+                    </option>
+                  ))}
+                </select>
+              )}
             </label>
 
             <label className="block text-sm font-medium text-brand-brown">
               Mode of claiming
-              <select
-                value={form.claim_mode}
-                onChange={(event) => updateField('claim_mode', event.target.value as FlowerClaimMode)}
-                className="flower-input mt-1.5"
-                required
-              >
-                <option value="pickup">Pick up</option>
-                <option value="delivery">Delivery</option>
-              </select>
+              {isViewMode ? (
+                <p className={`flower-input mt-1.5 ${readOnlyFieldClass}`}>{claimModeLabel}</p>
+              ) : (
+                <select
+                  value={form.claim_mode}
+                  onChange={(event) => updateField('claim_mode', event.target.value as FlowerClaimMode)}
+                  className="flower-input mt-1.5"
+                  required
+                >
+                  <option value="pickup">Pick up</option>
+                  <option value="delivery">Delivery</option>
+                </select>
+              )}
             </label>
 
             <label className="block text-sm font-medium text-brand-brown">
@@ -603,7 +692,8 @@ export default function FlowerOrderFormModal({
                 type="text"
                 value={form.wrapper_color}
                 onChange={(event) => updateField('wrapper_color', event.target.value)}
-                className="flower-input mt-1.5"
+                className={`flower-input mt-1.5 ${readOnlyFieldClass}`}
+                readOnly={isViewMode}
                 required
               />
             </label>
@@ -614,7 +704,8 @@ export default function FlowerOrderFormModal({
                 type="text"
                 value={form.greeting_card}
                 onChange={(event) => updateField('greeting_card', event.target.value)}
-                className="flower-input mt-1.5"
+                className={`flower-input mt-1.5 ${readOnlyFieldClass}`}
+                readOnly={isViewMode}
                 required
               />
             </label>
@@ -625,7 +716,8 @@ export default function FlowerOrderFormModal({
                 type="text"
                 value={form.special_instructions}
                 onChange={(event) => updateField('special_instructions', event.target.value)}
-                className="flower-input mt-1.5"
+                className={`flower-input mt-1.5 ${readOnlyFieldClass}`}
+                readOnly={isViewMode}
                 required
               />
             </label>
@@ -634,15 +726,36 @@ export default function FlowerOrderFormModal({
           <div className="mt-5">
             <div className="mb-2 flex items-center justify-between">
               <h3 className="text-sm font-semibold text-brand-dark">Flowers &amp; fillers (type + qty)</h3>
-              <button
-                type="button"
-                className="text-xs font-semibold text-brand-brown underline"
-                onClick={() => setLineDrafts((rows) => [...rows, createLineDraft()])}
-              >
-                Add row
-              </button>
+              {!isViewMode ? (
+                <button
+                  type="button"
+                  className="text-xs font-semibold text-brand-brown underline"
+                  onClick={() => setLineDrafts((rows) => [...rows, createLineDraft()])}
+                >
+                  Add row
+                </button>
+              ) : null}
             </div>
 
+            {isViewMode ? (
+              <ul className="space-y-2 rounded-xl border border-brand-muted/40 bg-brand-cream/20 p-3">
+                {lineDrafts.map((row) => {
+                  const productName =
+                    activeProducts.find((product) => product.id === row.productId)?.name ??
+                    existingOrder?.items.find((item) => item.product_id === row.productId)
+                      ?.item_name ??
+                    'Flower';
+
+                  return (
+                    <li key={row.rowId} className="flex justify-between text-sm text-brand-dark">
+                      <span>{productName}</span>
+                      <span className="font-semibold">x{row.quantity}</span>
+                    </li>
+                  );
+                })}
+              </ul>
+            ) : (
+              <>
             {!form.branch_id ? (
               <p className="mb-2 text-xs text-amber-800">
                 Select a branch above to load stock limits for each flower type.
@@ -709,33 +822,55 @@ export default function FlowerOrderFormModal({
               );
               })}
             </div>
+              </>
+            )}
           </div>
 
           <div className="mt-5 grid grid-cols-1 gap-3 md:grid-cols-3">
             <label className="block text-sm font-medium text-brand-brown">
               Downpayment
-              <input
-                type="text"
-                inputMode="decimal"
-                value={downpaymentDraft}
-                onChange={(event) => setDownpaymentDraft(event.target.value.replace(/[^\d.]/g, ''))}
-                placeholder="0"
-                className="flower-input mt-1.5"
-                required
-              />
-              <span className="mt-1 block text-xs text-brand-brown/60">Use 0 if no downpayment yet.</span>
+              {isViewMode ? (
+                <p className={`flower-input mt-1.5 ${readOnlyFieldClass}`}>
+                  {PRICE_FORMATTER.format(Number(downpaymentDraft) || 0)}
+                </p>
+              ) : (
+                <>
+                  <input
+                    type="text"
+                    inputMode="decimal"
+                    value={downpaymentDraft}
+                    onChange={(event) =>
+                      setDownpaymentDraft(event.target.value.replace(/[^\d.]/g, ''))
+                    }
+                    placeholder="0"
+                    className="flower-input mt-1.5"
+                    required
+                  />
+                  <span className="mt-1 block text-xs text-brand-brown/60">
+                    Use 0 if no downpayment yet.
+                  </span>
+                </>
+              )}
             </label>
             <label className="block text-sm font-medium text-brand-brown">
               Total amount
-              <input
-                type="text"
-                inputMode="decimal"
-                value={totalAmountDraft}
-                onChange={(event) => setTotalAmountDraft(event.target.value.replace(/[^\d.]/g, ''))}
-                placeholder="0.00"
-                className="flower-input mt-1.5"
-                required
-              />
+              {isViewMode ? (
+                <p className={`flower-input mt-1.5 ${readOnlyFieldClass}`}>
+                  {PRICE_FORMATTER.format(Number(totalAmountDraft) || 0)}
+                </p>
+              ) : (
+                <input
+                  type="text"
+                  inputMode="decimal"
+                  value={totalAmountDraft}
+                  onChange={(event) =>
+                    setTotalAmountDraft(event.target.value.replace(/[^\d.]/g, ''))
+                  }
+                  placeholder="0.00"
+                  className="flower-input mt-1.5"
+                  required
+                />
+              )}
             </label>
             <label className="block text-sm font-medium text-brand-brown">
               Balance
@@ -757,8 +892,9 @@ export default function FlowerOrderFormModal({
               type="text"
               value={form.payment_reference}
               onChange={(event) => updateField('payment_reference', event.target.value)}
-              className="flower-input mt-1.5"
-              required={requiresDownpaymentProof}
+              className={`flower-input mt-1.5 ${readOnlyFieldClass}`}
+              readOnly={isViewMode}
+              required={requiresDownpaymentProof && !isViewMode}
             />
           </label>
 
@@ -767,54 +903,61 @@ export default function FlowerOrderFormModal({
             <textarea
               value={form.notes}
               onChange={(event) => updateField('notes', event.target.value)}
-              className="flower-input mt-1.5 min-h-[72px]"
-              required
+              className={`flower-input mt-1.5 min-h-[72px] ${readOnlyFieldClass}`}
+              readOnly={isViewMode}
+              required={!isViewMode}
             />
           </label>
 
           <div className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-3">
-            <label className="block text-sm font-medium text-brand-brown">
+            <div className="block text-sm font-medium text-brand-brown">
               Photo of order / inspo
-              <input
-                type="file"
-                accept="image/*"
-                onChange={(event) =>
-                  void handleFileChange('photo_inspo_data_url', event.target.files?.[0] ?? null)
-                }
-                className="mt-1.5 block w-full text-xs"
-                required={!form.photo_inspo_data_url}
-              />
+              {!isViewMode ? (
+                <input
+                  type="file"
+                  accept="image/*"
+                  onChange={(event) =>
+                    void handleFileChange('photo_inspo_data_url', event.target.files?.[0] ?? null)
+                  }
+                  className="mt-1.5 block w-full text-xs"
+                  required={!form.photo_inspo_data_url}
+                />
+              ) : null}
               <OrderAttachmentPreview label="Current inspo photo" value={form.photo_inspo_data_url} />
-            </label>
-            <label className="block text-sm font-medium text-brand-brown">
+            </div>
+            <div className="block text-sm font-medium text-brand-brown">
               Proof of DP
-              {requiresDownpaymentProof ? null : (
+              {!isViewMode && !requiresDownpaymentProof ? (
                 <span className="ml-1 text-xs font-normal text-brand-brown/60">(optional when DP is 0)</span>
-              )}
-              <input
-                type="file"
-                accept="image/*"
-                onChange={(event) =>
-                  void handleFileChange('proof_dp_data_url', event.target.files?.[0] ?? null)
-                }
-                className="mt-1.5 block w-full text-xs"
-                required={requiresDownpaymentProof && !form.proof_dp_data_url}
-              />
+              ) : null}
+              {!isViewMode ? (
+                <input
+                  type="file"
+                  accept="image/*"
+                  onChange={(event) =>
+                    void handleFileChange('proof_dp_data_url', event.target.files?.[0] ?? null)
+                  }
+                  className="mt-1.5 block w-full text-xs"
+                  required={requiresDownpaymentProof && !form.proof_dp_data_url}
+                />
+              ) : null}
               <OrderAttachmentPreview label="Current DP proof" value={form.proof_dp_data_url} />
-            </label>
-            <label className="block text-sm font-medium text-brand-brown">
+            </div>
+            <div className="block text-sm font-medium text-brand-brown">
               SS of order form
-              <input
-                type="file"
-                accept="image/*"
-                onChange={(event) =>
-                  void handleFileChange('order_form_ss_data_url', event.target.files?.[0] ?? null)
-                }
-                className="mt-1.5 block w-full text-xs"
-                required={!form.order_form_ss_data_url}
-              />
+              {!isViewMode ? (
+                <input
+                  type="file"
+                  accept="image/*"
+                  onChange={(event) =>
+                    void handleFileChange('order_form_ss_data_url', event.target.files?.[0] ?? null)
+                  }
+                  className="mt-1.5 block w-full text-xs"
+                  required={!form.order_form_ss_data_url}
+                />
+              ) : null}
               <OrderAttachmentPreview label="Current order form SS" value={form.order_form_ss_data_url} />
-            </label>
+            </div>
           </div>
 
           <p className="mt-3 text-xs text-brand-brown/70">
@@ -829,17 +972,34 @@ export default function FlowerOrderFormModal({
         </form>
 
         <div className="flex shrink-0 gap-2 border-t border-brand-muted/40 bg-white px-4 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:px-6">
-          <button type="button" onClick={onClose} className="flower-btn-secondary flex-1">
-            Cancel
-          </button>
-          <button
-            type="submit"
-            disabled={isSubmitting}
-            onClick={handleSubmit}
-            className="flower-btn-primary flex-1"
-          >
-            {isSubmitting ? 'Saving...' : existingOrder ? 'Update order' : 'Save order'}
-          </button>
+          {isViewMode ? (
+            <>
+              <button type="button" onClick={onClose} className="flower-btn-secondary flex-1">
+                Close
+              </button>
+              <button
+                type="button"
+                onClick={() => setIsEditMode(true)}
+                className="flower-btn-primary flex-1"
+              >
+                Edit order
+              </button>
+            </>
+          ) : (
+            <>
+              <button type="button" onClick={handleCancelEdit} className="flower-btn-secondary flex-1">
+                {existingOrder ? 'Cancel edit' : 'Cancel'}
+              </button>
+              <button
+                type="submit"
+                disabled={isSubmitting}
+                onClick={handleSubmit}
+                className="flower-btn-primary flex-1"
+              >
+                {isSubmitting ? 'Saving...' : existingOrder ? 'Update order' : 'Save order'}
+              </button>
+            </>
+          )}
         </div>
       </div>
     </div>
