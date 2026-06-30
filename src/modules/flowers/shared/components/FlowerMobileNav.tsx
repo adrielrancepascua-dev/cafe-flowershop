@@ -1,7 +1,7 @@
 import { NavLink } from 'react-router-dom';
-import { BarChart3, CalendarDays, Flower2, Home, Package, Receipt, Sprout } from 'lucide-react';
+import { BarChart3, CalendarDays, Home, Package, Receipt, Sprout } from 'lucide-react';
 import { useFlowerAuth } from '../../../../lib/auth/FlowerAuthContext';
-
+import FlowerBrandLogo from './FlowerBrandLogo';
 const BASE_LINKS = [
   { label: 'Home', to: '/dashboard/flowers', icon: Home, end: true, adminOnly: false },
   { label: 'Orders', to: '/dashboard/flowers/orders', icon: CalendarDays, end: false, adminOnly: false },
@@ -54,18 +54,8 @@ export default function FlowerMobileNav() {
 
 export function FlowerDesktopSidebarHeader() {
   return (
-    <div className="mb-4 hidden border-b border-brand-muted/40 px-2 pb-4 lg:block">
-      <div className="flex items-center gap-2.5">
-        <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-brand-brown text-white shadow-sm">
-          <Flower2 className="h-5 w-5" strokeWidth={1.75} />
-        </span>
-        <div>
-          <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-brand-accent">
-            Papers &amp; Petals
-          </p>
-          <p className="font-serif text-sm font-semibold text-brand-dark">Flower Shop</p>
-        </div>
-      </div>
+    <div className="mb-4 hidden border-b border-brand-muted/40 px-1 pb-4 lg:block">
+      <FlowerBrandLogo size="sm" subtitle="Flower shop" />
     </div>
   );
 }

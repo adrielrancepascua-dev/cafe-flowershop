@@ -1,6 +1,8 @@
-# Papers & Petals — Flower Back Office
+# Papers & Petals — Back Office
 
 Flowers-only operations system for **Papers & Petals** (Dagupan, San Carlos, Urdaneta).
+
+**Production URL:** [papers-and-petals.vercel.app](https://papers-and-petals.vercel.app) (rename in Vercel: Project Settings → General → Project Name → `papers-and-petals`)
 
 ## Features
 

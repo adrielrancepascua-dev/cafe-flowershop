@@ -1,9 +1,10 @@
 import { useMemo, useState } from 'react';
 import { Navigate, useLocation, useNavigate } from 'react-router-dom';
-import { Flower2, ShieldCheck, UserRound } from 'lucide-react';
+import { ShieldCheck, UserRound } from 'lucide-react';
 import { useFlowerAuth } from '../../../../lib/auth/FlowerAuthContext';
 import { isFlowerDemoMode } from '../../../../app/app-mode';
 import { FLOWER_DEMO_USERS } from '../../shared/data/flowers.mock';
+import FlowerBrandLogo from '../../shared/components/FlowerBrandLogo';
 
 export default function FlowerLoginPage() {
   const { user, signIn } = useFlowerAuth();
@@ -65,16 +66,8 @@ export default function FlowerLoginPage() {
   return (
     <div className="flex min-h-screen items-center justify-center bg-gradient-to-b from-brand-cream via-brand-light to-brand-beige/40 px-4">
       <div className="flower-card w-full max-w-md p-6 sm:p-8">
-        <div className="mb-6 flex items-center gap-3">
-          <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-brand-brown text-white">
-            <Flower2 className="h-6 w-6" />
-          </span>
-          <div>
-            <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-brand-accent">
-              Papers &amp; Petals
-            </p>
-            <h1 className="font-serif text-xl font-semibold text-brand-dark">Staff Login</h1>
-          </div>
+        <div className="mb-6">
+          <FlowerBrandLogo size="lg" subtitle="Staff login" />
         </div>
 
         {isDemoMode ? (

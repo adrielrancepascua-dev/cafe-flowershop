@@ -1,6 +1,7 @@
 import { NavLink, Outlet } from 'react-router-dom';
 import { useFlowerAuth } from '../../../lib/auth/FlowerAuthContext';
 import FlowerMobileNav, { FlowerDesktopSidebarHeader } from '../../flowers/shared/components/FlowerMobileNav';
+import FlowerBrandLogo from '../../flowers/shared/components/FlowerBrandLogo';
 import DemoModeBanner from '../../flowers/shared/components/DemoModeBanner';
 
 const FLOWER_LINKS = [
@@ -20,14 +21,7 @@ export default function DashboardLayout() {
     <div className="min-h-screen bg-gradient-to-b from-brand-cream via-brand-light to-brand-beige/30 font-sans text-brand-dark">
       <header className="sticky top-0 z-40 border-b border-brand-muted/40 bg-white/90 backdrop-blur-md">
         <div className="mx-auto flex w-full max-w-7xl items-center justify-between gap-3 px-4 py-3.5 sm:px-6 sm:py-4 lg:px-8">
-          <div className="min-w-0">
-            <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-brand-accent">
-              Papers &amp; Petals
-            </p>
-            <h1 className="truncate font-serif text-lg font-semibold text-brand-dark sm:text-2xl">
-              Flower Back Office
-            </h1>
-          </div>
+          <FlowerBrandLogo size="sm" subtitle="Back office" className="min-w-0 flex-1" />
           <div className="flex shrink-0 items-center gap-2">
             <span className="hidden rounded-full bg-brand-beige/80 px-3 py-1 text-xs font-medium text-brand-brown sm:inline">
               {user?.display_name} · {isAdmin ? 'Admin' : 'Staff'}
