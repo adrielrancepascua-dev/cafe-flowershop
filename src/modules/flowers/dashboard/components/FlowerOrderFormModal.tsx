@@ -21,11 +21,15 @@ import {
   toDateInputValue,
 } from '../../shared/utils/flower-format';
 import {
+  formatFinishedPhotoRequirementLabel,
+  formatPrepDeadlineTimePh,
+  formatRemainingTimeLabel,
   getOrderPrepDeadlineInfo,
   isReadyPhotoRequiredForStatusChange,
   urgencyBadgeClassName,
   urgencyPanelClassName,
 } from '../../shared/utils/flower-order-deadlines';
+import OrderAttachmentField from './OrderAttachmentField';
 import OrderAttachmentPreview from './OrderAttachmentPreview';
 
 type LineDraft = {
@@ -175,6 +179,8 @@ export default function FlowerOrderFormModal({
   const hasPendingReadyPhoto = Boolean(
     existingOrder && form.ready_photo_data_url !== existingOrder.ready_photo_data_url,
   );
+  const readyPhotoSaved = Boolean(existingOrder?.ready_photo_data_url && !hasPendingReadyPhoto);
+  const showReadyPhotoRequirement = Boolean(existingOrder && !readyPhotoSaved);
 
   function loadExistingOrderIntoForm(order: FlowerOrder) {
     setForm({
@@ -238,23 +244,24 @@ export default function FlowerOrderFormModal({
   }, [open, existingOrder, initialPickupIso, staffId, staffName]);
 
   useEffect(() => {
-    if (!open || !existingOrder || existingOrder.ready_photo_data_url) {
+    if (!open || !existingOrder || readyPhotoSaved) {
       return;
     }
 
     setDeadlineNowMs(Date.now());
     const intervalId = window.setInterval(() => {
       setDeadlineNowMs(Date.now());
-    }, 60_000);
+    }, 30_000);
 
     return () => window.clearInterval(intervalId);
-  }, [open, existingOrder]);
+  }, [open, existingOrder, readyPhotoSaved]);
 
   const prepDeadline = existingOrder
     ? getOrderPrepDeadlineInfo(
         {
           ...existingOrder,
-          ready_photo_data_url: form.ready_photo_data_url,
+          claim_mode: form.claim_mode,
+          ready_photo_data_url: readyPhotoSaved ? form.ready_photo_data_url : '',
         },
         deadlineNowMs,
       )
@@ -790,27 +797,56 @@ export default function FlowerOrderFormModal({
             </div>
           ) : null}
 
-          {prepDeadline && prepDeadline.urgency !== 'none' ? (
-            <div
-              className={`mb-4 rounded-xl border px-3 py-2.5 ${urgencyPanelClassName(prepDeadline.urgency)}`}
-            >
-              <p className="text-sm font-semibold text-red-950">Photo deadline</p>
-              <p className="mt-1 text-sm text-brand-brown/85">{prepDeadline.detail}</p>
-              <span
-                className={`mt-2 inline-flex rounded-full border px-2.5 py-0.5 text-xs font-semibold ${urgencyBadgeClassName(prepDeadline.urgency)}`}
-              >
-                {prepDeadline.message}
-              </span>
-            </div>
-          ) : null}
-
           {existingOrder && onReadyPhotoSubmit ? (
-            <div className="mb-4 rounded-xl border border-brand-muted/40 bg-white p-3 sm:p-4">
+            <div
+              className={`mb-4 rounded-xl border p-3 sm:p-4 ${
+                showReadyPhotoRequirement
+                  ? 'border-amber-300/80 bg-amber-50/40 ring-1 ring-amber-200/60'
+                  : 'border-brand-muted/40 bg-white'
+              }`}
+            >
               <p className="text-center text-sm font-semibold text-brand-dark">Finished order photo</p>
-              <p className="mt-1 text-center text-xs text-brand-brown/75">
-                Upload the completed arrangement — required 30 min before pick up or 1 hr before
-                delivery.
-              </p>
+              {showReadyPhotoRequirement ? (
+                prepDeadline ? (
+                  <div
+                    className={`mx-auto mt-3 max-w-lg rounded-xl border-2 px-4 py-3 text-center ${urgencyPanelClassName(prepDeadline.urgency)}`}
+                  >
+                    <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-red-800">
+                      Required — staff must upload
+                    </p>
+                    <p className="mt-1.5 text-sm font-semibold leading-snug text-brand-dark">
+                      {formatFinishedPhotoRequirementLabel(form.claim_mode)}
+                    </p>
+                    <p
+                      className={`mt-3 font-serif text-2xl font-bold tabular-nums ${
+                        prepDeadline.minutesUntilDeadline < 0 ? 'text-red-800' : 'text-brand-dark'
+                      }`}
+                    >
+                      {formatRemainingTimeLabel(prepDeadline.minutesUntilDeadline)}
+                    </p>
+                    <p className="mt-1.5 text-xs text-brand-brown/85">
+                      Upload deadline (PH time):{' '}
+                      {formatPrepDeadlineTimePh(prepDeadline.prepDeadlineIso)}
+                    </p>
+                    <span
+                      className={`mt-2 inline-flex rounded-full border px-2.5 py-0.5 text-xs font-semibold ${urgencyBadgeClassName(prepDeadline.urgency)}`}
+                    >
+                      {prepDeadline.minutesUntilDeadline < 0
+                        ? 'Overdue — upload now'
+                        : prepDeadline.message}
+                    </span>
+                  </div>
+                ) : (
+                  <div className="mx-auto mt-3 max-w-lg rounded-xl border-2 border-amber-300 bg-amber-50 px-4 py-3 text-center">
+                    <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-red-800">
+                      Required — staff must upload
+                    </p>
+                    <p className="mt-1.5 text-sm font-semibold text-brand-dark">
+                      {formatFinishedPhotoRequirementLabel(form.claim_mode)}
+                    </p>
+                  </div>
+                )
+              ) : null}
               <input
                 ref={readyPhotoInputRef}
                 type="file"
@@ -1196,55 +1232,32 @@ export default function FlowerOrderFormModal({
             />
           </label>
 
-          <div className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-3">
-            <div className="block text-sm font-medium text-brand-brown">
-              Photo of order / inspo
-              {!isViewMode ? (
-                <input
-                  type="file"
-                  accept="image/*"
-                  onChange={(event) =>
-                    void handleFileChange('photo_inspo_data_url', event.target.files?.[0] ?? null)
-                  }
-                  className="mt-1.5 block w-full text-xs"
-                  required={!form.photo_inspo_data_url}
-                />
-              ) : null}
-              <OrderAttachmentPreview label="Current inspo photo" value={form.photo_inspo_data_url} />
-            </div>
-            <div className="block text-sm font-medium text-brand-brown">
-              Proof of DP
-              {!isViewMode && !requiresDownpaymentProof ? (
-                <span className="ml-1 text-xs font-normal text-brand-brown/60">(optional when DP is 0)</span>
-              ) : null}
-              {!isViewMode ? (
-                <input
-                  type="file"
-                  accept="image/*"
-                  onChange={(event) =>
-                    void handleFileChange('proof_dp_data_url', event.target.files?.[0] ?? null)
-                  }
-                  className="mt-1.5 block w-full text-xs"
-                  required={requiresDownpaymentProof && !form.proof_dp_data_url}
-                />
-              ) : null}
-              <OrderAttachmentPreview label="Current DP proof" value={form.proof_dp_data_url} />
-            </div>
-            <div className="block text-sm font-medium text-brand-brown">
-              SS of order form
-              {!isViewMode ? (
-                <input
-                  type="file"
-                  accept="image/*"
-                  onChange={(event) =>
-                    void handleFileChange('order_form_ss_data_url', event.target.files?.[0] ?? null)
-                  }
-                  className="mt-1.5 block w-full text-xs"
-                  required={!form.order_form_ss_data_url}
-                />
-              ) : null}
-              <OrderAttachmentPreview label="Current order form SS" value={form.order_form_ss_data_url} />
-            </div>
+          <div className="mt-4 grid grid-cols-1 gap-4 md:grid-cols-3">
+            <OrderAttachmentField
+              label="Photo of order / inspo"
+              previewLabel="Current inspo photo"
+              value={form.photo_inspo_data_url}
+              readOnly={isViewMode}
+              onEditRequest={() => setIsEditMode(true)}
+              onChange={(file) => void handleFileChange('photo_inspo_data_url', file)}
+            />
+            <OrderAttachmentField
+              label="Proof of DP"
+              previewLabel="Current DP proof"
+              value={form.proof_dp_data_url}
+              optional={!requiresDownpaymentProof}
+              readOnly={isViewMode}
+              onEditRequest={() => setIsEditMode(true)}
+              onChange={(file) => void handleFileChange('proof_dp_data_url', file)}
+            />
+            <OrderAttachmentField
+              label="SS of order form"
+              previewLabel="Current order form SS"
+              value={form.order_form_ss_data_url}
+              readOnly={isViewMode}
+              onEditRequest={() => setIsEditMode(true)}
+              onChange={(file) => void handleFileChange('order_form_ss_data_url', file)}
+            />
           </div>
 
           <p className="mt-3 text-xs text-brand-brown/70">

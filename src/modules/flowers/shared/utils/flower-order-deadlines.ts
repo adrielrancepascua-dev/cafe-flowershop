@@ -44,6 +44,31 @@ function formatMinutesRemaining(totalMinutes: number): string {
   return minutes > 0 ? `${hours}h ${minutes}m` : `${hours}h`;
 }
 
+export function formatFinishedPhotoRequirementLabel(claimMode: FlowerClaimMode): string {
+  return claimMode === 'delivery'
+    ? 'Delivery — upload finished order photo 1 hour before delivery'
+    : 'Pick up — upload finished order photo 30 minutes before pick up';
+}
+
+export function formatPrepDeadlineTimePh(iso: string): string {
+  return parseFlowerTimestamp(iso).toLocaleString('en-PH', {
+    timeZone: 'Asia/Manila',
+    month: 'short',
+    day: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+    hour12: true,
+  });
+}
+
+export function formatRemainingTimeLabel(minutesUntilDeadline: number): string {
+  if (minutesUntilDeadline < 0) {
+    return `${formatMinutesRemaining(minutesUntilDeadline)} overdue`;
+  }
+
+  return `${formatMinutesRemaining(minutesUntilDeadline)} remaining`;
+}
+
 function resolveUrgency(
   minutesUntilDeadline: number,
   status: FlowerOrderStatus,
