@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { Check, Copy, UserPlus, Users } from 'lucide-react';
 import {
   createFlowerStaff,
+  deleteFlowerTeamMember,
   generateStaffEmailPreview,
   listFlowerTeam,
   setFlowerTeamMemberActive,
@@ -43,6 +44,7 @@ export default function FlowerTeamPage() {
   const [errorMessage, setErrorMessage] = useState('');
   const [createdStaff, setCreatedStaff] = useState<CreateFlowerStaffResult | null>(null);
   const [copied, setCopied] = useState(false);
+  const [deletingMemberId, setDeletingMemberId] = useState<string | null>(null);
 
   const emailPreview = useMemo(
     () => (displayName.trim() ? generateStaffEmailPreview(displayName.trim()) : ''),
@@ -99,6 +101,31 @@ export default function FlowerTeamPage() {
       await loadMembers();
     } catch (error) {
       setErrorMessage(error instanceof Error ? error.message : 'Could not update staff status.');
+    }
+  }
+
+  async function handleDelete(member: FlowerTeamMember) {
+    if (member.role !== 'staff' || member.id === user?.id) {
+      return;
+    }
+
+    const confirmed = window.confirm(
+      `Delete ${member.display_name} (${member.email})?\n\nThis permanently removes their login. Their past orders and expenses stay in the system.`,
+    );
+    if (!confirmed) {
+      return;
+    }
+
+    setDeletingMemberId(member.id);
+    setErrorMessage('');
+
+    try {
+      await deleteFlowerTeamMember(member.id);
+      await loadMembers();
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : 'Could not delete staff account.');
+    } finally {
+      setDeletingMemberId(null);
     }
   }
 
@@ -233,13 +260,23 @@ export default function FlowerTeamPage() {
                         </span>
 
                         {member.role === 'staff' && member.id !== user?.id ? (
-                          <button
-                            type="button"
-                            onClick={() => void handleToggleActive(member)}
-                            className="text-xs font-medium text-brand-brown underline-offset-2 hover:underline"
-                          >
-                            {member.is_active ? 'Deactivate' : 'Reactivate'}
-                          </button>
+                          <div className="flex flex-wrap items-center gap-3">
+                            <button
+                              type="button"
+                              onClick={() => void handleToggleActive(member)}
+                              className="text-xs font-medium text-brand-brown underline-offset-2 hover:underline"
+                            >
+                              {member.is_active ? 'Deactivate' : 'Reactivate'}
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => void handleDelete(member)}
+                              disabled={deletingMemberId === member.id}
+                              className="text-xs font-medium text-red-700 underline-offset-2 hover:underline disabled:opacity-50"
+                            >
+                              {deletingMemberId === member.id ? 'Deleting...' : 'Delete'}
+                            </button>
+                          </div>
                         ) : null}
                       </div>
                     </div>

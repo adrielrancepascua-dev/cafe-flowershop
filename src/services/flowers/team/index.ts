@@ -1,6 +1,7 @@
 export {
   completeStaffOnboarding,
   createFlowerStaff,
+  deleteFlowerTeamMember,
   generateStaffEmailPreview,
   listFlowerTeam,
   setFlowerTeamMemberActive,

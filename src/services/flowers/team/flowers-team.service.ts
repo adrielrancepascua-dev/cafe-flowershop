@@ -5,12 +5,14 @@ import { getFlowerStorageMode, shouldUseFlowerSupabase } from '../storage-mode';
 import {
   completeStaffOnboardingLocal,
   createFlowerStaffLocal,
+  deleteFlowerTeamMemberLocal,
   listFlowerTeamLocal,
   setFlowerTeamMemberActiveLocal,
 } from './flowers-team.local';
 import {
   completeStaffOnboardingSupabase,
   createFlowerStaffSupabase,
+  deleteFlowerTeamMemberSupabase,
   listFlowerTeamSupabase,
   setFlowerTeamMemberActiveSupabase,
 } from './flowers-team.supabase';
@@ -50,6 +52,15 @@ export async function setFlowerTeamMemberActive(memberId: string, isActive: bool
   }
 
   await setFlowerTeamMemberActiveLocal(memberId, isActive);
+}
+
+export async function deleteFlowerTeamMember(memberId: string): Promise<void> {
+  if (shouldUseFlowerSupabase(getFlowerStorageMode())) {
+    await deleteFlowerTeamMemberSupabase(memberId);
+    return;
+  }
+
+  await deleteFlowerTeamMemberLocal(memberId);
 }
 
 export async function completeStaffOnboarding(

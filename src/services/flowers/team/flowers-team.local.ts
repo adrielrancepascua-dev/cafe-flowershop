@@ -97,6 +97,16 @@ export async function setFlowerTeamMemberActiveLocal(memberId: string, isActive:
   writeTeam(next);
 }
 
+export async function deleteFlowerTeamMemberLocal(memberId: string): Promise<void> {
+  const team = readTeam();
+  const exists = team.some((member) => member.id === memberId);
+  if (!exists) {
+    throw new Error('Only staff accounts created in Team can be deleted in demo mode.');
+  }
+
+  writeTeam(team.filter((member) => member.id !== memberId));
+}
+
 export async function completeStaffOnboardingLocal(
   userId: string,
   branchId: string,

@@ -1,4 +1,4 @@
-import { createClient } from '@supabase/supabase-js';
+import { requireFlowerAdmin } from './_flower-admin-auth.mjs';
 
 const TEMP_PASSWORD = '1234';
 
@@ -51,28 +51,8 @@ export default async function handler(req, res) {
     process.env.VITE_STAFF_EMAIL_DOMAIN ||
     'papersandpetals.ph';
 
-  const userClient = createClient(supabaseUrl, anonKey, {
-    auth: { persistSession: false, autoRefreshToken: false },
-  });
-
-  const { data: userData, error: userError } = await userClient.auth.getUser(token);
-  if (userError || !userData.user) {
-    return res.status(401).json({ error: 'Invalid or expired session.' });
-  }
-
-  const adminClient = createClient(supabaseUrl, serviceRoleKey, {
-    auth: { persistSession: false, autoRefreshToken: false },
-  });
-
-  const { data: adminProfile, error: profileError } = await adminClient
-    .from('flower_profiles')
-    .select('role, is_active')
-    .eq('id', userData.user.id)
-    .single();
-
-  if (profileError || !adminProfile || adminProfile.role !== 'admin' || adminProfile.is_active === false) {
-    return res.status(403).json({ error: 'Admin access required.' });
-  }
+  try {
+    const { adminClient, adminUserId } = await requireFlowerAdmin(token);
 
   let email = String(req.body?.email || '').trim().toLowerCase();
   if (!email) {
@@ -90,7 +70,7 @@ export default async function handler(req, res) {
       email_confirm: true,
       user_metadata: {
         display_name: displayName,
-        created_by_admin: userData.user.id,
+        created_by_admin: adminUserId,
       },
     });
 
@@ -135,4 +115,10 @@ export default async function handler(req, res) {
     temporary_password: TEMP_PASSWORD,
     onboarding_completed: false,
   });
+  } catch (error) {
+    const statusCode = error?.statusCode ?? 500;
+    return res.status(statusCode).json({
+      error: error instanceof Error ? error.message : 'Could not create staff account.',
+    });
+  }
 }

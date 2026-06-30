@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
   createFlowerStaffExpense,
   deleteFlowerStaffExpense,
@@ -33,11 +33,23 @@ export default function FlowerExpensesPage() {
   const { user, isAdmin } = useFlowerAuth();
   const [expenses, setExpenses] = useState<FlowerStaffExpense[]>([]);
   const [branches, setBranches] = useState<FlowerBranchOption[]>([]);
+  const [branchFilter, setBranchFilter] = useState('all');
   const [draft, setDraft] = useState<ExpenseDraft>(emptyDraft(''));
   const [editingExpenseId, setEditingExpenseId] = useState<string | null>(null);
   const [editDraft, setEditDraft] = useState<ExpenseDraft | null>(null);
   const [message, setMessage] = useState('');
   const [errorMessage, setErrorMessage] = useState('');
+
+  const staffBranchId = !isAdmin ? user?.branch_id ?? null : null;
+  const staffBranchName = !isAdmin ? user?.branch_name ?? null : null;
+
+  const visibleExpenses = useMemo(() => {
+    if (!isAdmin || branchFilter === 'all') {
+      return expenses;
+    }
+
+    return expenses.filter((expense) => expense.branch_id === branchFilter);
+  }, [expenses, branchFilter, isAdmin]);
 
   async function loadData() {
     const [expenseList, branchList] = await Promise.all([
@@ -46,7 +58,13 @@ export default function FlowerExpensesPage() {
     ]);
     setExpenses(expenseList);
     setBranches(branchList);
-    if (!draft.branch_id && branchList[0]) {
+
+    if (!isAdmin && staffBranchId) {
+      setDraft((current) => ({
+        ...emptyDraft(staffBranchId),
+        expense_date: current.expense_date || toDateKey(new Date()),
+      }));
+    } else if (!draft.branch_id && branchList[0]) {
       setDraft(emptyDraft(branchList[0].id));
     }
   }
@@ -70,8 +88,13 @@ export default function FlowerExpensesPage() {
     }
 
     const parsedAmount = parseAmount(draft.amount);
-    if (!parsedAmount || !draft.description.trim() || !draft.branch_id) {
-      setErrorMessage('Enter a valid amount, description, and branch.');
+    const branchId = isAdmin ? draft.branch_id : staffBranchId;
+    if (!parsedAmount || !draft.description.trim() || !branchId) {
+      setErrorMessage(
+        isAdmin
+          ? 'Enter a valid amount, description, and branch.'
+          : 'Enter a valid amount and description. Finish first-time setup if your branch is missing.',
+      );
       return;
     }
 
@@ -79,14 +102,14 @@ export default function FlowerExpensesPage() {
       await createFlowerStaffExpense({
         staff_id: user.id,
         staff_name: user.display_name,
-        branch_id: draft.branch_id,
+        branch_id: branchId,
         amount: parsedAmount,
         description: draft.description,
         expense_date: draft.expense_date,
       });
 
       setDraft((current) => ({
-        ...emptyDraft(current.branch_id),
+        ...emptyDraft(isAdmin ? current.branch_id : staffBranchId ?? current.branch_id),
         expense_date: current.expense_date,
       }));
       setMessage('Expense saved.');
@@ -172,6 +195,32 @@ export default function FlowerExpensesPage() {
         }
       />
 
+      {isAdmin ? (
+        <div className="mt-4 flex flex-wrap items-center gap-2">
+          <select
+            value={branchFilter}
+            onChange={(e) => setBranchFilter(e.target.value)}
+            className="flower-input max-w-[200px]"
+          >
+            <option value="all">All branches</option>
+            {branches.map((branch) => (
+              <option key={branch.id} value={branch.id}>
+                {branch.name}
+              </option>
+            ))}
+          </select>
+          {branchFilter !== 'all' ? (
+            <p className="text-sm text-brand-brown/70">
+              Showing {visibleExpenses.length} expense{visibleExpenses.length === 1 ? '' : 's'}
+            </p>
+          ) : null}
+        </div>
+      ) : staffBranchName ? (
+        <p className="mt-4 inline-flex rounded-xl border border-brand-brown/20 bg-brand-beige/50 px-3 py-2 text-sm font-semibold text-brand-dark">
+          {staffBranchName} branch
+        </p>
+      ) : null}
+
       <form onSubmit={handleSubmit} className="mt-5 grid grid-cols-1 gap-3 rounded-2xl border border-brand-muted/40 bg-brand-cream/20 p-4 md:grid-cols-2">
         <input
           type="date"
@@ -180,16 +229,27 @@ export default function FlowerExpensesPage() {
           className="flower-input"
           required
         />
-        <select
-          value={draft.branch_id}
-          onChange={(e) => setDraft((current) => ({ ...current, branch_id: e.target.value }))}
-          className="flower-input"
-          required
-        >
-          {branches.map((branch) => (
-            <option key={branch.id} value={branch.id}>{branch.name}</option>
-          ))}
-        </select>
+        {isAdmin ? (
+          <select
+            value={draft.branch_id}
+            onChange={(e) => setDraft((current) => ({ ...current, branch_id: e.target.value }))}
+            className="flower-input"
+            required
+          >
+            {branches.map((branch) => (
+              <option key={branch.id} value={branch.id}>
+                {branch.name}
+              </option>
+            ))}
+          </select>
+        ) : (
+          <div
+            className="flower-input flex items-center bg-brand-cream/40 text-brand-dark"
+            aria-readonly="true"
+          >
+            {staffBranchName ?? 'Branch not set'}
+          </div>
+        )}
         <input
           type="number"
           min="0"
@@ -216,8 +276,10 @@ export default function FlowerExpensesPage() {
 
       <div className="mt-5 md:hidden">
         <FlowerMobileCardList
-          items={expenses}
-          emptyMessage="No expenses logged yet."
+          items={visibleExpenses}
+          emptyMessage={
+            branchFilter !== 'all' ? 'No expenses for this branch.' : 'No expenses logged yet.'
+          }
           getKey={(expense) => expense.id}
           renderCard={(expense) =>
             isAdmin && editingExpenseId === expense.id && editDraft ? (
@@ -331,7 +393,17 @@ export default function FlowerExpensesPage() {
             </tr>
           </thead>
           <tbody>
-            {expenses.map((expense) =>
+            {visibleExpenses.length === 0 ? (
+              <tr>
+                <td
+                  colSpan={isAdmin ? 6 : 5}
+                  className="border-t border-brand-muted/30 px-3 py-6 text-center text-brand-brown/60"
+                >
+                  {branchFilter !== 'all' ? 'No expenses for this branch.' : 'No expenses logged yet.'}
+                </td>
+              </tr>
+            ) : null}
+            {visibleExpenses.map((expense) =>
               isAdmin && editingExpenseId === expense.id && editDraft ? (
                 <tr key={expense.id} className="border-t border-brand-muted/30 bg-brand-cream/30">
                   <td className="px-3 py-2">
