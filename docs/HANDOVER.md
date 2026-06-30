@@ -7,7 +7,8 @@ Use this before collecting the ₱30k balance. Run on the **production** deploy 
 - [ ] `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY` set on Vercel
 - [ ] `VITE_FLOWER_STORAGE_MODE=supabase`
 - [ ] `VITE_APP_MODE` is **not** `flower_demo` (use `cafe` or omit)
-- [ ] `supabase/schema_flowers_v2.sql` applied in Supabase SQL editor (includes RLS + storage bucket)
+- [x] `supabase/schema_flowers_v2.sql` applied in Supabase SQL editor
+- [ ] `supabase/seed_flowers_products_and_stock.sql` applied (products + starting stock)
 - [ ] Admin + staff users created in Supabase Auth with matching rows in `flower_profiles`
 
 ### Create a profile after Auth signup

@@ -13,6 +13,7 @@ import type { FlowerOrder } from '../../shared/types/flower-order';
 import type { FlowerBranchOption } from '../../shared/types/flower-inventory';
 import type { FlowerProduct } from '../../shared/types/flower-product';
 import FlowerPageHeader from '../../shared/components/FlowerPageHeader';
+import FlowerMobileCardList from '../../shared/components/FlowerMobileCardList';
 import FlowerOrderFormModal from '../components/FlowerOrderFormModal';
 import {
   ORDER_STATUS_LABELS,
@@ -755,7 +756,45 @@ export default function FlowerOrdersPage() {
           )}
         </div>
       ) : (
-        <div className="mt-5 overflow-x-auto rounded-2xl border border-brand-muted/40">
+        <>
+          <div className="mt-5 md:hidden">
+            <FlowerMobileCardList
+              items={orders}
+              emptyMessage="No orders yet. Tap New order to add one."
+              getKey={(order) => order.id}
+              renderCard={(order) => (
+                <button
+                  type="button"
+                  onClick={() => openExistingOrder(order)}
+                  className="w-full text-left"
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="font-semibold text-brand-dark">{order.receiver}</p>
+                      <p className="mt-1 text-xs text-brand-brown/60">
+                        {formatPickupDateTimeLocal(order.scheduled_for)}
+                      </p>
+                    </div>
+                    <p className="shrink-0 font-semibold text-brand-dark">
+                      {PRICE_FORMATTER.format(order.total_amount)}
+                    </p>
+                  </div>
+                  <p className="mt-2 text-sm text-brand-brown/75">{order.branch_name}</p>
+                  <p className="mt-1 truncate text-xs text-brand-brown/60">
+                    {summarizeFlowerLines(order.items)}
+                  </p>
+                  <div className="mt-3 flex items-center justify-between gap-2">
+                    <span className="rounded-full bg-brand-beige px-2.5 py-1 text-xs font-semibold text-brand-brown">
+                      {ORDER_STATUS_LABELS[order.status]}
+                    </span>
+                    <span className="text-xs text-brand-brown/60">{order.created_by_name}</span>
+                  </div>
+                </button>
+              )}
+            />
+          </div>
+
+          <div className="mt-5 hidden overflow-x-auto rounded-2xl border border-brand-muted/40 md:block">
           <table className="min-w-full text-left text-sm">
             <thead className="bg-brand-beige/40 text-brand-brown">
               <tr>
@@ -798,6 +837,7 @@ export default function FlowerOrdersPage() {
             </tbody>
           </table>
         </div>
+        </>
       )}
 
       {user ? (

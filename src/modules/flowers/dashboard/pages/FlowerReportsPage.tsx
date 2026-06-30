@@ -13,6 +13,7 @@ import type { FlowerReportsData } from '../../shared/types/flower-report';
 import type { FlowerBranchOption } from '../../shared/types/flower-inventory';
 import type { FlowerSupplierCost } from '../../shared/types/flower-expense';
 import FlowerPageHeader from '../../shared/components/FlowerPageHeader';
+import FlowerMobileCardList from '../../shared/components/FlowerMobileCardList';
 import FlowerPrintableSalesReportPanel from '../components/FlowerPrintableSalesReportPanel';
 import { PRICE_FORMATTER, toDateKey } from '../../shared/utils/flower-format';
 
@@ -287,7 +288,113 @@ export default function FlowerReportsPage() {
               {supplierMessage ? <p className="mt-3 text-sm text-emerald-700">{supplierMessage}</p> : null}
               {supplierErrorMessage ? <p className="mt-3 text-sm text-red-700">{supplierErrorMessage}</p> : null}
 
-              <div className="mt-4 overflow-x-auto rounded-xl border border-brand-muted/40 bg-white">
+              <div className="mt-4 md:hidden">
+                <FlowerMobileCardList
+                  items={supplierCosts}
+                  emptyMessage="No supplier costs logged yet."
+                  getKey={(cost) => cost.id}
+                  renderCard={(cost) =>
+                    editingSupplierCostId === cost.id && supplierEditDraft ? (
+                      <div className="space-y-3">
+                        <input
+                          type="date"
+                          value={supplierEditDraft.cost_date}
+                          onChange={(e) =>
+                            setSupplierEditDraft((current) =>
+                              current ? { ...current, cost_date: e.target.value } : current,
+                            )
+                          }
+                          className="flower-input w-full"
+                        />
+                        <select
+                          value={supplierEditDraft.branch_id}
+                          onChange={(e) =>
+                            setSupplierEditDraft((current) =>
+                              current ? { ...current, branch_id: e.target.value } : current,
+                            )
+                          }
+                          className="flower-input w-full"
+                        >
+                          {branches.map((branch) => (
+                            <option key={branch.id} value={branch.id}>{branch.name}</option>
+                          ))}
+                        </select>
+                        <input
+                          type="text"
+                          value={supplierEditDraft.description}
+                          onChange={(e) =>
+                            setSupplierEditDraft((current) =>
+                              current ? { ...current, description: e.target.value } : current,
+                            )
+                          }
+                          className="flower-input w-full"
+                        />
+                        <input
+                          type="number"
+                          min="0"
+                          step="0.01"
+                          value={supplierEditDraft.amount}
+                          onChange={(e) =>
+                            setSupplierEditDraft((current) =>
+                              current ? { ...current, amount: e.target.value } : current,
+                            )
+                          }
+                          className="flower-input w-full"
+                        />
+                        <div className="flex gap-2">
+                          <button
+                            type="button"
+                            onClick={() => void handleSaveSupplierCost(cost.id)}
+                            className="flower-btn-primary flex-1 text-sm"
+                          >
+                            Save
+                          </button>
+                          <button
+                            type="button"
+                            onClick={cancelEditingSupplierCost}
+                            className="flower-btn-secondary flex-1 text-sm"
+                          >
+                            Cancel
+                          </button>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="space-y-2">
+                        <div className="flex items-start justify-between gap-3">
+                          <div>
+                            <p className="font-semibold text-brand-dark">{cost.description}</p>
+                            <p className="mt-1 text-xs text-brand-brown/60">{cost.cost_date}</p>
+                          </div>
+                          <p className="shrink-0 font-semibold text-brand-dark">
+                            {PRICE_FORMATTER.format(cost.amount)}
+                          </p>
+                        </div>
+                        <p className="text-sm text-brand-brown/75">
+                          {cost.branch_name} · {cost.created_by_name}
+                        </p>
+                        <div className="flex gap-2 pt-1">
+                          <button
+                            type="button"
+                            onClick={() => startEditingSupplierCost(cost)}
+                            className="flower-btn-secondary flex-1 px-3 py-1.5 text-xs"
+                          >
+                            Edit
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => void handleDeleteSupplierCost(cost.id)}
+                            className="flex-1 rounded-xl border border-red-200 px-3 py-1.5 text-xs font-semibold text-red-700"
+                          >
+                            Delete
+                          </button>
+                        </div>
+                      </div>
+                    )
+                  }
+                />
+              </div>
+
+              <div className="mt-4 hidden overflow-x-auto rounded-xl border border-brand-muted/40 bg-white md:block">
                 <table className="min-w-full text-left text-sm">
                   <thead className="bg-brand-beige/40 text-brand-brown">
                     <tr>

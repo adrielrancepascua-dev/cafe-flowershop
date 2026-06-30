@@ -11,6 +11,7 @@ import type { FlowerAuthSession, FlowerUser } from '../../modules/flowers/shared
 import {
   getStoredFlowerSession,
   isAdminUser,
+  restoreFlowerSession,
   signInFlowerUser,
   signOutFlowerUser,
 } from './flower-auth.service';
@@ -30,8 +31,21 @@ export function FlowerAuthProvider({ children }: { children: ReactNode }) {
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    setSession(getStoredFlowerSession());
-    setIsLoading(false);
+    let cancelled = false;
+
+    async function bootstrap() {
+      const restored = await restoreFlowerSession();
+      if (!cancelled) {
+        setSession(restored ?? getStoredFlowerSession());
+        setIsLoading(false);
+      }
+    }
+
+    void bootstrap();
+
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   const signIn = useCallback(async (email: string, password: string) => {

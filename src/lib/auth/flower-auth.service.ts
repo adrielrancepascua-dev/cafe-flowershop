@@ -110,6 +110,47 @@ export async function signInFlowerUser(email: string, password: string): Promise
   return signInLocal(email, password);
 }
 
+export async function restoreFlowerSession(): Promise<FlowerAuthSession | null> {
+  if (!isSupabaseConfigured()) {
+    return readLocalSession();
+  }
+
+  const supabase = getSupabaseClient();
+  if (!supabase) {
+    return readLocalSession();
+  }
+
+  const { data, error } = await supabase.auth.getSession();
+  if (error || !data.session?.user) {
+    writeLocalSession(null);
+    return null;
+  }
+
+  const { data: profile, error: profileError } = await supabase
+    .from('flower_profiles')
+    .select('id, email, display_name, role')
+    .eq('id', data.session.user.id)
+    .single();
+
+  if (profileError || !profile) {
+    writeLocalSession(null);
+    return null;
+  }
+
+  const session: FlowerAuthSession = {
+    user: {
+      id: profile.id,
+      email: profile.email,
+      display_name: profile.display_name,
+      role: profile.role === 'admin' ? 'admin' : 'staff',
+    },
+    token: data.session.access_token,
+  };
+
+  writeLocalSession(session);
+  return session;
+}
+
 export async function signOutFlowerUser(): Promise<void> {
   writeLocalSession(null);
 
