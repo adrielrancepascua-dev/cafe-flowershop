@@ -64,6 +64,13 @@ export default function FlowerReportsPage() {
 
   const staffReportDate = toDateKey(new Date());
   const effectiveReportDate = isAdmin ? reportDate : staffReportDate;
+  const staffBranchId = !isAdmin ? user?.branch_id ?? null : null;
+  const staffBranchName = !isAdmin ? user?.branch_name ?? null : null;
+  const effectiveBranchFilter = isAdmin
+    ? branchFilter === 'all'
+      ? undefined
+      : branchFilter
+    : staffBranchId ?? undefined;
 
   async function loadSupplierCosts() {
     if (!isAdmin) {
@@ -83,13 +90,20 @@ export default function FlowerReportsPage() {
 
     try {
       if (!isAdmin) {
-        const allowed = await canStaffAccessReports(effectiveReportDate);
+        if (!staffBranchId) {
+          setBlockedMessage('Reports unlock after you finish first-time setup and choose your branch.');
+          setReportsData(emptyReports());
+          return;
+        }
+
+        const allowed = await canStaffAccessReports(effectiveReportDate, staffBranchId);
         if (!allowed) {
-          const closeStatus = await getFlowerDayCloseStatus(effectiveReportDate);
+          const closeStatus = await getFlowerDayCloseStatus(effectiveReportDate, staffBranchId);
+          const branchLabel = staffBranchName ? `${staffBranchName} branch` : 'your branch';
           setBlockedMessage(
             closeStatus.total_orders === 0
-              ? `Reports unlock after today (${formatReportDateLabel(effectiveReportDate)}) once orders are scheduled and all are marked picked up or delivered.`
-              : `Reports locked — ${closeStatus.open_orders} order(s) still open for today. Mark all as picked up or delivered first.`,
+              ? `Reports unlock after today (${formatReportDateLabel(effectiveReportDate)}) once ${branchLabel} has scheduled orders and all are marked picked up or delivered.`
+              : `Reports locked — ${closeStatus.open_orders} open order(s) left for ${branchLabel} today. Mark all as picked up or delivered first.`,
           );
           setReportsData(emptyReports());
           return;
@@ -97,7 +111,7 @@ export default function FlowerReportsPage() {
       }
 
       const data = await getFlowerReports({
-        branchId: branchFilter === 'all' ? undefined : branchFilter,
+        branchId: effectiveBranchFilter,
         reportDate: effectiveReportDate,
         dailyDays: isAdmin ? undefined : 1,
         monthlyMonths: isAdmin ? undefined : 0,
@@ -123,7 +137,7 @@ export default function FlowerReportsPage() {
 
   useEffect(() => {
     void loadReports();
-  }, [branchFilter, effectiveReportDate, user, isAdmin]);
+  }, [branchFilter, effectiveReportDate, user, isAdmin, staffBranchId]);
 
   async function handleSupplierCost(event: React.FormEvent) {
     event.preventDefault();
@@ -224,7 +238,9 @@ export default function FlowerReportsPage() {
         description={
           isAdmin
             ? 'Net income = total sales − staff expenses − supplier costs. Pick any date to review history.'
-            : `Today's totals only. Unlocks after all orders for ${formatReportDateLabel(staffReportDate)} are closed.`
+            : staffBranchName
+              ? `Today's ${staffBranchName} totals only. Unlocks after all orders for this branch on ${formatReportDateLabel(staffReportDate)} are closed.`
+              : `Today's totals only. Unlocks after all orders for your branch on ${formatReportDateLabel(staffReportDate)} are closed.`
         }
       />
 
@@ -237,16 +253,25 @@ export default function FlowerReportsPage() {
             className="flower-input max-w-[180px]"
           />
         ) : (
-          <p className="rounded-xl border border-brand-muted/40 bg-brand-cream/30 px-3 py-2 text-sm font-medium text-brand-dark">
-            {formatReportDateLabel(staffReportDate)}
-          </p>
+          <div className="flex flex-wrap items-center gap-2">
+            <p className="rounded-xl border border-brand-muted/40 bg-brand-cream/30 px-3 py-2 text-sm font-medium text-brand-dark">
+              {formatReportDateLabel(staffReportDate)}
+            </p>
+            {staffBranchName ? (
+              <p className="rounded-xl border border-brand-brown/20 bg-brand-beige/50 px-3 py-2 text-sm font-semibold text-brand-dark">
+                {staffBranchName} branch
+              </p>
+            ) : null}
+          </div>
         )}
-        <select value={branchFilter} onChange={(e) => setBranchFilter(e.target.value)} className="flower-input max-w-[180px]">
-          <option value="all">All branches</option>
-          {branches.map((branch) => (
-            <option key={branch.id} value={branch.id}>{branch.name}</option>
-          ))}
-        </select>
+        {isAdmin ? (
+          <select value={branchFilter} onChange={(e) => setBranchFilter(e.target.value)} className="flower-input max-w-[180px]">
+            <option value="all">All branches</option>
+            {branches.map((branch) => (
+              <option key={branch.id} value={branch.id}>{branch.name}</option>
+            ))}
+          </select>
+        ) : null}
       </div>
 
       {blockedMessage ? (
@@ -555,6 +580,7 @@ export default function FlowerReportsPage() {
         <FlowerPrintableSalesReportPanel
           anchorDate={effectiveReportDate}
           isAdmin={isAdmin}
+          branchId={staffBranchId ?? undefined}
         />
       ) : null}
     </div>

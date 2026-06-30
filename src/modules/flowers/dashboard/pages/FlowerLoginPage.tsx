@@ -5,6 +5,7 @@ import { useFlowerAuth } from '../../../../lib/auth/FlowerAuthContext';
 import { isFlowerDemoMode } from '../../../../app/app-mode';
 import { FLOWER_DEMO_USERS } from '../../shared/data/flowers.mock';
 import FlowerBrandLogo from '../../shared/components/FlowerBrandLogo';
+import { formatStaffEmailExample } from '../../shared/config/brand';
 
 export default function FlowerLoginPage() {
   const { user, signIn } = useFlowerAuth();
@@ -165,9 +166,13 @@ export default function FlowerLoginPage() {
                 value={email}
                 onChange={(event) => setEmail(event.target.value)}
                 className="flower-input mt-1.5"
+                placeholder={formatStaffEmailExample('your.name')}
                 required
                 autoComplete="username"
               />
+              <span className="mt-1 block text-xs text-brand-brown/60">
+                Staff accounts use @{formatStaffEmailExample().split('@')[1]}
+              </span>
             </label>
 
             <label className="block text-sm font-medium text-brand-brown">

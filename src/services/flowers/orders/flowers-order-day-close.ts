@@ -9,6 +9,7 @@ export function getPickupDateKey(iso: string): string {
 export function computeFlowerDayCloseStatus(
   orders: FlowerOrder[],
   dateKey: string,
+  branchId?: string,
 ): {
   date: string;
   total_orders: number;
@@ -16,7 +17,10 @@ export function computeFlowerDayCloseStatus(
   is_closed: boolean;
 } {
   const dayOrders = orders.filter(
-    (order) => getPickupDateKey(order.scheduled_for) === dateKey && order.status !== 'cancelled',
+    (order) =>
+      getPickupDateKey(order.scheduled_for) === dateKey &&
+      order.status !== 'cancelled' &&
+      (!branchId || order.branch_id === branchId),
   );
 
   const openOrders = dayOrders.filter(

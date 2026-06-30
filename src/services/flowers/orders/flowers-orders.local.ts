@@ -315,12 +315,15 @@ export async function updateFlowerOrderStatusLocal(
   return refreshed ?? order;
 }
 
-export async function getFlowerDayCloseStatusLocal(dateKey: string): Promise<{
+export async function getFlowerDayCloseStatusLocal(
+  dateKey: string,
+  branchId?: string,
+): Promise<{
   date: string;
   total_orders: number;
   open_orders: number;
   is_closed: boolean;
 }> {
   const orders = readOrdersFromStorage();
-  return computeFlowerDayCloseStatus(orders, dateKey);
+  return computeFlowerDayCloseStatus(orders, dateKey, branchId);
 }

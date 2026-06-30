@@ -784,11 +784,15 @@ export default function FlowerOrderFormModal({
               {isViewMode ? (
                 <button
                   type="button"
-                  className="flower-btn-secondary mt-3 w-full px-4 py-2.5 text-sm sm:w-auto"
+                  className={`mt-3 w-full px-4 py-3 text-sm font-semibold transition sm:w-auto ${
+                    statusDraft !== displayOrderStatus
+                      ? 'flower-btn-primary shadow-md ring-2 ring-brand-accent/35'
+                      : 'flower-btn-secondary opacity-50'
+                  }`}
                   disabled={statusDraft === displayOrderStatus}
                   onClick={() => void handleStatusSelect(statusDraft)}
                 >
-                  Apply status
+                  {statusDraft !== displayOrderStatus ? 'Apply status change' : 'Apply status'}
                 </button>
               ) : null}
               {statusMessage ? (

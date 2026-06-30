@@ -514,12 +514,15 @@ export async function updateFlowerOrderStatusSupabase(
   return updated;
 }
 
-export async function getFlowerDayCloseStatusSupabase(dateKey: string): Promise<{
+export async function getFlowerDayCloseStatusSupabase(
+  dateKey: string,
+  branchId?: string,
+): Promise<{
   date: string;
   total_orders: number;
   open_orders: number;
   is_closed: boolean;
 }> {
   const orders = await listOrdersForPickupDate(dateKey);
-  return computeFlowerDayCloseStatus(orders, dateKey);
+  return computeFlowerDayCloseStatus(orders, dateKey, branchId);
 }

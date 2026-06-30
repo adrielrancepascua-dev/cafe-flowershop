@@ -10,6 +10,7 @@ import { ORDER_STATUS_LABELS, PRICE_FORMATTER } from '../../shared/utils/flower-
 type FlowerPrintableSalesReportPanelProps = {
   anchorDate: string;
   isAdmin: boolean;
+  branchId?: string;
   disabled?: boolean;
 };
 
@@ -32,6 +33,7 @@ function formatGeneratedAt(iso: string): string {
 export default function FlowerPrintableSalesReportPanel({
   anchorDate,
   isAdmin,
+  branchId,
   disabled = false,
 }: FlowerPrintableSalesReportPanelProps) {
   const [period, setPeriod] = useState<FlowerSalesReportPeriod>('day');
@@ -53,6 +55,7 @@ export default function FlowerPrintableSalesReportPanel({
     void getFlowerPrintableSalesReport({
       anchorDate,
       period: effectivePeriod,
+      branchId,
     })
       .then(setReport)
       .catch((error) => {
@@ -62,7 +65,7 @@ export default function FlowerPrintableSalesReportPanel({
       .finally(() => {
         setLoading(false);
       });
-  }, [anchorDate, disabled, effectivePeriod]);
+  }, [anchorDate, branchId, disabled, effectivePeriod]);
 
   function handlePrint() {
     window.print();

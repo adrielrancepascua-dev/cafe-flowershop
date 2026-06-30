@@ -22,6 +22,7 @@ function isSalesIncluded(status: string): boolean {
 export async function getFlowerPrintableSalesReportLocal(options: {
   anchorDate: string;
   period: FlowerSalesReportPeriod;
+  branchId?: string;
 }): Promise<FlowerPrintableSalesReport> {
   const { fromDate, toDate, periodLabel } = getSalesReportPeriodRange(
     options.anchorDate,
@@ -33,8 +34,12 @@ export async function getFlowerPrintableSalesReportLocal(options: {
     listFlowerBranches(),
   ]);
 
+  const scopedBranches = options.branchId
+    ? branches.filter((branch) => branch.id === options.branchId)
+    : branches;
+
   const branchRows: FlowerPrintableSalesBranchRow[] = await Promise.all(
-    branches.map(async (branch) => {
+    scopedBranches.map(async (branch) => {
       const branchOrders = orders
         .filter((order) => {
           if (order.branch_id !== branch.id || !isSalesIncluded(order.status)) {

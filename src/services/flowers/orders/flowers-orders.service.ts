@@ -113,12 +113,12 @@ export async function deleteFlowerOrder(orderId: string): Promise<void> {
   );
 }
 
-export async function getFlowerDayCloseStatus(dateKey: string) {
+export async function getFlowerDayCloseStatus(dateKey: string, branchId?: string) {
   return withSupabaseOrders(
     async () => {
       const { getFlowerDayCloseStatusSupabase } = await import('./flowers-orders.supabase');
-      return getFlowerDayCloseStatusSupabase(dateKey);
+      return getFlowerDayCloseStatusSupabase(dateKey, branchId);
     },
-    () => getFlowerDayCloseStatusLocal(dateKey),
+    () => getFlowerDayCloseStatusLocal(dateKey, branchId),
   );
 }

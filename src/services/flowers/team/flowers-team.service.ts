@@ -1,5 +1,6 @@
 import { isFlowerDemoMode } from '../../../app/app-mode';
 import type { CreateFlowerStaffResult, FlowerTeamMember } from '../../../modules/flowers/shared/types/auth';
+import { STAFF_EMAIL_DOMAIN } from '../../../modules/flowers/shared/config/brand';
 import { getFlowerStorageMode, shouldUseFlowerSupabase } from '../storage-mode';
 import {
   completeStaffOnboardingLocal,
@@ -15,7 +16,6 @@ import {
 } from './flowers-team.supabase';
 
 export function generateStaffEmailPreview(displayName: string): string {
-  const domain = import.meta.env.VITE_STAFF_EMAIL_DOMAIN || 'papersandpetals.ph';
   const slug = displayName
     .toLowerCase()
     .normalize('NFD')
@@ -24,7 +24,7 @@ export function generateStaffEmailPreview(displayName: string): string {
     .replace(/^\.+|\.+$/g, '')
     .slice(0, 28) || 'staff';
 
-  return `${slug}.xxxx@${domain}`;
+  return `${slug}.xxxx@${STAFF_EMAIL_DOMAIN}`;
 }
 
 export async function listFlowerTeam(): Promise<FlowerTeamMember[]> {

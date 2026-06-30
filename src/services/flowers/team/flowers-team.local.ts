@@ -1,4 +1,5 @@
 import type { FlowerTeamMember } from '../../../modules/flowers/shared/types/auth';
+import { STAFF_EMAIL_DOMAIN } from '../../../modules/flowers/shared/config/brand';
 import { FLOWER_BRANCHES_MOCK, FLOWER_DEMO_USERS } from '../../../modules/flowers/shared/data/flowers.mock';
 
 const TEAM_STORAGE_KEY = 'papers_petals_team_v1';
@@ -55,7 +56,7 @@ export async function listFlowerTeamLocal(): Promise<FlowerTeamMember[]> {
 }
 
 export async function createFlowerStaffLocal(displayName: string) {
-  const domain = 'papersandpetals.ph';
+  const domain = STAFF_EMAIL_DOMAIN;
   const slug = displayName
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, '.')

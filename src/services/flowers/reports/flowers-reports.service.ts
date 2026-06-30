@@ -26,6 +26,7 @@ export async function getFlowerReports(options: FlowerReportsOptions = {}): Prom
 export async function getFlowerPrintableSalesReport(options: {
   anchorDate: string;
   period: FlowerSalesReportPeriod;
+  branchId?: string;
 }): Promise<FlowerPrintableSalesReport> {
   const mode = getFlowerStorageMode();
 
@@ -43,13 +44,20 @@ export async function getFlowerPrintableSalesReport(options: {
   return getFlowerPrintableSalesReportLocal(options);
 }
 
-export async function canStaffAccessReports(reportDate: string): Promise<boolean> {
+export async function canStaffAccessReports(
+  reportDate: string,
+  branchId?: string,
+): Promise<boolean> {
   const todayKey = toDateKey(new Date());
   if (reportDate !== todayKey) {
     return false;
   }
 
+  if (!branchId) {
+    return false;
+  }
+
   const { getFlowerDayCloseStatus } = await import('../orders/flowers-orders.service');
-  const status = await getFlowerDayCloseStatus(reportDate);
+  const status = await getFlowerDayCloseStatus(reportDate, branchId);
   return status.is_closed;
 }
