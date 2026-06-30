@@ -10,17 +10,36 @@ Use this before collecting the ₱30k balance. Run on the **production** deploy 
 - [x] `supabase/schema_flowers_v2.sql` applied in Supabase SQL editor
 - [ ] `supabase/fix_flower_branches_rls.sql` applied (if branch dropdown is empty)
 - [ ] `supabase/seed_flowers_products_and_stock.sql` applied (products + starting stock)
-- [ ] Admin + staff users created in Supabase Auth with matching rows in `flower_profiles`
+- [ ] `supabase/add_staff_management.sql` applied (team page + first-login onboarding)
+- [ ] `SUPABASE_SERVICE_ROLE_KEY` set on Vercel (server only — enables **Team** page to create staff)
+- [ ] `VITE_STAFF_EMAIL_DOMAIN` set if staff emails should not use `papersandpetals.ph`
+- [ ] Admin account exists in Supabase Auth + `flower_profiles` with `role = 'admin'`
 
-### Create a profile after Auth signup
+### Create the first admin (one-time)
 
 ```sql
-insert into public.flower_profiles (id, email, display_name, role)
+insert into public.flower_profiles (id, email, display_name, role, onboarding_completed)
 values (
   '<auth-user-uuid>',
   'admin@papersandpetals.ph',
   'Shop Admin',
-  'admin'
+  'admin',
+  true
+);
+```
+
+After that, the owner adds staff from **Team** in the app (temporary password `1234`; staff pick branch + new password on first login).
+
+### Legacy manual staff (optional)
+
+```sql
+insert into public.flower_profiles (id, email, display_name, role, onboarding_completed)
+values (
+  '<auth-user-uuid>',
+  'staff@papersandpetals.ph',
+  'Staff Name',
+  'staff',
+  true
 );
 ```
 
@@ -75,7 +94,8 @@ Pick a test day with 2+ orders (or create them for today).
 2. **Inventory** — view stock; stock in/out; transfers tab
 3. **Expenses** — log petty cash; admin can fix typos
 4. **Reports** — locked until all today’s orders are done; screenshot printable report for Messenger
-5. **Day close rule** — stock comes out when every order for that pickup day is finished, not when each order is marked ready
+5. **Team** (admin) — add staff, copy login details, deactivate leavers
+6. **Day close rule** — stock comes out when every order for that pickup day is finished, not when each order is marked ready
 
 ## Rollback
 

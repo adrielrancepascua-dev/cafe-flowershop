@@ -7,6 +7,8 @@ Flowers-only operations system for **Papers & Petals** (Dagupan, San Carlos, Urd
 ## Features
 
 - Staff/admin login (Supabase Auth in production)
+- Admin **Team** page — create staff accounts (generated email + temp password `1234`)
+- First-login onboarding — staff choose branch and set a personal password
 - Calendar + list order views with full order form + photo uploads
 - Flower type + quantity lines, manual total price, auto balance
 - Per-branch inventory with admin stock in/out and inter-branch transfers
@@ -44,7 +46,8 @@ Set `VITE_APP_MODE=flower_demo` for demo mode.
 Run these in the Supabase SQL editor **in order**:
 
 1. `supabase/schema_flowers_v2.sql` — tables, RLS, photo bucket
-2. `supabase/seed_flowers_products_and_stock.sql` — starter products + stock per branch
+2. `supabase/add_staff_management.sql` — team profiles, onboarding, branch on staff
+3. `supabase/seed_flowers_products_and_stock.sql` — starter products + stock per branch
 
 Then:
 
@@ -54,5 +57,7 @@ Then:
    - `VITE_SUPABASE_ANON_KEY`
    - `VITE_FLOWER_STORAGE_MODE=supabase`
    - `VITE_APP_MODE=cafe` (not `flower_demo`)
+   - `SUPABASE_SERVICE_ROLE_KEY` (Vercel server env — required for Team page)
+   - `VITE_STAFF_EMAIL_DOMAIN=papersandpetals.ph` (optional)
 
 Full checklist: `docs/HANDOVER.md`

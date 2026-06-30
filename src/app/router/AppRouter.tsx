@@ -4,8 +4,10 @@ import FlowersAdminHome from '../../modules/flowers/dashboard/pages/FlowersAdmin
 import FlowerOrdersPage from '../../modules/flowers/dashboard/pages/FlowerOrdersPage';
 import FlowerProductsPage from '../../modules/flowers/dashboard/pages/FlowerProductsPage';
 import FlowerInventoryPage from '../../modules/flowers/dashboard/pages/FlowerInventoryPage';
-import FlowerReportsPage from '../../modules/flowers/dashboard/pages/FlowerReportsPage';
 import FlowerExpensesPage from '../../modules/flowers/dashboard/pages/FlowerExpensesPage';
+import FlowerReportsPage from '../../modules/flowers/dashboard/pages/FlowerReportsPage';
+import FlowerTeamPage from '../../modules/flowers/dashboard/pages/FlowerTeamPage';
+import RequireStaffOnboarding from '../../modules/flowers/dashboard/components/RequireStaffOnboarding';
 import FlowerLoginPage from '../../modules/flowers/dashboard/pages/FlowerLoginPage';
 import RequireFlowerAuth from '../../modules/flowers/dashboard/components/RequireFlowerAuth';
 
@@ -19,7 +21,9 @@ export default function AppRouter() {
           path="/dashboard"
           element={
             <RequireFlowerAuth>
-              <DashboardLayout />
+              <RequireStaffOnboarding>
+                <DashboardLayout />
+              </RequireStaffOnboarding>
             </RequireFlowerAuth>
           }
         >
@@ -30,6 +34,7 @@ export default function AppRouter() {
           <Route path="flowers/inventory" element={<FlowerInventoryPage />} />
           <Route path="flowers/expenses" element={<FlowerExpensesPage />} />
           <Route path="flowers/reports" element={<FlowerReportsPage />} />
+          <Route path="flowers/team" element={<FlowerTeamPage />} />
         </Route>
 
         <Route path="*" element={<Navigate to="/dashboard/flowers" replace />} />

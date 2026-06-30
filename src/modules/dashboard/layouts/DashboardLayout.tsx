@@ -10,6 +10,7 @@ const FLOWER_LINKS = [
   { label: 'Inventory', to: '/dashboard/flowers/inventory' },
   { label: 'Expenses', to: '/dashboard/flowers/expenses' },
   { label: 'Reports', to: '/dashboard/flowers/reports' },
+  { label: 'Team', to: '/dashboard/flowers/team', adminOnly: true },
   { label: 'Products', to: '/dashboard/flowers/products', adminOnly: true },
 ];
 
@@ -24,7 +25,8 @@ export default function DashboardLayout() {
           <FlowerBrandLogo size="sm" subtitle="Back office" className="min-w-0 flex-1" />
           <div className="flex shrink-0 items-center gap-2">
             <span className="hidden rounded-full bg-brand-beige/80 px-3 py-1 text-xs font-medium text-brand-brown sm:inline">
-              {user?.display_name} · {isAdmin ? 'Admin' : 'Staff'}
+              {user?.display_name}
+              {user?.branch_name ? ` · ${user.branch_name}` : ''} · {isAdmin ? 'Admin' : 'Staff'}
             </span>
             <button type="button" onClick={() => void signOut()} className="flower-btn-secondary px-3 py-1.5 text-xs">
               Sign out

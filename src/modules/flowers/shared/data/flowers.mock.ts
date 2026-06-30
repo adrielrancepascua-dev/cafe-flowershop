@@ -65,12 +65,18 @@ export const FLOWER_INVENTORY_SEED: Record<string, Record<string, number>> = {
   },
 };
 
-export const FLOWER_DEMO_USERS: Array<FlowerUser & { password: string }> = [
+export const FLOWER_DEMO_USERS: Array<
+  FlowerUser & { password: string; branch_name?: string | null }
+> = [
   {
     id: 'user-admin',
     email: 'admin@papersandpetals.ph',
     display_name: 'Owner Admin',
     role: 'admin',
+    branch_id: null,
+    branch_name: null,
+    onboarding_completed: true,
+    is_active: true,
     password: 'admin1234',
   },
   {
@@ -78,6 +84,10 @@ export const FLOWER_DEMO_USERS: Array<FlowerUser & { password: string }> = [
     email: 'staff1@papersandpetals.ph',
     display_name: 'Staff One',
     role: 'staff',
+    branch_id: 'branch-dagupan',
+    branch_name: 'Dagupan',
+    onboarding_completed: true,
+    is_active: true,
     password: 'staff1234',
   },
   {
@@ -85,6 +95,10 @@ export const FLOWER_DEMO_USERS: Array<FlowerUser & { password: string }> = [
     email: 'staff2@papersandpetals.ph',
     display_name: 'Staff Two',
     role: 'staff',
+    branch_id: 'branch-san-carlos',
+    branch_name: 'San Carlos',
+    onboarding_completed: true,
+    is_active: true,
     password: 'staff1234',
   },
 ];

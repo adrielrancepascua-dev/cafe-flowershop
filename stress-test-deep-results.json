@@ -1,0 +1,229 @@
+{
+  "passed": 35,
+  "warnings": 0,
+  "failed": 2,
+  "results": [
+    {
+      "viewport": "desktop",
+      "category": "prod-auth",
+      "status": "pass",
+      "message": "No demo one-tap login buttons"
+    },
+    {
+      "viewport": "desktop",
+      "category": "prod-banner",
+      "status": "pass",
+      "message": "No demo mode banner on dashboard"
+    },
+    {
+      "viewport": "desktop",
+      "category": "home-data",
+      "status": "pass",
+      "message": "Home dashboard shows operational content"
+    },
+    {
+      "viewport": "desktop",
+      "category": "orders-list",
+      "status": "pass",
+      "message": "List view toggles"
+    },
+    {
+      "viewport": "desktop",
+      "category": "orders-calendar",
+      "status": "pass",
+      "message": "Calendar view toggles"
+    },
+    {
+      "viewport": "desktop",
+      "category": "rapid-nav",
+      "status": "pass",
+      "message": "25 rapid page changes without crash"
+    },
+    {
+      "viewport": "desktop",
+      "category": "inventory-tabs",
+      "status": "pass",
+      "message": "Transfer tab works"
+    },
+    {
+      "viewport": "desktop",
+      "category": "expenses",
+      "status": "pass",
+      "message": "Expenses page renders"
+    },
+    {
+      "viewport": "desktop",
+      "category": "reports-metrics",
+      "status": "pass",
+      "message": "Report metrics visible"
+    },
+    {
+      "viewport": "desktop",
+      "category": "reports-print",
+      "status": "pass",
+      "message": "Printable report section present"
+    },
+    {
+      "viewport": "desktop",
+      "category": "products",
+      "status": "pass",
+      "message": "Products admin accessible"
+    },
+    {
+      "viewport": "desktop",
+      "category": "fatal",
+      "status": "fail",
+      "message": "locator.click: Timeout 5000ms exceeded.\nCall log:\n  - waiting for locator('tr button, li button').first()\n    - locator resolved to <button type=\"button\" class=\"min-w-0 flex-1 text-left\">…</button>\n  - attempting click action\n    2 × waiting for element to be visible, enabled and stable\n      - element is not visible\n    - retrying click action\n    - waiting 20ms\n    2 × waiting for element to be visible, enabled and stable\n      - element is not visible\n    - retrying click action\n      - waiting 100ms\n    9 × waiting for element to be visible, enabled and stable\n      - element is not visible\n    - retrying click action\n      - waiting 500ms\n"
+    },
+    {
+      "viewport": "phone",
+      "category": "prod-auth",
+      "status": "pass",
+      "message": "No demo one-tap login buttons"
+    },
+    {
+      "viewport": "phone",
+      "category": "prod-banner",
+      "status": "pass",
+      "message": "No demo mode banner on dashboard"
+    },
+    {
+      "viewport": "phone",
+      "category": "home-data",
+      "status": "pass",
+      "message": "Home dashboard shows operational content"
+    },
+    {
+      "viewport": "phone",
+      "category": "orders-list",
+      "status": "pass",
+      "message": "List view toggles"
+    },
+    {
+      "viewport": "phone",
+      "category": "orders-calendar",
+      "status": "pass",
+      "message": "Calendar view toggles"
+    },
+    {
+      "viewport": "phone",
+      "category": "rapid-nav",
+      "status": "pass",
+      "message": "25 rapid page changes without crash"
+    },
+    {
+      "viewport": "phone",
+      "category": "inventory-tabs",
+      "status": "pass",
+      "message": "Transfer tab works"
+    },
+    {
+      "viewport": "phone",
+      "category": "expenses",
+      "status": "pass",
+      "message": "Expenses page renders"
+    },
+    {
+      "viewport": "phone",
+      "category": "reports-metrics",
+      "status": "pass",
+      "message": "Report metrics visible"
+    },
+    {
+      "viewport": "phone",
+      "category": "reports-print",
+      "status": "pass",
+      "message": "Printable report section present"
+    },
+    {
+      "viewport": "phone",
+      "category": "products",
+      "status": "pass",
+      "message": "Products admin accessible"
+    },
+    {
+      "viewport": "phone",
+      "category": "order-status",
+      "status": "pass",
+      "message": "Status workflow in modal"
+    },
+    {
+      "viewport": "phone",
+      "category": "order-photos",
+      "status": "pass",
+      "message": "Photo sections in modal"
+    },
+    {
+      "viewport": "ipad",
+      "category": "prod-auth",
+      "status": "pass",
+      "message": "No demo one-tap login buttons"
+    },
+    {
+      "viewport": "ipad",
+      "category": "prod-banner",
+      "status": "pass",
+      "message": "No demo mode banner on dashboard"
+    },
+    {
+      "viewport": "ipad",
+      "category": "home-data",
+      "status": "pass",
+      "message": "Home dashboard shows operational content"
+    },
+    {
+      "viewport": "ipad",
+      "category": "orders-list",
+      "status": "pass",
+      "message": "List view toggles"
+    },
+    {
+      "viewport": "ipad",
+      "category": "orders-calendar",
+      "status": "pass",
+      "message": "Calendar view toggles"
+    },
+    {
+      "viewport": "ipad",
+      "category": "rapid-nav",
+      "status": "pass",
+      "message": "25 rapid page changes without crash"
+    },
+    {
+      "viewport": "ipad",
+      "category": "inventory-tabs",
+      "status": "pass",
+      "message": "Transfer tab works"
+    },
+    {
+      "viewport": "ipad",
+      "category": "expenses",
+      "status": "pass",
+      "message": "Expenses page renders"
+    },
+    {
+      "viewport": "ipad",
+      "category": "reports-metrics",
+      "status": "pass",
+      "message": "Report metrics visible"
+    },
+    {
+      "viewport": "ipad",
+      "category": "reports-print",
+      "status": "pass",
+      "message": "Printable report section present"
+    },
+    {
+      "viewport": "ipad",
+      "category": "products",
+      "status": "pass",
+      "message": "Products admin accessible"
+    },
+    {
+      "viewport": "ipad",
+      "category": "fatal",
+      "status": "fail",
+      "message": "locator.click: Timeout 5000ms exceeded.\nCall log:\n  - waiting for locator('tr button, li button').first()\n    - locator resolved to <button type=\"button\" class=\"min-w-0 flex-1 text-left\">…</button>\n  - attempting click action\n    2 × waiting for element to be visible, enabled and stable\n      - element is not visible\n    - retrying click action\n    - waiting 20ms\n    2 × waiting for element to be visible, enabled and stable\n      - element is not visible\n    - retrying click action\n      - waiting 100ms\n    10 × waiting for element to be visible, enabled and stable\n       - element is not visible\n     - retrying click action\n       - waiting 500ms\n"
+    }
+  ]
+}

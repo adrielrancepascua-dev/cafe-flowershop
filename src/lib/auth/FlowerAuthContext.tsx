@@ -11,6 +11,8 @@ import type { FlowerAuthSession, FlowerUser } from '../../modules/flowers/shared
 import {
   getStoredFlowerSession,
   isAdminUser,
+  needsStaffOnboarding,
+  refreshFlowerSession,
   restoreFlowerSession,
   signInFlowerUser,
   signOutFlowerUser,
@@ -20,8 +22,10 @@ interface FlowerAuthContextValue {
   user: FlowerUser | null;
   isLoading: boolean;
   isAdmin: boolean;
+  needsOnboarding: boolean;
   signIn: (email: string, password: string) => Promise<void>;
   signOut: () => Promise<void>;
+  refreshUser: () => Promise<void>;
 }
 
 const FlowerAuthContext = createContext<FlowerAuthContextValue | null>(null);
@@ -58,15 +62,22 @@ export function FlowerAuthProvider({ children }: { children: ReactNode }) {
     setSession(null);
   }, []);
 
+  const refreshUser = useCallback(async () => {
+    const nextSession = await refreshFlowerSession();
+    setSession(nextSession);
+  }, []);
+
   const value = useMemo(
     () => ({
       user: session?.user ?? null,
       isLoading,
       isAdmin: isAdminUser(session?.user),
+      needsOnboarding: needsStaffOnboarding(session?.user),
       signIn,
       signOut,
+      refreshUser,
     }),
-    [session, isLoading, signIn, signOut],
+    [session, isLoading, signIn, signOut, refreshUser],
   );
 
   return <FlowerAuthContext.Provider value={value}>{children}</FlowerAuthContext.Provider>;

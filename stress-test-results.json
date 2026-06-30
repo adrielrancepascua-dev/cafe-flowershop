@@ -1,0 +1,381 @@
+{
+  "testedAt": "2026-06-30T07:00:37.199Z",
+  "baseUrl": "https://flower-backoffice-demo.vercel.app",
+  "viewports": [
+    "desktop",
+    "phone",
+    "ipad"
+  ],
+  "total": 59,
+  "passed": 56,
+  "warnings": 0,
+  "failed": 3,
+  "results": [
+    {
+      "viewport": "desktop",
+      "category": "auth",
+      "status": "pass",
+      "message": "Admin login succeeded"
+    },
+    {
+      "viewport": "desktop",
+      "category": "layout",
+      "status": "pass",
+      "message": "Home after login: no horizontal overflow"
+    },
+    {
+      "viewport": "desktop",
+      "category": "navigation",
+      "status": "pass",
+      "message": "Home loaded"
+    },
+    {
+      "viewport": "desktop",
+      "category": "layout",
+      "status": "pass",
+      "message": "Home: no horizontal overflow"
+    },
+    {
+      "viewport": "desktop",
+      "category": "navigation",
+      "status": "pass",
+      "message": "Orders loaded"
+    },
+    {
+      "viewport": "desktop",
+      "category": "layout",
+      "status": "pass",
+      "message": "Orders: no horizontal overflow"
+    },
+    {
+      "viewport": "desktop",
+      "category": "navigation",
+      "status": "pass",
+      "message": "Inventory loaded"
+    },
+    {
+      "viewport": "desktop",
+      "category": "layout",
+      "status": "pass",
+      "message": "Inventory: no horizontal overflow"
+    },
+    {
+      "viewport": "desktop",
+      "category": "navigation",
+      "status": "pass",
+      "message": "Expenses loaded"
+    },
+    {
+      "viewport": "desktop",
+      "category": "layout",
+      "status": "pass",
+      "message": "Expenses: no horizontal overflow"
+    },
+    {
+      "viewport": "desktop",
+      "category": "navigation",
+      "status": "pass",
+      "message": "Reports loaded"
+    },
+    {
+      "viewport": "desktop",
+      "category": "layout",
+      "status": "pass",
+      "message": "Reports: no horizontal overflow"
+    },
+    {
+      "viewport": "desktop",
+      "category": "navigation",
+      "status": "pass",
+      "message": "Products loaded"
+    },
+    {
+      "viewport": "desktop",
+      "category": "layout",
+      "status": "pass",
+      "message": "Products: no horizontal overflow"
+    },
+    {
+      "viewport": "desktop",
+      "category": "orders",
+      "status": "pass",
+      "message": "Order modal opens"
+    },
+    {
+      "viewport": "desktop",
+      "category": "layout",
+      "status": "pass",
+      "message": "Order modal: no horizontal overflow"
+    },
+    {
+      "viewport": "desktop",
+      "category": "reports",
+      "status": "pass",
+      "message": "Reports content renders"
+    },
+    {
+      "viewport": "desktop",
+      "category": "console",
+      "status": "pass",
+      "message": "No critical console errors"
+    },
+    {
+      "viewport": "desktop",
+      "category": "network",
+      "status": "fail",
+      "message": "2 failed request(s)",
+      "requests": [
+        "GET https://lzolyrqehzpmohbhdjau.supabase.co/rest/v1/flower_branches?select=id%2Cname%2Cis_active&order=name.asc — net::ERR_ABORTED",
+        "GET https://lzolyrqehzpmohbhdjau.supabase.co/rest/v1/flower_orders?select=id%2Cbranch_id%2Creceiver%2Ccustomer_social%2Cscheduled_for%2Cstatus%2Cclaim_mode%2Cwrapper_color%2Cgreeting_card%2Cspecial_instructions%2Cdownpayment%2Cpayment_reference%2Ctotal_amount%2Cbalance%2Cnotes%2Cphoto_inspo_data_url%2Cproof_dp_data_url%2Corder_form_ss_data_url%2Cready_photo_data_url%2Ccreated_by_id%2Ccreated_by_name%2Cinventory_deducted%2Ccreated_at%2Cflower_branches%28name%29%2Cflower_order_items%28id%2Cproduct_id%2Citem_name%2Cquantity%29&order=scheduled_for.desc — net::ERR_ABORTED"
+      ]
+    },
+    {
+      "viewport": "phone",
+      "category": "auth",
+      "status": "pass",
+      "message": "Admin login succeeded"
+    },
+    {
+      "viewport": "phone",
+      "category": "layout",
+      "status": "pass",
+      "message": "Home after login: no horizontal overflow"
+    },
+    {
+      "viewport": "phone",
+      "category": "navigation",
+      "status": "pass",
+      "message": "Home loaded"
+    },
+    {
+      "viewport": "phone",
+      "category": "layout",
+      "status": "pass",
+      "message": "Home: no horizontal overflow"
+    },
+    {
+      "viewport": "phone",
+      "category": "navigation",
+      "status": "pass",
+      "message": "Orders loaded"
+    },
+    {
+      "viewport": "phone",
+      "category": "layout",
+      "status": "pass",
+      "message": "Orders: no horizontal overflow"
+    },
+    {
+      "viewport": "phone",
+      "category": "navigation",
+      "status": "pass",
+      "message": "Inventory loaded"
+    },
+    {
+      "viewport": "phone",
+      "category": "layout",
+      "status": "pass",
+      "message": "Inventory: no horizontal overflow"
+    },
+    {
+      "viewport": "phone",
+      "category": "navigation",
+      "status": "pass",
+      "message": "Expenses loaded"
+    },
+    {
+      "viewport": "phone",
+      "category": "layout",
+      "status": "pass",
+      "message": "Expenses: no horizontal overflow"
+    },
+    {
+      "viewport": "phone",
+      "category": "navigation",
+      "status": "pass",
+      "message": "Reports loaded"
+    },
+    {
+      "viewport": "phone",
+      "category": "layout",
+      "status": "pass",
+      "message": "Reports: no horizontal overflow"
+    },
+    {
+      "viewport": "phone",
+      "category": "navigation",
+      "status": "pass",
+      "message": "Products loaded"
+    },
+    {
+      "viewport": "phone",
+      "category": "layout",
+      "status": "pass",
+      "message": "Products: no horizontal overflow"
+    },
+    {
+      "viewport": "phone",
+      "category": "orders",
+      "status": "pass",
+      "message": "Order modal opens"
+    },
+    {
+      "viewport": "phone",
+      "category": "layout",
+      "status": "pass",
+      "message": "Order modal: no horizontal overflow"
+    },
+    {
+      "viewport": "phone",
+      "category": "mobile-nav",
+      "status": "pass",
+      "message": "Bottom navigation visible"
+    },
+    {
+      "viewport": "phone",
+      "category": "reports",
+      "status": "pass",
+      "message": "Reports content renders"
+    },
+    {
+      "viewport": "phone",
+      "category": "console",
+      "status": "pass",
+      "message": "No critical console errors"
+    },
+    {
+      "viewport": "phone",
+      "category": "network",
+      "status": "fail",
+      "message": "1 failed request(s)",
+      "requests": [
+        "GET https://lzolyrqehzpmohbhdjau.supabase.co/rest/v1/flower_branches?select=id%2Cname%2Cis_active&order=name.asc — net::ERR_ABORTED"
+      ]
+    },
+    {
+      "viewport": "ipad",
+      "category": "auth",
+      "status": "pass",
+      "message": "Admin login succeeded"
+    },
+    {
+      "viewport": "ipad",
+      "category": "layout",
+      "status": "pass",
+      "message": "Home after login: no horizontal overflow"
+    },
+    {
+      "viewport": "ipad",
+      "category": "navigation",
+      "status": "pass",
+      "message": "Home loaded"
+    },
+    {
+      "viewport": "ipad",
+      "category": "layout",
+      "status": "pass",
+      "message": "Home: no horizontal overflow"
+    },
+    {
+      "viewport": "ipad",
+      "category": "navigation",
+      "status": "pass",
+      "message": "Orders loaded"
+    },
+    {
+      "viewport": "ipad",
+      "category": "layout",
+      "status": "pass",
+      "message": "Orders: no horizontal overflow"
+    },
+    {
+      "viewport": "ipad",
+      "category": "navigation",
+      "status": "pass",
+      "message": "Inventory loaded"
+    },
+    {
+      "viewport": "ipad",
+      "category": "layout",
+      "status": "pass",
+      "message": "Inventory: no horizontal overflow"
+    },
+    {
+      "viewport": "ipad",
+      "category": "navigation",
+      "status": "pass",
+      "message": "Expenses loaded"
+    },
+    {
+      "viewport": "ipad",
+      "category": "layout",
+      "status": "pass",
+      "message": "Expenses: no horizontal overflow"
+    },
+    {
+      "viewport": "ipad",
+      "category": "navigation",
+      "status": "pass",
+      "message": "Reports loaded"
+    },
+    {
+      "viewport": "ipad",
+      "category": "layout",
+      "status": "pass",
+      "message": "Reports: no horizontal overflow"
+    },
+    {
+      "viewport": "ipad",
+      "category": "navigation",
+      "status": "pass",
+      "message": "Products loaded"
+    },
+    {
+      "viewport": "ipad",
+      "category": "layout",
+      "status": "pass",
+      "message": "Products: no horizontal overflow"
+    },
+    {
+      "viewport": "ipad",
+      "category": "orders",
+      "status": "pass",
+      "message": "Order modal opens"
+    },
+    {
+      "viewport": "ipad",
+      "category": "layout",
+      "status": "pass",
+      "message": "Order modal: no horizontal overflow"
+    },
+    {
+      "viewport": "ipad",
+      "category": "mobile-nav",
+      "status": "pass",
+      "message": "Bottom navigation visible"
+    },
+    {
+      "viewport": "ipad",
+      "category": "reports",
+      "status": "pass",
+      "message": "Reports content renders"
+    },
+    {
+      "viewport": "ipad",
+      "category": "console",
+      "status": "pass",
+      "message": "No critical console errors"
+    },
+    {
+      "viewport": "ipad",
+      "category": "network",
+      "status": "fail",
+      "message": "3 failed request(s)",
+      "requests": [
+        "GET https://flower-backoffice-demo.vercel.app/assets/flowers-products.supabase-Dodly9cH.js — net::ERR_ABORTED",
+        "GET https://flower-backoffice-demo.vercel.app/assets/flowers-orders.supabase-BdH6LEmZ.js — net::ERR_ABORTED",
+        "GET https://flower-backoffice-demo.vercel.app/assets/flowers-inventory.supabase-tZNI1_GL.js — net::ERR_ABORTED"
+      ]
+    }
+  ]
+}

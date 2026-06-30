@@ -1,10 +1,15 @@
 import { isFlowerDemoMode } from '../../app/app-mode';
 import type { FlowerAuthSession, FlowerUser } from '../../modules/flowers/shared/types/auth';
 import { FLOWER_DEMO_USERS } from '../../modules/flowers/shared/data/flowers.mock';
-import { getSupabaseClient, isSupabaseConfigured } from '../supabase/client';
+import { mapFlowerProfileRow } from '../../services/flowers/team/flowers-team.shared';
 import { getFlowerStorageMode, shouldUseFlowerSupabase } from '../../services/flowers/storage-mode';
+import { getSupabaseClient, isSupabaseConfigured } from '../supabase/client';
 
 const AUTH_STORAGE_KEY = 'papers_petals_auth_v1';
+const TEAM_STORAGE_KEY = 'papers_petals_team_v1';
+
+const PROFILE_SELECT =
+  'id, email, display_name, role, branch_id, onboarding_completed, is_active, flower_branches ( name )';
 
 function shouldUseSupabaseAuth(): boolean {
   if (!isSupabaseConfigured()) {
@@ -54,22 +59,77 @@ async function signInLocal(email: string, password: string): Promise<FlowerAuthS
     (user) => user.email.toLowerCase() === normalizedEmail && user.password === password,
   );
 
-  if (!match) {
+  let user: FlowerUser | null = match
+    ? {
+        id: match.id,
+        email: match.email,
+        display_name: match.display_name,
+        role: match.role,
+        branch_id: match.branch_id ?? null,
+        branch_name: match.branch_name ?? null,
+        onboarding_completed: match.onboarding_completed ?? true,
+        is_active: match.is_active ?? true,
+      }
+    : null;
+
+  if (!user) {
+    try {
+      const raw = window.localStorage.getItem(TEAM_STORAGE_KEY);
+      const team = raw ? (JSON.parse(raw) as Array<FlowerUser & { password?: string }>) : [];
+      const teamMatch = team.find(
+        (entry) => entry.email.toLowerCase() === normalizedEmail && entry.password === password,
+      );
+      if (teamMatch) {
+        user = {
+          id: teamMatch.id,
+          email: teamMatch.email,
+          display_name: teamMatch.display_name,
+          role: 'staff',
+          branch_id: teamMatch.branch_id ?? null,
+          branch_name: teamMatch.branch_name ?? null,
+          onboarding_completed: teamMatch.onboarding_completed ?? false,
+          is_active: teamMatch.is_active ?? true,
+        };
+      }
+    } catch {
+      // ignore malformed local team storage
+    }
+  }
+
+  if (!user) {
     throw new Error('Invalid email or password.');
   }
 
+  if (!user.is_active) {
+    throw new Error('This account has been deactivated. Contact your shop admin.');
+  }
+
   const session: FlowerAuthSession = {
-    user: {
-      id: match.id,
-      email: match.email,
-      display_name: match.display_name,
-      role: match.role,
-    },
-    token: `local-${match.id}-${Date.now()}`,
+    user,
+    token: `local-${user.id}-${Date.now()}`,
   };
 
   writeLocalSession(session);
   return session;
+}
+
+async function loadSupabaseProfile(userId: string): Promise<FlowerUser> {
+  const supabase = getSupabaseClient();
+  if (!supabase) {
+    throw new Error('Supabase is not configured.');
+  }
+
+  const { data: profile, error: profileError } = await supabase
+    .from('flower_profiles')
+    .select(PROFILE_SELECT)
+    .eq('id', userId)
+    .single();
+
+  if (profileError || !profile) {
+    throw new Error('User profile not found.');
+  }
+
+  return mapFlowerProfileRow(profile);
 }
 
 async function signInSupabase(email: string, password: string): Promise<FlowerAuthSession> {
@@ -103,23 +163,14 @@ async function signInSupabase(email: string, password: string): Promise<FlowerAu
     throw new Error(error?.message ?? 'Invalid email or password.');
   }
 
-  const { data: profile, error: profileError } = await supabase
-    .from('flower_profiles')
-    .select('id, email, display_name, role')
-    .eq('id', data.user.id)
-    .single();
-
-  if (profileError || !profile) {
-    throw new Error('User profile not found.');
+  const user = await loadSupabaseProfile(data.user.id);
+  if (!user.is_active) {
+    await supabase.auth.signOut();
+    throw new Error('This account has been deactivated. Contact your shop admin.');
   }
 
   const session: FlowerAuthSession = {
-    user: {
-      id: profile.id,
-      email: profile.email,
-      display_name: profile.display_name,
-      role: profile.role === 'admin' ? 'admin' : 'staff',
-    },
+    user,
     token: data.session?.access_token ?? '',
     refresh_token: data.session?.refresh_token ?? '',
   };
@@ -168,7 +219,34 @@ export async function ensureSupabaseSession(): Promise<void> {
 
 export async function restoreFlowerSession(): Promise<FlowerAuthSession | null> {
   if (!shouldUseSupabaseAuth()) {
-    return readLocalSession();
+    const stored = readLocalSession();
+    if (!stored) {
+      return null;
+    }
+
+    try {
+      const raw = window.localStorage.getItem(TEAM_STORAGE_KEY);
+      const team = raw ? (JSON.parse(raw) as Array<FlowerUser & { password?: string }>) : [];
+      const teamMatch = team.find((entry) => entry.id === stored.user.id);
+      if (teamMatch) {
+        const refreshed: FlowerAuthSession = {
+          ...stored,
+          user: {
+            ...stored.user,
+            branch_id: teamMatch.branch_id ?? null,
+            branch_name: teamMatch.branch_name ?? null,
+            onboarding_completed: teamMatch.onboarding_completed ?? false,
+            is_active: teamMatch.is_active ?? true,
+          },
+        };
+        writeLocalSession(refreshed);
+        return refreshed;
+      }
+    } catch {
+      return stored;
+    }
+
+    return stored;
   }
 
   const supabase = getSupabaseClient();
@@ -184,24 +262,14 @@ export async function restoreFlowerSession(): Promise<FlowerAuthSession | null> 
     return null;
   }
 
-  const { data: profile, error: profileError } = await supabase
-    .from('flower_profiles')
-    .select('id, email, display_name, role')
-    .eq('id', data.session.user.id)
-    .single();
-
-  if (profileError || !profile) {
+  const user = await loadSupabaseProfile(data.session.user.id);
+  if (!user.is_active) {
     writeLocalSession(null);
     return null;
   }
 
   const session: FlowerAuthSession = {
-    user: {
-      id: profile.id,
-      email: profile.email,
-      display_name: profile.display_name,
-      role: profile.role === 'admin' ? 'admin' : 'staff',
-    },
+    user,
     token: data.session.access_token,
     refresh_token: data.session.refresh_token,
   };
@@ -227,4 +295,16 @@ export function getStoredFlowerSession(): FlowerAuthSession | null {
 
 export function isAdminUser(user: FlowerUser | null | undefined): boolean {
   return user?.role === 'admin';
+}
+
+export function needsStaffOnboarding(user: FlowerUser | null | undefined): boolean {
+  return Boolean(user && user.role === 'staff' && !user.onboarding_completed && user.is_active);
+}
+
+export async function refreshFlowerSession(): Promise<FlowerAuthSession | null> {
+  const session = await restoreFlowerSession();
+  if (session) {
+    writeLocalSession(session);
+  }
+  return session;
 }
