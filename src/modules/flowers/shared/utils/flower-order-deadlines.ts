@@ -1,4 +1,5 @@
 import type { FlowerClaimMode, FlowerOrder, FlowerOrderStatus } from '../types/flower-order';
+import { parseFlowerTimestamp, scheduledForToDateKey, toDateKey } from './flower-format';
 
 const PICKUP_PHOTO_LEAD_MS = 30 * 60 * 1000;
 const DELIVERY_PHOTO_LEAD_MS = 60 * 60 * 1000;
@@ -105,8 +106,14 @@ export function getOrderPrepDeadlineInfo(
     return null;
   }
 
-  const scheduledMs = new Date(order.scheduled_for).getTime();
+  const scheduledMs = parseFlowerTimestamp(order.scheduled_for).getTime();
   if (Number.isNaN(scheduledMs)) {
+    return null;
+  }
+
+  const pickupDayKey = scheduledForToDateKey(order.scheduled_for);
+  const todayKey = toDateKey(new Date());
+  if (pickupDayKey < todayKey) {
     return null;
   }
 
@@ -131,7 +138,7 @@ export function getOrderPrepDeadlineInfo(
     minutesUntilDeadline,
     urgency,
     message: buildPhotoMessage(order.claim_mode, minutesUntilDeadline),
-    detail: `${detail} Scheduled ${claimLabel}: ${new Date(scheduledMs).toLocaleString('en-PH', {
+    detail: `${detail} Scheduled ${claimLabel}: ${parseFlowerTimestamp(order.scheduled_for).toLocaleString('en-PH', {
       month: 'short',
       day: 'numeric',
       hour: 'numeric',

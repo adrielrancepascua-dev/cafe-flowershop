@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Clock3 } from 'lucide-react';
 import type { FlowerOrder } from '../../shared/types/flower-order';
+import { formatPickupDateTimeLocal } from '../../shared/utils/flower-format';
 import {
   listActiveOrderPrepDeadlines,
   urgencyPanelClassName,
@@ -76,8 +77,8 @@ export default function OrderDeadlineAlertsPanel({
                         {order.receiver}
                       </p>
                       <p className="truncate text-xs text-brand-brown/70">
-                        {order.branch_name} ·{' '}
-                        {order.claim_mode === 'delivery' ? 'Delivery' : 'Pick up'}
+                        {formatPickupDateTimeLocal(order.scheduled_for)} · {order.branch_name}{' '}
+                        · {order.claim_mode === 'delivery' ? 'Delivery' : 'Pick up'}
                       </p>
                     </div>
                     <span

@@ -62,12 +62,36 @@ function estimateDataUrlBytes(dataUrl: string): number {
   const base64 = dataUrl.split(',')[1] ?? '';
   return Math.ceil((base64.length * 3) / 4);
 }
+
+/** Parse DB timestamps as UTC when Supabase/Postgres omits the Z suffix. */
+export function parseFlowerTimestamp(iso: string): Date {
+  if (!iso) {
+    return new Date(Number.NaN);
+  }
+
+  const trimmed = iso.trim();
+  if (/[zZ]$/.test(trimmed) || /[+-]\d{2}:\d{2}$/.test(trimmed)) {
+    return new Date(trimmed);
+  }
+
+  const normalized = trimmed.replace(' ', 'T');
+  if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?$/.test(normalized)) {
+    return new Date(`${normalized}Z`);
+  }
+
+  return new Date(trimmed);
+}
+
 export function formatPickupDateTimeLocal(iso: string): string {
   if (!iso) {
     return '';
   }
 
-  const date = new Date(iso);
+  const date = parseFlowerTimestamp(iso);
+  if (Number.isNaN(date.getTime())) {
+    return '';
+  }
+
   return date.toLocaleString('en-PH', {
     month: 'short',
     day: 'numeric',
@@ -82,7 +106,7 @@ export function toDateInputValue(iso: string): string {
     return '';
   }
 
-  const date = new Date(iso);
+  const date = parseFlowerTimestamp(iso);
   if (Number.isNaN(date.getTime())) {
     return '';
   }
@@ -114,7 +138,7 @@ export function scheduledForToDateKey(iso: string): string {
     return '';
   }
 
-  const date = new Date(iso);
+  const date = parseFlowerTimestamp(iso);
   if (Number.isNaN(date.getTime())) {
     return '';
   }

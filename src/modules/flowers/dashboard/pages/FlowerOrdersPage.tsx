@@ -537,9 +537,21 @@ export default function FlowerOrdersPage() {
   function openNewOrderForDate(date: Date) {
     const pickup = new Date(date);
     pickup.setHours(10, 0, 0, 0);
+    setCursorMonth(new Date(pickup.getFullYear(), pickup.getMonth(), 1));
+    setSelectedDateKey(toDateKey(pickup));
     setSelectedOrder(null);
     setInitialPickupIso(pickup.toISOString());
     setFormOpen(true);
+  }
+
+  function openNewOrderFromToolbar() {
+    if (selectedDateKey) {
+      const [year, month, day] = selectedDateKey.split('-').map(Number);
+      openNewOrderForDate(new Date(year, month - 1, day));
+      return;
+    }
+
+    openNewOrderForDate(new Date());
   }
 
   async function openExistingOrder(order: FlowerOrder) {
@@ -662,7 +674,7 @@ export default function FlowerOrdersPage() {
         <button
           type="button"
           className="flower-btn-primary ml-auto"
-          onClick={() => openNewOrderForDate(new Date())}
+          onClick={openNewOrderFromToolbar}
         >
           New order
         </button>
