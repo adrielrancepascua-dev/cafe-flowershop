@@ -1,1 +1,1 @@
-export { canStaffAccessReports, getFlowerReports } from './flowers-reports.service';
+export { canStaffAccessReports, getFlowerPrintableSalesReport, getFlowerReports } from './flowers-reports.service';

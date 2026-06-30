@@ -7,6 +7,7 @@ import { useFlowerAuth } from '../../../../lib/auth/FlowerAuthContext';
 import type { FlowerReportsData } from '../../shared/types/flower-report';
 import type { FlowerBranchOption } from '../../shared/types/flower-inventory';
 import FlowerPageHeader from '../../shared/components/FlowerPageHeader';
+import FlowerPrintableSalesReportPanel from '../components/FlowerPrintableSalesReportPanel';
 import { PRICE_FORMATTER, toDateKey } from '../../shared/utils/flower-format';
 
 function formatReportDateLabel(dateKey: string): string {
@@ -125,6 +126,7 @@ export default function FlowerReportsPage() {
 
   return (
     <div className="animate-fade-in">
+      <div className="print:hidden">
       <FlowerPageHeader
         label="Sales & Finance"
         title="Reports"
@@ -216,6 +218,14 @@ export default function FlowerReportsPage() {
             </div>
           ) : null}
         </>
+      ) : null}
+      </div>
+
+      {!loading && !blockedMessage ? (
+        <FlowerPrintableSalesReportPanel
+          anchorDate={effectiveReportDate}
+          isAdmin={isAdmin}
+        />
       ) : null}
     </div>
   );

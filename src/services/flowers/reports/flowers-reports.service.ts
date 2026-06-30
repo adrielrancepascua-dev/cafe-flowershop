@@ -2,6 +2,8 @@ import type { FlowerReportsData, FlowerReportsOptions } from '../../../modules/f
 import { toDateKey } from '../../../modules/flowers/shared/utils/flower-format';
 import { getFlowerStorageMode, shouldUseFlowerSupabase } from '../storage-mode';
 import { getFlowerReportsLocal } from './flowers-reports.local';
+import { getFlowerPrintableSalesReportLocal } from './flowers-printable-sales-report.local';
+import type { FlowerPrintableSalesReport, FlowerSalesReportPeriod } from '../../../modules/flowers/shared/types/flower-report';
 
 export async function getFlowerReports(options: FlowerReportsOptions = {}): Promise<FlowerReportsData> {
   const mode = getFlowerStorageMode();
@@ -19,6 +21,27 @@ export async function getFlowerReports(options: FlowerReportsOptions = {}): Prom
   }
 
   return getFlowerReportsLocal(options);
+}
+
+export async function getFlowerPrintableSalesReport(options: {
+  anchorDate: string;
+  period: FlowerSalesReportPeriod;
+}): Promise<FlowerPrintableSalesReport> {
+  const mode = getFlowerStorageMode();
+
+  if (shouldUseFlowerSupabase(mode)) {
+    try {
+      // Printable report uses the same order/expense sources; fall through to local until supabase parity.
+      return await getFlowerPrintableSalesReportLocal(options);
+    } catch (error) {
+      if (mode === 'supabase') {
+        throw error;
+      }
+      console.warn('Falling back to local printable sales report.', error);
+    }
+  }
+
+  return getFlowerPrintableSalesReportLocal(options);
 }
 
 export async function canStaffAccessReports(reportDate: string): Promise<boolean> {

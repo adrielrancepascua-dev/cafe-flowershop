@@ -60,3 +60,39 @@
     border-radius: 9999px;
   }
 }
+
+@media print {
+  @page {
+    margin: 12mm;
+  }
+
+  body {
+    background: white !important;
+  }
+
+  header,
+  aside,
+  nav[aria-label='Mobile navigation'] {
+    display: none !important;
+  }
+
+  main.flower-card {
+    box-shadow: none !important;
+    border: none !important;
+    padding: 0 !important;
+    min-height: auto !important;
+  }
+
+  .print\:hidden {
+    display: none !important;
+  }
+
+  #flower-printable-sales-report {
+    break-inside: avoid;
+  }
+
+  .break-inside-avoid {
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+}
