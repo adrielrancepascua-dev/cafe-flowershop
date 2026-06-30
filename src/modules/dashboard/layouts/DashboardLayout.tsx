@@ -58,7 +58,7 @@ export default function DashboardLayout() {
           </div>
         </aside>
 
-        <main className="flower-card min-h-[60vh] p-4 sm:p-6 lg:mb-0 lg:pb-6 pb-24">
+        <main className="flower-card min-h-[60vh] min-w-0 overflow-x-hidden p-4 pb-24 sm:p-6 lg:mb-0 lg:pb-6">
           <DemoModeBanner />
           <Outlet />
         </main>

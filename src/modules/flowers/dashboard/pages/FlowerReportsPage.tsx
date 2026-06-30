@@ -216,7 +216,7 @@ export default function FlowerReportsPage() {
   }
 
   return (
-    <div className="animate-fade-in">
+    <div className="animate-fade-in min-w-0 max-w-full overflow-x-hidden">
       <div className="print:hidden">
       <FlowerPageHeader
         label="Sales & Finance"
@@ -523,9 +523,11 @@ export default function FlowerReportsPage() {
                 <h3 className="text-sm font-semibold text-brand-dark">Daily summary</h3>
                 <ul className="mt-2 space-y-1 text-sm">
                   {reportsData.daily_summary.map((row) => (
-                    <li key={row.date} className="flex justify-between">
-                      <span>{row.date}</span>
-                      <span>{row.order_count} orders · {PRICE_FORMATTER.format(row.sales_total)}</span>
+                    <li key={row.date} className="flex flex-col gap-0.5 border-b border-brand-muted/20 py-2 last:border-0 sm:flex-row sm:items-center sm:justify-between">
+                      <span className="font-medium text-brand-dark">{row.date}</span>
+                      <span className="text-brand-brown/80">
+                        {row.order_count} orders · {PRICE_FORMATTER.format(row.sales_total)}
+                      </span>
                     </li>
                   ))}
                 </ul>
@@ -534,9 +536,11 @@ export default function FlowerReportsPage() {
                 <h3 className="text-sm font-semibold text-brand-dark">Monthly summary</h3>
                 <ul className="mt-2 space-y-1 text-sm">
                   {reportsData.monthly_summary.map((row) => (
-                    <li key={row.month} className="flex justify-between">
-                      <span>{row.month}</span>
-                      <span>{row.order_count} orders · {PRICE_FORMATTER.format(row.sales_total)}</span>
+                    <li key={row.month} className="flex flex-col gap-0.5 border-b border-brand-muted/20 py-2 last:border-0 sm:flex-row sm:items-center sm:justify-between">
+                      <span className="font-medium text-brand-dark">{row.month}</span>
+                      <span className="text-brand-brown/80">
+                        {row.order_count} orders · {PRICE_FORMATTER.format(row.sales_total)}
+                      </span>
                     </li>
                   ))}
                 </ul>
@@ -559,9 +563,9 @@ export default function FlowerReportsPage() {
 
 function MetricCard({ label, value, accent = false }: { label: string; value: string; accent?: boolean }) {
   return (
-    <div className={`rounded-2xl border p-4 ${accent ? 'border-brand-brown bg-brand-brown text-white' : 'border-brand-muted/40 bg-white'}`}>
-      <p className={`text-xs font-semibold uppercase tracking-wide ${accent ? 'text-white/80' : 'text-brand-brown/60'}`}>{label}</p>
-      <p className="mt-2 font-serif text-xl font-semibold">{value}</p>
+    <div className={`min-w-0 rounded-2xl border p-3 sm:p-4 ${accent ? 'border-brand-brown bg-brand-brown text-white' : 'border-brand-muted/40 bg-white'}`}>
+      <p className={`text-[10px] font-semibold uppercase tracking-wide sm:text-xs ${accent ? 'text-white/80' : 'text-brand-brown/60'}`}>{label}</p>
+      <p className="mt-2 break-words font-serif text-base font-semibold leading-tight sm:text-xl">{value}</p>
     </div>
   );
 }
