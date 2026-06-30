@@ -224,7 +224,7 @@ export async function deductFlowerInventoryForOrderLocal(input: {
     productId: input.productId,
     delta: -input.quantity,
     movementType: 'order_deduct',
-    note: `Order ${input.orderId} completed`,
+    note: `Order ${input.orderId} day-close deduct`,
   });
 }
 

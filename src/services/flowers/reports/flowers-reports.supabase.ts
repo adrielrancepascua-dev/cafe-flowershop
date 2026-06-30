@@ -6,6 +6,10 @@ import type {
   FlowerReportsOptions,
 } from '../../../modules/flowers/shared/types/flower-report';
 import type { FlowerOrderStatus } from '../../../modules/flowers/shared/types/flower-order';
+import {
+  sumStaffExpensesForPeriodSupabase,
+  sumSupplierCostsForPeriodSupabase,
+} from '../expenses/flowers-expenses.supabase';
 
 type BranchRow = {
   id: string;
@@ -15,8 +19,8 @@ type BranchRow = {
 type ReportOrderRow = {
   id: string;
   branch_id: string;
-  customer_name: string | null;
-  scheduled_for: string | null;
+  receiver: string;
+  scheduled_for: string;
   status: FlowerOrderStatus;
   total_amount: number;
   created_at: string;
@@ -41,7 +45,7 @@ function formatMonthKeyUtc(date: Date): string {
 }
 
 function isSalesIncluded(status: FlowerOrderStatus): boolean {
-  return status !== 'cancelled';
+  return status === 'completed' || status === 'picked_up' || status === 'delivered';
 }
 
 function buildDailySkeleton(days: number): FlowerDailySalesSummaryRow[] {
@@ -82,6 +86,7 @@ export async function getFlowerReportsSupabase(options: FlowerReportsOptions = {
   const dailyDays = options.dailyDays ?? 14;
   const monthlyMonths = options.monthlyMonths ?? 6;
   const advanceLimit = options.advanceLimit ?? 25;
+  const reportDate = options.reportDate ?? formatDateKeyUtc(new Date());
 
   let ordersQuery = supabase
     .from('flower_orders')
@@ -89,7 +94,7 @@ export async function getFlowerReportsSupabase(options: FlowerReportsOptions = {
       `
       id,
       branch_id,
-      customer_name,
+      receiver,
       scheduled_for,
       status,
       total_amount,
@@ -131,54 +136,72 @@ export async function getFlowerReportsSupabase(options: FlowerReportsOptions = {
   const monthlySummary = buildMonthlySkeleton(monthlyMonths);
   const monthlyByMonth = new Map(monthlySummary.map((row) => [row.month, row]));
 
+  let totalSales = 0;
+
   for (const order of orderRows) {
     if (!isSalesIncluded(order.status)) {
       continue;
     }
 
-    const createdAt = new Date(order.created_at);
-    const dateKey = formatDateKeyUtc(createdAt);
-    const monthKey = formatMonthKeyUtc(createdAt);
+    const pickupDate = order.scheduled_for.slice(0, 10);
+    const pickupMonth = pickupDate.slice(0, 7);
 
-    const daily = dailyByDate.get(dateKey);
+    const daily = dailyByDate.get(pickupDate);
     if (daily) {
       daily.order_count += 1;
       daily.sales_total += Number(order.total_amount);
     }
 
-    const monthly = monthlyByMonth.get(monthKey);
+    const monthly = monthlyByMonth.get(pickupMonth);
     if (monthly) {
       monthly.order_count += 1;
       monthly.sales_total += Number(order.total_amount);
+    }
+
+    if (pickupDate === reportDate) {
+      totalSales += Number(order.total_amount);
     }
   }
 
   const now = Date.now();
   const advanceOrders = orderRows
     .filter((order) => order.scheduled_for && new Date(order.scheduled_for).getTime() > now)
-    .sort((a, b) => new Date(a.scheduled_for as string).getTime() - new Date(b.scheduled_for as string).getTime())
+    .sort((a, b) => new Date(a.scheduled_for).getTime() - new Date(b.scheduled_for).getTime())
     .slice(0, advanceLimit)
     .map((order) => ({
       order_id: order.id,
       branch_id: order.branch_id,
       branch_name: branchNameById.get(order.branch_id) ?? order.branch_id,
-      receiver: (order as { receiver?: string }).receiver ?? order.customer_name ?? '',
-      scheduled_for: order.scheduled_for as string,
+      receiver: order.receiver,
+      scheduled_for: order.scheduled_for,
       created_at: order.created_at,
       status: order.status,
       total_amount: Number(order.total_amount),
       item_count: (order.flower_order_items ?? []).length,
     }));
 
+  const [staffExpenses, supplierCosts] = await Promise.all([
+    sumStaffExpensesForPeriodSupabase({
+      branchId: options.branchId,
+      fromDate: reportDate,
+      toDate: reportDate,
+    }),
+    sumSupplierCostsForPeriodSupabase({
+      branchId: options.branchId,
+      fromDate: reportDate,
+      toDate: reportDate,
+    }),
+  ]);
+
   return {
     daily_summary: dailySummary,
     monthly_summary: monthlySummary,
     advance_orders: advanceOrders,
     financial: {
-      total_sales: 0,
-      staff_expenses: 0,
-      supplier_costs: 0,
-      net_income: 0,
+      total_sales: totalSales,
+      staff_expenses: staffExpenses,
+      supplier_costs: supplierCosts,
+      net_income: totalSales - staffExpenses - supplierCosts,
     },
   };
 }

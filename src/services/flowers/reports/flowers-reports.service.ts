@@ -31,7 +31,6 @@ export async function getFlowerPrintableSalesReport(options: {
 
   if (shouldUseFlowerSupabase(mode)) {
     try {
-      // Printable report uses the same order/expense sources; fall through to local until supabase parity.
       return await getFlowerPrintableSalesReportLocal(options);
     } catch (error) {
       if (mode === 'supabase') {

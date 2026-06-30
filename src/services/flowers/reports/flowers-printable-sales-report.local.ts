@@ -7,12 +7,12 @@ import {
   getSalesReportPeriodRange,
   isPickupDateInRange,
 } from '../../../modules/flowers/shared/utils/flower-report-period';
-import { listFlowerBranchesLocal } from '../inventory/flowers-inventory.local';
-import { listFlowerOrdersLocal } from '../orders/flowers-orders.local';
+import { listFlowerBranches } from '../inventory/flowers-inventory.service';
+import { listFlowerOrders } from '../orders/flowers-orders.service';
 import {
-  sumStaffExpensesForPeriodLocal,
-  sumSupplierCostsForPeriodLocal,
-} from '../expenses/flowers-expenses.local';
+  sumStaffExpensesForPeriod,
+  sumSupplierCostsForPeriod,
+} from '../expenses/flowers-expenses.service';
 
 function isSalesIncluded(status: string): boolean {
   return status === 'completed' || status === 'picked_up' || status === 'delivered';
@@ -28,8 +28,8 @@ export async function getFlowerPrintableSalesReportLocal(options: {
   );
 
   const [orders, branches] = await Promise.all([
-    listFlowerOrdersLocal(),
-    listFlowerBranchesLocal(),
+    listFlowerOrders(),
+    listFlowerBranches(),
   ]);
 
   const branchRows: FlowerPrintableSalesBranchRow[] = await Promise.all(
@@ -50,12 +50,12 @@ export async function getFlowerPrintableSalesReportLocal(options: {
         );
 
       const salesTotal = branchOrders.reduce((sum, order) => sum + order.total_amount, 0);
-      const staffExpenses = await sumStaffExpensesForPeriodLocal({
+      const staffExpenses = await sumStaffExpensesForPeriod({
         branchId: branch.id,
         fromDate,
         toDate,
       });
-      const supplierCosts = await sumSupplierCostsForPeriodLocal({
+      const supplierCosts = await sumSupplierCostsForPeriod({
         branchId: branch.id,
         fromDate,
         toDate,

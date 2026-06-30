@@ -113,3 +113,89 @@ alter table public.flower_inventory_stock enable row level security;
 alter table public.flower_inventory_movements enable row level security;
 alter table public.flower_staff_expenses enable row level security;
 alter table public.flower_supplier_costs enable row level security;
+
+-- Helper: current user's flower role (null if no profile)
+create or replace function public.flower_current_role()
+returns text
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select role from public.flower_profiles where id = auth.uid();
+$$;
+
+-- Profiles: users read their own row; admins read all profiles
+create policy "flower_profiles_select_own"
+  on public.flower_profiles for select
+  to authenticated
+  using (id = auth.uid());
+
+create policy "flower_profiles_select_admin"
+  on public.flower_profiles for select
+  to authenticated
+  using (public.flower_current_role() = 'admin');
+
+-- Operational tables: any authenticated user with a flower profile
+create policy "flower_orders_access"
+  on public.flower_orders for all
+  to authenticated
+  using (public.flower_current_role() in ('staff', 'admin'))
+  with check (public.flower_current_role() in ('staff', 'admin'));
+
+create policy "flower_order_items_access"
+  on public.flower_order_items for all
+  to authenticated
+  using (public.flower_current_role() in ('staff', 'admin'))
+  with check (public.flower_current_role() in ('staff', 'admin'));
+
+create policy "flower_products_access"
+  on public.flower_products for all
+  to authenticated
+  using (public.flower_current_role() in ('staff', 'admin'))
+  with check (public.flower_current_role() in ('staff', 'admin'));
+
+create policy "flower_inventory_stock_access"
+  on public.flower_inventory_stock for all
+  to authenticated
+  using (public.flower_current_role() in ('staff', 'admin'))
+  with check (public.flower_current_role() in ('staff', 'admin'));
+
+create policy "flower_inventory_movements_access"
+  on public.flower_inventory_movements for all
+  to authenticated
+  using (public.flower_current_role() in ('staff', 'admin'))
+  with check (public.flower_current_role() in ('staff', 'admin'));
+
+create policy "flower_staff_expenses_access"
+  on public.flower_staff_expenses for all
+  to authenticated
+  using (public.flower_current_role() in ('staff', 'admin'))
+  with check (public.flower_current_role() in ('staff', 'admin'));
+
+create policy "flower_supplier_costs_access"
+  on public.flower_supplier_costs for all
+  to authenticated
+  using (public.flower_current_role() in ('staff', 'admin'))
+  with check (public.flower_current_role() in ('staff', 'admin'));
+
+-- Order photo attachments (public bucket; writes require auth)
+insert into storage.buckets (id, name, public)
+values ('order-attachments', 'order-attachments', true)
+on conflict (id) do update set public = excluded.public;
+
+create policy "flower_order_attachments_select"
+  on storage.objects for select
+  to authenticated
+  using (bucket_id = 'order-attachments');
+
+create policy "flower_order_attachments_insert"
+  on storage.objects for insert
+  to authenticated
+  with check (bucket_id = 'order-attachments');
+
+create policy "flower_order_attachments_update"
+  on storage.objects for update
+  to authenticated
+  using (bucket_id = 'order-attachments')
+  with check (bucket_id = 'order-attachments');

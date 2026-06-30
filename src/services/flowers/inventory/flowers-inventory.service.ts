@@ -84,5 +84,19 @@ export async function adjustFlowerInventory(input: AdjustFlowerInventoryInput): 
 }
 
 export async function transferFlowerInventory(input: TransferFlowerInventoryInput): Promise<void> {
+  const mode = getFlowerStorageMode();
+
+  if (shouldUseFlowerSupabase(mode)) {
+    try {
+      const { transferFlowerInventorySupabase } = await import('./flowers-inventory.supabase');
+      return await transferFlowerInventorySupabase(input);
+    } catch (error) {
+      if (mode === 'supabase') {
+        throw error;
+      }
+      console.warn('Falling back to local flower inventory transfer.', error);
+    }
+  }
+
   return transferFlowerInventoryLocal(input);
 }

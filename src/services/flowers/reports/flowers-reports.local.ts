@@ -2,11 +2,11 @@ import type {
   FlowerReportsData,
   FlowerReportsOptions,
 } from '../../../modules/flowers/shared/types/flower-report';
-import { listFlowerOrdersLocal } from '../orders/flowers-orders.local';
+import { listFlowerOrders } from '../orders/flowers-orders.service';
 import {
-  sumStaffExpensesForPeriodLocal,
-  sumSupplierCostsForPeriodLocal,
-} from '../expenses/flowers-expenses.local';
+  sumStaffExpensesForPeriod,
+  sumSupplierCostsForPeriod,
+} from '../expenses/flowers-expenses.service';
 
 function formatDateKeyUtc(date: Date): string {
   return date.toISOString().slice(0, 10);
@@ -61,7 +61,7 @@ export async function getFlowerReportsLocal(
   const advanceLimit = options.advanceLimit ?? 25;
   const reportDate = options.reportDate ?? formatDateKeyUtc(new Date());
 
-  const orders = await listFlowerOrdersLocal({
+  const orders = await listFlowerOrders({
     branchId: options.branchId,
   });
 
@@ -118,13 +118,13 @@ export async function getFlowerReportsLocal(
     }
   }
 
-  const staffExpenses = await sumStaffExpensesForPeriodLocal({
+  const staffExpenses = await sumStaffExpensesForPeriod({
     branchId: options.branchId,
     fromDate: reportDate,
     toDate: reportDate,
   });
 
-  const supplierCosts = await sumSupplierCostsForPeriodLocal({
+  const supplierCosts = await sumSupplierCostsForPeriod({
     branchId: options.branchId,
     fromDate: reportDate,
     toDate: reportDate,

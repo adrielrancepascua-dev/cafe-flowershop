@@ -8,13 +8,17 @@ import type {
   ListFlowerOrdersOptions,
   UpdateFlowerOrderInput,
 } from '../../../modules/flowers/shared/types/flower-order';
-import { FLOWER_ORDER_TERMINAL_STATUSES } from '../../../modules/flowers/shared/types/flower-order';
 import { buildOrderId } from '../../orders/order-id';
 import {
   deductFlowerInventoryForOrderLocal,
   listFlowerBranchesLocal,
   validateFlowerOrderStockLocal,
 } from '../inventory/flowers-inventory.local';
+import {
+  computeFlowerDayCloseStatus,
+  getOrdersPendingInventoryDeduction,
+  getPickupDateKey,
+} from './flowers-order-day-close';
 
 const ORDERS_STORAGE_KEY = 'papers_petals_flower_orders_v2';
 const ORDERS_SEEDED_KEY = 'papers_petals_flower_orders_seeded_v2';
@@ -74,8 +78,47 @@ function writeOrdersToStorage(orders: FlowerOrder[]) {
   }
 }
 
-function getPickupDateKey(iso: string): string {
-  return iso.slice(0, 10);
+function getPickupDateKeyFromOrder(iso: string): string {
+  return getPickupDateKey(iso);
+}
+
+async function maybeBatchDeductInventoryForClosedDay(dateKey: string): Promise<void> {
+  const orders = readOrdersFromStorage();
+  const dayOrders = orders.filter(
+    (order) => getPickupDateKey(order.scheduled_for) === dateKey,
+  );
+  const closeStatus = computeFlowerDayCloseStatus(dayOrders, dateKey);
+
+  if (!closeStatus.is_closed) {
+    return;
+  }
+
+  const pending = getOrdersPendingInventoryDeduction(dayOrders, dateKey);
+
+  for (const order of pending) {
+    await validateFlowerOrderStockLocal(order.branch_id, order.items);
+
+    for (const item of order.items) {
+      await deductFlowerInventoryForOrderLocal({
+        branchId: order.branch_id,
+        productId: item.product_id,
+        quantity: item.quantity,
+        orderId: order.id,
+      });
+    }
+
+    const index = orders.findIndex((entry) => entry.id === order.id);
+    if (index !== -1) {
+      orders[index] = {
+        ...orders[index],
+        inventory_deducted: true,
+      };
+    }
+  }
+
+  if (pending.length > 0) {
+    writeOrdersToStorage(orders);
+  }
 }
 
 export async function listFlowerOrdersLocal(
@@ -88,11 +131,11 @@ export async function listFlowerOrdersLocal(
       return false;
     }
 
-    if (options.scheduledFrom && getPickupDateKey(order.scheduled_for) < options.scheduledFrom) {
+    if (options.scheduledFrom && getPickupDateKeyFromOrder(order.scheduled_for) < options.scheduledFrom) {
       return false;
     }
 
-    if (options.scheduledTo && getPickupDateKey(order.scheduled_for) > options.scheduledTo) {
+    if (options.scheduledTo && getPickupDateKeyFromOrder(order.scheduled_for) > options.scheduledTo) {
       return false;
     }
 
@@ -217,30 +260,19 @@ export async function updateFlowerOrderStatusLocal(
 
   const current = orders[index];
 
-  if (status === 'completed' && !current.inventory_deducted) {
-    await validateFlowerOrderStockLocal(current.branch_id, current.items);
-
-    for (const item of current.items) {
-      await deductFlowerInventoryForOrderLocal({
-        branchId: current.branch_id,
-        productId: item.product_id,
-        quantity: item.quantity,
-        orderId: current.id,
-      });
-    }
-  }
-
   const order: FlowerOrder = {
     ...current,
     status,
-    inventory_deducted: status === 'completed' ? true : current.inventory_deducted,
     items: current.items.map((item) => ({ ...item })),
   };
 
   orders[index] = order;
   writeOrdersToStorage(orders);
 
-  return order;
+  await maybeBatchDeductInventoryForClosedDay(getPickupDateKeyFromOrder(current.scheduled_for));
+
+  const refreshed = readOrdersFromStorage().find((entry) => entry.id === orderId);
+  return refreshed ?? order;
 }
 
 export async function getFlowerDayCloseStatusLocal(dateKey: string): Promise<{
@@ -249,18 +281,6 @@ export async function getFlowerDayCloseStatusLocal(dateKey: string): Promise<{
   open_orders: number;
   is_closed: boolean;
 }> {
-  const orders = readOrdersFromStorage().filter(
-    (order) => getPickupDateKey(order.scheduled_for) === dateKey && order.status !== 'cancelled',
-  );
-
-  const openOrders = orders.filter(
-    (order) => !FLOWER_ORDER_TERMINAL_STATUSES.includes(order.status),
-  );
-
-  return {
-    date: dateKey,
-    total_orders: orders.length,
-    open_orders: openOrders.length,
-    is_closed: orders.length > 0 && openOrders.length === 0,
-  };
+  const orders = readOrdersFromStorage();
+  return computeFlowerDayCloseStatus(orders, dateKey);
 }

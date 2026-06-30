@@ -15,13 +15,15 @@ import {
   updateFlowerOrderStatusLocal,
 } from './flowers-orders.local';
 
-export async function listFlowerOrders(options: ListFlowerOrdersOptions = {}): Promise<FlowerOrder[]> {
+async function withSupabaseOrders<T>(
+  operation: () => Promise<T>,
+  fallback: () => Promise<T>,
+): Promise<T> {
   const mode = getFlowerStorageMode();
 
   if (shouldUseFlowerSupabase(mode)) {
     try {
-      const { listFlowerOrdersSupabase } = await import('./flowers-orders.supabase');
-      return await listFlowerOrdersSupabase(options);
+      return await operation();
     } catch (error) {
       if (mode === 'supabase') {
         throw error;
@@ -30,42 +32,68 @@ export async function listFlowerOrders(options: ListFlowerOrdersOptions = {}): P
     }
   }
 
-  return listFlowerOrdersLocal(options);
+  return fallback();
+}
+
+export async function listFlowerOrders(options: ListFlowerOrdersOptions = {}): Promise<FlowerOrder[]> {
+  return withSupabaseOrders(
+    async () => {
+      const { listFlowerOrdersSupabase } = await import('./flowers-orders.supabase');
+      return listFlowerOrdersSupabase(options);
+    },
+    () => listFlowerOrdersLocal(options),
+  );
 }
 
 export async function getFlowerOrder(orderId: string): Promise<FlowerOrder | null> {
-  return getFlowerOrderLocal(orderId);
+  return withSupabaseOrders(
+    async () => {
+      const { getFlowerOrderSupabase } = await import('./flowers-orders.supabase');
+      return getFlowerOrderSupabase(orderId);
+    },
+    () => getFlowerOrderLocal(orderId),
+  );
 }
 
 export async function createFlowerOrder(input: CreateFlowerOrderInput): Promise<FlowerOrder> {
-  const mode = getFlowerStorageMode();
-
-  if (shouldUseFlowerSupabase(mode)) {
-    try {
+  return withSupabaseOrders(
+    async () => {
       const { createFlowerOrderSupabase } = await import('./flowers-orders.supabase');
-      return await createFlowerOrderSupabase(input);
-    } catch (error) {
-      if (mode === 'supabase') {
-        throw error;
-      }
-      console.warn('Falling back to local flower order create.', error);
-    }
-  }
-
-  return createFlowerOrderLocal(input);
+      return createFlowerOrderSupabase(input);
+    },
+    () => createFlowerOrderLocal(input),
+  );
 }
 
 export async function updateFlowerOrder(input: UpdateFlowerOrderInput): Promise<FlowerOrder> {
-  return updateFlowerOrderLocal(input);
+  return withSupabaseOrders(
+    async () => {
+      const { updateFlowerOrderSupabase } = await import('./flowers-orders.supabase');
+      return updateFlowerOrderSupabase(input);
+    },
+    () => updateFlowerOrderLocal(input),
+  );
 }
 
 export async function updateFlowerOrderStatus(
   orderId: string,
   status: FlowerOrderStatus,
 ): Promise<FlowerOrder> {
-  return updateFlowerOrderStatusLocal(orderId, status);
+  return withSupabaseOrders(
+    async () => {
+      const { updateFlowerOrderStatusSupabase } = await import('./flowers-orders.supabase');
+      return updateFlowerOrderStatusSupabase(orderId, status);
+    },
+    () => updateFlowerOrderStatusLocal(orderId, status),
+  );
 }
 
 export async function getFlowerDayCloseStatus(dateKey: string) {
-  return getFlowerDayCloseStatusLocal(dateKey);
+  return withSupabaseOrders(
+    async () => {
+      const { getFlowerDayCloseStatusSupabase } = await import('./flowers-orders.supabase');
+      return getFlowerDayCloseStatusSupabase(dateKey);
+    },
+    () => getFlowerDayCloseStatusLocal(dateKey),
+  );
 }

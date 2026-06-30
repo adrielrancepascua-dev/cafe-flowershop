@@ -1,3 +1,4 @@
+import { isFlowerDemoMode } from '../../app/app-mode';
 import type { FlowerAuthSession, FlowerUser } from '../../modules/flowers/shared/types/auth';
 import { FLOWER_DEMO_USERS } from '../../modules/flowers/shared/data/flowers.mock';
 import { getSupabaseClient, isSupabaseConfigured } from '../supabase/client';
@@ -99,11 +100,11 @@ async function signInSupabase(email: string, password: string): Promise<FlowerAu
 
 export async function signInFlowerUser(email: string, password: string): Promise<FlowerAuthSession> {
   if (isSupabaseConfigured()) {
-    try {
-      return await signInSupabase(email, password);
-    } catch (error) {
-      console.warn('Supabase sign-in failed, falling back to demo users.', error);
-    }
+    return signInSupabase(email, password);
+  }
+
+  if (!isFlowerDemoMode()) {
+    throw new Error('Live login is not configured. Contact your administrator.');
   }
 
   return signInLocal(email, password);

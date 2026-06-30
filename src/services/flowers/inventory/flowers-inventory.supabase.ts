@@ -5,6 +5,7 @@ import type {
   FlowerInventoryMovementRow,
   FlowerInventoryStockRow,
   ListFlowerInventoryOptions,
+  TransferFlowerInventoryInput,
 } from '../../../modules/flowers/shared/types/flower-inventory';
 
 type BranchRow = {
@@ -311,4 +312,193 @@ export async function adjustFlowerInventorySupabase(input: AdjustFlowerInventory
     );
 
   throw new Error(`Inventory movement logging failed: ${movementError.message}`);
+}
+
+async function applyFlowerStockChangeSupabase(input: {
+  branchId: string;
+  productId: string;
+  delta: number;
+  movementType: string;
+  note: string;
+}): Promise<void> {
+  const supabase = requireSupabaseClient();
+  const quantity = Math.abs(input.delta);
+
+  if (!Number.isFinite(quantity) || quantity <= 0 || !Number.isInteger(quantity)) {
+    throw new Error('Quantity must be a whole number greater than 0.');
+  }
+
+  const { data: existingStock, error: existingStockError } = await supabase
+    .from('flower_inventory_stock')
+    .select('branch_id, product_id, on_hand')
+    .eq('branch_id', input.branchId)
+    .eq('product_id', input.productId)
+    .maybeSingle();
+
+  if (existingStockError) {
+    throw existingStockError;
+  }
+
+  const previousOnHand = Number(existingStock?.on_hand ?? 0);
+  const nextOnHand = previousOnHand + input.delta;
+
+  if (nextOnHand < 0) {
+    throw new Error('Insufficient stock. Stock out would result in negative balance.');
+  }
+
+  const nowIso = new Date().toISOString();
+
+  const { error: upsertError } = await supabase
+    .from('flower_inventory_stock')
+    .upsert(
+      {
+        branch_id: input.branchId,
+        product_id: input.productId,
+        on_hand: nextOnHand,
+        updated_at: nowIso,
+      },
+      { onConflict: 'branch_id,product_id' },
+    );
+
+  if (upsertError) {
+    throw upsertError;
+  }
+
+  const { error: movementError } = await supabase.from('flower_inventory_movements').insert({
+    branch_id: input.branchId,
+    product_id: input.productId,
+    movement_type: input.movementType,
+    quantity,
+    previous_on_hand: previousOnHand,
+    new_on_hand: nextOnHand,
+    note: input.note.trim(),
+    created_at: nowIso,
+  });
+
+  if (!movementError) {
+    return;
+  }
+
+  await supabase
+    .from('flower_inventory_stock')
+    .upsert(
+      {
+        branch_id: input.branchId,
+        product_id: input.productId,
+        on_hand: previousOnHand,
+        updated_at: nowIso,
+      },
+      { onConflict: 'branch_id,product_id' },
+    );
+
+  throw new Error(`Inventory movement logging failed: ${movementError.message}`);
+}
+
+export async function deductFlowerInventoryForOrderSupabase(input: {
+  branchId: string;
+  productId: string;
+  quantity: number;
+  orderId: string;
+}): Promise<void> {
+  await applyFlowerStockChangeSupabase({
+    branchId: input.branchId,
+    productId: input.productId,
+    delta: -input.quantity,
+    movementType: 'order_deduct',
+    note: `Order ${input.orderId} day-close deduct`,
+  });
+}
+
+export async function validateFlowerOrderStockSupabase(
+  branchId: string,
+  items: Array<{ product_id: string; item_name: string; quantity: number }>,
+  creditByProductId: Record<string, number> = {},
+): Promise<void> {
+  const supabase = requireSupabaseClient();
+  const productIds = [...new Set(items.map((item) => item.product_id))];
+
+  if (productIds.length === 0) {
+    return;
+  }
+
+  const { data, error } = await supabase
+    .from('flower_inventory_stock')
+    .select('product_id, on_hand')
+    .eq('branch_id', branchId)
+    .in('product_id', productIds);
+
+  if (error) {
+    throw error;
+  }
+
+  const stockByProduct = new Map<string, number>();
+  for (const row of (data as Array<{ product_id: string; on_hand: number }> | null) ?? []) {
+    stockByProduct.set(row.product_id, Number(row.on_hand));
+  }
+
+  const neededByProduct = new Map<string, { name: string; qty: number }>();
+
+  for (const item of items) {
+    const existing = neededByProduct.get(item.product_id);
+    if (existing) {
+      existing.qty += item.quantity;
+      continue;
+    }
+
+    neededByProduct.set(item.product_id, {
+      name: item.item_name,
+      qty: item.quantity,
+    });
+  }
+
+  for (const [productId, { name, qty }] of neededByProduct) {
+    const onHand = stockByProduct.get(productId) ?? 0;
+    const credit = creditByProductId[productId] ?? 0;
+    const available = onHand + credit;
+
+    if (qty > available) {
+      throw new Error(
+        `Insufficient stock for ${name}. Available: ${available}, requested: ${qty}.`,
+      );
+    }
+  }
+}
+
+export async function transferFlowerInventorySupabase(
+  input: TransferFlowerInventoryInput,
+): Promise<void> {
+  if (input.fromBranchId === input.toBranchId) {
+    throw new Error('Source and destination branches must be different.');
+  }
+
+  if (input.items.length === 0) {
+    throw new Error('Add at least one product to transfer.');
+  }
+
+  const branches = await listFlowerBranchesSupabase();
+  const fromBranch = branches.find((branch) => branch.id === input.fromBranchId);
+  const toBranch = branches.find((branch) => branch.id === input.toBranchId);
+  const note = input.note?.trim() || `Transfer to ${toBranch?.name ?? input.toBranchId}`;
+
+  for (const item of input.items) {
+    if (item.quantity <= 0) {
+      continue;
+    }
+
+    await applyFlowerStockChangeSupabase({
+      branchId: input.fromBranchId,
+      productId: item.productId,
+      delta: -item.quantity,
+      movementType: 'transfer_out',
+      note,
+    });
+
+    await applyFlowerStockChangeSupabase({
+      branchId: input.toBranchId,
+      productId: item.productId,
+      delta: item.quantity,
+      movementType: 'transfer_in',
+      note: `From ${fromBranch?.name ?? input.fromBranchId}`,
+    });
+  }
 }

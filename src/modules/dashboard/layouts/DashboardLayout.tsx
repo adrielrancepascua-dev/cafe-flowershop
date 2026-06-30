@@ -1,6 +1,7 @@
 import { NavLink, Outlet } from 'react-router-dom';
 import { useFlowerAuth } from '../../../lib/auth/FlowerAuthContext';
 import FlowerMobileNav, { FlowerDesktopSidebarHeader } from '../../flowers/shared/components/FlowerMobileNav';
+import DemoModeBanner from '../../flowers/shared/components/DemoModeBanner';
 
 const FLOWER_LINKS = [
   { label: 'Home', to: '/dashboard/flowers' },
@@ -64,6 +65,7 @@ export default function DashboardLayout() {
         </aside>
 
         <main className="flower-card min-h-[60vh] p-4 sm:p-6 lg:mb-0 lg:pb-6 pb-24">
+          <DemoModeBanner />
           <Outlet />
         </main>
       </div>
