@@ -1,4 +1,6 @@
 import { getSupabaseClient } from '../../../lib/supabase/client';
+import { ensureSupabaseSession } from '../../../lib/auth/flower-auth.service';
+import { FLOWER_BRANCHES_MOCK } from '../../../modules/flowers/shared/data/flowers.mock';
 import type {
   AdjustFlowerInventoryInput,
   FlowerBranchOption,
@@ -31,7 +33,7 @@ type InventoryMovementDbRow = {
   id: number;
   branch_id: string;
   product_id: string;
-  movement_type: 'in' | 'out' | 'adjustment';
+  movement_type: string;
   quantity: number;
   previous_on_hand: number;
   new_on_hand: number;
@@ -48,8 +50,25 @@ function requireSupabaseClient() {
   return supabase;
 }
 
-function toAdjustmentType(value: 'in' | 'out' | 'adjustment'): 'stock_in' | 'stock_out' {
-  return value === 'in' ? 'stock_in' : 'stock_out';
+async function requireAuthenticatedSupabaseClient() {
+  await ensureSupabaseSession();
+  return requireSupabaseClient();
+}
+
+function toDisplayMovementType(value: string): FlowerInventoryMovementRow['movement_type'] {
+  if (value === 'stock_in' || value === 'in' || value === 'transfer_in') {
+    return value === 'transfer_in' ? 'transfer_in' : 'stock_in';
+  }
+
+  if (value === 'order_deduct') {
+    return 'order_deduct';
+  }
+
+  if (value === 'transfer_out') {
+    return 'transfer_out';
+  }
+
+  return 'stock_out';
 }
 
 function toMovementType(value: 'stock_in' | 'stock_out'): 'in' | 'out' {
@@ -57,7 +76,7 @@ function toMovementType(value: 'stock_in' | 'stock_out'): 'in' | 'out' {
 }
 
 async function listBranchesInternal(options: ListFlowerInventoryOptions = {}): Promise<BranchRow[]> {
-  const supabase = requireSupabaseClient();
+  const supabase = await requireAuthenticatedSupabaseClient();
 
   let query = supabase
     .from('flower_branches')
@@ -78,7 +97,7 @@ async function listBranchesInternal(options: ListFlowerInventoryOptions = {}): P
 }
 
 async function listProductsInternal(): Promise<ProductRow[]> {
-  const supabase = requireSupabaseClient();
+  const supabase = await requireAuthenticatedSupabaseClient();
 
   const { data, error } = await supabase
     .from('flower_products')
@@ -95,17 +114,25 @@ async function listProductsInternal(): Promise<ProductRow[]> {
 export async function listFlowerBranchesSupabase(): Promise<FlowerBranchOption[]> {
   const rows = await listBranchesInternal();
 
-  return rows.map((row) => ({
-    id: row.id,
-    name: row.name,
-    is_active: Boolean(row.is_active),
+  if (rows.length > 0) {
+    return rows.map((row) => ({
+      id: row.id,
+      name: row.name,
+      is_active: Boolean(row.is_active),
+    }));
+  }
+
+  return FLOWER_BRANCHES_MOCK.map((branch) => ({
+    id: branch.id,
+    name: branch.name,
+    is_active: branch.is_active,
   }));
 }
 
 export async function listFlowerInventoryStockSupabase(
   options: ListFlowerInventoryOptions = {},
 ): Promise<FlowerInventoryStockRow[]> {
-  const supabase = requireSupabaseClient();
+  const supabase = await requireAuthenticatedSupabaseClient();
 
   const [branches, products] = await Promise.all([
     listBranchesInternal(options),
@@ -169,7 +196,7 @@ export async function listFlowerInventoryStockSupabase(
 export async function listFlowerInventoryMovementsSupabase(
   options: ListFlowerInventoryOptions & { limit?: number } = {},
 ): Promise<FlowerInventoryMovementRow[]> {
-  const supabase = requireSupabaseClient();
+  const supabase = await requireAuthenticatedSupabaseClient();
   const limit = options.limit ?? 40;
 
   let query = supabase
@@ -226,7 +253,7 @@ export async function listFlowerInventoryMovementsSupabase(
     branch_name: branchMap.get(row.branch_id) ?? row.branch_id,
     product_id: row.product_id,
     product_name: productMap.get(row.product_id) ?? row.product_id,
-    movement_type: toAdjustmentType(row.movement_type),
+    movement_type: toDisplayMovementType(row.movement_type),
     quantity: Number(row.quantity),
     previous_on_hand: Number(row.previous_on_hand),
     new_on_hand: Number(row.new_on_hand),
@@ -236,7 +263,7 @@ export async function listFlowerInventoryMovementsSupabase(
 }
 
 export async function adjustFlowerInventorySupabase(input: AdjustFlowerInventoryInput): Promise<void> {
-  const supabase = requireSupabaseClient();
+  const supabase = await requireAuthenticatedSupabaseClient();
   const quantity = Number(input.quantity);
 
   if (!Number.isFinite(quantity) || quantity <= 0 || !Number.isInteger(quantity)) {
@@ -321,7 +348,7 @@ async function applyFlowerStockChangeSupabase(input: {
   movementType: string;
   note: string;
 }): Promise<void> {
-  const supabase = requireSupabaseClient();
+  const supabase = await requireAuthenticatedSupabaseClient();
   const quantity = Math.abs(input.delta);
 
   if (!Number.isFinite(quantity) || quantity <= 0 || !Number.isInteger(quantity)) {
@@ -414,7 +441,7 @@ export async function validateFlowerOrderStockSupabase(
   items: Array<{ product_id: string; item_name: string; quantity: number }>,
   creditByProductId: Record<string, number> = {},
 ): Promise<void> {
-  const supabase = requireSupabaseClient();
+  const supabase = await requireAuthenticatedSupabaseClient();
   const productIds = [...new Set(items.map((item) => item.product_id))];
 
   if (productIds.length === 0) {

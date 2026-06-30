@@ -8,6 +8,7 @@ Use this before collecting the ₱30k balance. Run on the **production** deploy 
 - [ ] `VITE_FLOWER_STORAGE_MODE=supabase`
 - [ ] `VITE_APP_MODE` is **not** `flower_demo` (use `cafe` or omit)
 - [x] `supabase/schema_flowers_v2.sql` applied in Supabase SQL editor
+- [ ] `supabase/fix_flower_branches_rls.sql` applied (if branch dropdown is empty)
 - [ ] `supabase/seed_flowers_products_and_stock.sql` applied (products + starting stock)
 - [ ] Admin + staff users created in Supabase Auth with matching rows in `flower_profiles`
 

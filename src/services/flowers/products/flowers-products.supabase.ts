@@ -1,4 +1,5 @@
 import { getSupabaseClient } from '../../../lib/supabase/client';
+import { ensureSupabaseSession } from '../../../lib/auth/flower-auth.service';
 import type {
   CreateFlowerProductInput,
   FlowerProduct,
@@ -22,6 +23,11 @@ function requireSupabaseClient() {
   return supabase;
 }
 
+async function requireAuthenticatedSupabaseClient() {
+  await ensureSupabaseSession();
+  return requireSupabaseClient();
+}
+
 function rowToFlowerProduct(row: FlowerProductRow): FlowerProduct {
   return {
     id: row.id,
@@ -33,7 +39,7 @@ function rowToFlowerProduct(row: FlowerProductRow): FlowerProduct {
 }
 
 export async function listFlowerProductsSupabase(): Promise<FlowerProduct[]> {
-  const supabase = requireSupabaseClient();
+  const supabase = await requireAuthenticatedSupabaseClient();
 
   const { data, error } = await supabase
     .from('flower_products')
@@ -48,7 +54,7 @@ export async function listFlowerProductsSupabase(): Promise<FlowerProduct[]> {
 }
 
 export async function createFlowerProductSupabase(input: CreateFlowerProductInput): Promise<FlowerProduct> {
-  const supabase = requireSupabaseClient();
+  const supabase = await requireAuthenticatedSupabaseClient();
 
   const { data, error } = await supabase
     .from('flower_products')
@@ -72,7 +78,7 @@ export async function updateFlowerProductSupabase(
   productId: string,
   input: UpdateFlowerProductInput,
 ): Promise<FlowerProduct> {
-  const supabase = requireSupabaseClient();
+  const supabase = await requireAuthenticatedSupabaseClient();
 
   const { data, error } = await supabase
     .from('flower_products')
@@ -95,7 +101,7 @@ export async function toggleFlowerProductActiveSupabase(
   productId: string,
   isActive: boolean,
 ): Promise<FlowerProduct> {
-  const supabase = requireSupabaseClient();
+  const supabase = await requireAuthenticatedSupabaseClient();
 
   const { data, error } = await supabase
     .from('flower_products')
@@ -112,7 +118,7 @@ export async function toggleFlowerProductActiveSupabase(
 }
 
 export async function deleteFlowerProductSupabase(productId: string): Promise<void> {
-  const supabase = requireSupabaseClient();
+  const supabase = await requireAuthenticatedSupabaseClient();
 
   const { error } = await supabase.from('flower_products').delete().eq('id', productId);
 

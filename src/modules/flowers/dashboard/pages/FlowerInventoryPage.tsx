@@ -164,7 +164,7 @@ function StockAdjustControls({
 type InventoryTab = 'stock' | 'transfer';
 
 export default function FlowerInventoryPage() {
-  const { isAdmin } = useFlowerAuth();
+  const { isAdmin, isLoading: authLoading } = useFlowerAuth();
   const [branches, setBranches] = useState<FlowerBranchOption[]>([]);
   const [selectedBranchId, setSelectedBranchId] = useState('all');
   const [stockRows, setStockRows] = useState<FlowerInventoryStockRow[]>([]);
@@ -205,8 +205,12 @@ export default function FlowerInventoryPage() {
   }
 
   useEffect(() => {
+    if (authLoading) {
+      return;
+    }
+
     void loadData();
-  }, [selectedBranchId, activeTab]);
+  }, [selectedBranchId, activeTab, authLoading]);
 
   useEffect(() => {
     if (!fromBranchId) {

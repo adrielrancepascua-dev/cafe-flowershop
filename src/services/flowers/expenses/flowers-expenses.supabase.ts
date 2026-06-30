@@ -1,4 +1,5 @@
 import { getSupabaseClient } from '../../../lib/supabase/client';
+import { ensureSupabaseSession } from '../../../lib/auth/flower-auth.service';
 import type {
   CreateFlowerStaffExpenseInput,
   CreateFlowerSupplierCostInput,
@@ -50,8 +51,13 @@ function requireSupabaseClient() {
   return supabase;
 }
 
+async function requireAuthenticatedSupabaseClient() {
+  await ensureSupabaseSession();
+  return requireSupabaseClient();
+}
+
 async function getBranchNameMap(): Promise<Map<string, string>> {
-  const supabase = requireSupabaseClient();
+  const supabase = await requireAuthenticatedSupabaseClient();
   const { data, error } = await supabase.from('flower_branches').select('id, name');
 
   if (error) {
@@ -71,7 +77,7 @@ async function getProductName(productId: string | null): Promise<string | null> 
     return null;
   }
 
-  const supabase = requireSupabaseClient();
+  const supabase = await requireAuthenticatedSupabaseClient();
   const { data, error } = await supabase
     .from('flower_products')
     .select('id, name')
@@ -122,7 +128,7 @@ function mapSupplierCost(
 export async function listFlowerStaffExpensesSupabase(
   staffId?: string,
 ): Promise<FlowerStaffExpense[]> {
-  const supabase = requireSupabaseClient();
+  const supabase = await requireAuthenticatedSupabaseClient();
   const branchMap = await getBranchNameMap();
 
   let query = supabase
@@ -148,7 +154,7 @@ export async function listFlowerStaffExpensesSupabase(
 export async function createFlowerStaffExpenseSupabase(
   input: CreateFlowerStaffExpenseInput,
 ): Promise<FlowerStaffExpense> {
-  const supabase = requireSupabaseClient();
+  const supabase = await requireAuthenticatedSupabaseClient();
   const branchMap = await getBranchNameMap();
   const branchName = branchMap.get(input.branch_id);
 
@@ -179,7 +185,7 @@ export async function createFlowerStaffExpenseSupabase(
 export async function updateFlowerStaffExpenseSupabase(
   input: UpdateFlowerStaffExpenseInput,
 ): Promise<FlowerStaffExpense> {
-  const supabase = requireSupabaseClient();
+  const supabase = await requireAuthenticatedSupabaseClient();
   const branchMap = await getBranchNameMap();
   const branchName = branchMap.get(input.branch_id);
 
@@ -207,7 +213,7 @@ export async function updateFlowerStaffExpenseSupabase(
 }
 
 export async function deleteFlowerStaffExpenseSupabase(expenseId: string): Promise<void> {
-  const supabase = requireSupabaseClient();
+  const supabase = await requireAuthenticatedSupabaseClient();
   const { error, count } = await supabase
     .from('flower_staff_expenses')
     .delete({ count: 'exact' })
@@ -223,7 +229,7 @@ export async function deleteFlowerStaffExpenseSupabase(expenseId: string): Promi
 }
 
 export async function listFlowerSupplierCostsSupabase(): Promise<FlowerSupplierCost[]> {
-  const supabase = requireSupabaseClient();
+  const supabase = await requireAuthenticatedSupabaseClient();
   const branchMap = await getBranchNameMap();
 
   const { data, error } = await supabase
@@ -266,7 +272,7 @@ export async function listFlowerSupplierCostsSupabase(): Promise<FlowerSupplierC
 export async function createFlowerSupplierCostSupabase(
   input: CreateFlowerSupplierCostInput,
 ): Promise<FlowerSupplierCost> {
-  const supabase = requireSupabaseClient();
+  const supabase = await requireAuthenticatedSupabaseClient();
   const branchMap = await getBranchNameMap();
   const branchName = branchMap.get(input.branch_id);
 
@@ -299,7 +305,7 @@ export async function createFlowerSupplierCostSupabase(
 export async function updateFlowerSupplierCostSupabase(
   input: UpdateFlowerSupplierCostInput,
 ): Promise<FlowerSupplierCost> {
-  const supabase = requireSupabaseClient();
+  const supabase = await requireAuthenticatedSupabaseClient();
   const branchMap = await getBranchNameMap();
   const branchName = branchMap.get(input.branch_id);
 
@@ -330,7 +336,7 @@ export async function updateFlowerSupplierCostSupabase(
 }
 
 export async function deleteFlowerSupplierCostSupabase(costId: string): Promise<void> {
-  const supabase = requireSupabaseClient();
+  const supabase = await requireAuthenticatedSupabaseClient();
   const { error, count } = await supabase
     .from('flower_supplier_costs')
     .delete({ count: 'exact' })

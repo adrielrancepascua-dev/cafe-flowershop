@@ -121,6 +121,7 @@ async function signInSupabase(email: string, password: string): Promise<FlowerAu
       role: profile.role === 'admin' ? 'admin' : 'staff',
     },
     token: data.session?.access_token ?? '',
+    refresh_token: data.session?.refresh_token ?? '',
   };
 
   writeLocalSession(session);
@@ -139,6 +140,32 @@ export async function signInFlowerUser(email: string, password: string): Promise
   throw new Error('Live login is not configured. Set Supabase env vars and VITE_FLOWER_STORAGE_MODE=supabase on Vercel.');
 }
 
+export async function ensureSupabaseSession(): Promise<void> {
+  if (!shouldUseSupabaseAuth()) {
+    return;
+  }
+
+  const supabase = getSupabaseClient();
+  if (!supabase) {
+    return;
+  }
+
+  const { data } = await supabase.auth.getSession();
+  if (data.session?.access_token) {
+    return;
+  }
+
+  const stored = readLocalSession();
+  if (!stored?.token || !stored.refresh_token) {
+    return;
+  }
+
+  await supabase.auth.setSession({
+    access_token: stored.token,
+    refresh_token: stored.refresh_token,
+  });
+}
+
 export async function restoreFlowerSession(): Promise<FlowerAuthSession | null> {
   if (!shouldUseSupabaseAuth()) {
     return readLocalSession();
@@ -148,6 +175,8 @@ export async function restoreFlowerSession(): Promise<FlowerAuthSession | null> 
   if (!supabase) {
     return readLocalSession();
   }
+
+  await ensureSupabaseSession();
 
   const { data, error } = await supabase.auth.getSession();
   if (error || !data.session?.user) {
@@ -174,6 +203,7 @@ export async function restoreFlowerSession(): Promise<FlowerAuthSession | null> 
       role: profile.role === 'admin' ? 'admin' : 'staff',
     },
     token: data.session.access_token,
+    refresh_token: data.session.refresh_token,
   };
 
   writeLocalSession(session);

@@ -106,6 +106,7 @@ create table if not exists public.flower_supplier_costs (
 );
 
 alter table public.flower_profiles enable row level security;
+alter table public.flower_branches enable row level security;
 alter table public.flower_orders enable row level security;
 alter table public.flower_order_items enable row level security;
 alter table public.flower_products enable row level security;
@@ -135,6 +136,11 @@ create policy "flower_profiles_select_admin"
   on public.flower_profiles for select
   to authenticated
   using (public.flower_current_role() = 'admin');
+
+create policy "flower_branches_read"
+  on public.flower_branches for select
+  to authenticated
+  using (public.flower_current_role() in ('staff', 'admin'));
 
 -- Operational tables: any authenticated user with a flower profile
 create policy "flower_orders_access"

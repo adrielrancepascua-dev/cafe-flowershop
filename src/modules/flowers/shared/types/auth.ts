@@ -10,4 +10,5 @@ export interface FlowerUser {
 export interface FlowerAuthSession {
   user: FlowerUser;
   token: string;
+  refresh_token?: string;
 }

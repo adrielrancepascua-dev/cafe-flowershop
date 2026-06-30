@@ -1,4 +1,5 @@
 import { getSupabaseClient } from '../../../lib/supabase/client';
+import { ensureSupabaseSession } from '../../../lib/auth/flower-auth.service';
 import type {
   CreateFlowerOrderInput,
   FlowerOrder,
@@ -88,6 +89,11 @@ function requireSupabaseClient() {
   return supabase;
 }
 
+async function requireAuthenticatedSupabaseClient() {
+  await ensureSupabaseSession();
+  return requireSupabaseClient();
+}
+
 function buildOrderId(): string {
   return `PP-${Date.now()}-${Math.floor(Math.random() * 10000)
     .toString()
@@ -150,7 +156,7 @@ function buildCreditFromOrderItems(
 }
 
 async function fetchOrderById(orderId: string): Promise<FlowerOrder | null> {
-  const supabase = requireSupabaseClient();
+  const supabase = await requireAuthenticatedSupabaseClient();
 
   const { data, error } = await supabase
     .from('flower_orders')
@@ -202,7 +208,7 @@ async function maybeBatchDeductInventoryForClosedDay(dateKey: string): Promise<v
     return;
   }
 
-  const supabase = requireSupabaseClient();
+  const supabase = await requireAuthenticatedSupabaseClient();
 
   for (const order of pending) {
     await deductInventoryForOrder(order);
@@ -221,7 +227,7 @@ async function maybeBatchDeductInventoryForClosedDay(dateKey: string): Promise<v
 export async function listFlowerOrdersSupabase(
   options: ListFlowerOrdersOptions = {},
 ): Promise<FlowerOrder[]> {
-  const supabase = requireSupabaseClient();
+  const supabase = await requireAuthenticatedSupabaseClient();
 
   let query = supabase.from('flower_orders').select(ORDER_SELECT);
 
@@ -253,7 +259,7 @@ export async function getFlowerOrderSupabase(orderId: string): Promise<FlowerOrd
 export async function createFlowerOrderSupabase(
   input: CreateFlowerOrderInput,
 ): Promise<FlowerOrder> {
-  const supabase = requireSupabaseClient();
+  const supabase = await requireAuthenticatedSupabaseClient();
   const branches = await listFlowerBranchesSupabase();
   const branch = branches.find((entry) => entry.id === input.branch_id);
 
@@ -330,7 +336,7 @@ export async function createFlowerOrderSupabase(
 export async function updateFlowerOrderSupabase(
   input: UpdateFlowerOrderInput,
 ): Promise<FlowerOrder> {
-  const supabase = requireSupabaseClient();
+  const supabase = await requireAuthenticatedSupabaseClient();
   const existing = await fetchOrderById(input.id);
 
   if (!existing) {
@@ -421,7 +427,7 @@ export async function updateFlowerOrderStatusSupabase(
   orderId: string,
   status: FlowerOrderStatus,
 ): Promise<FlowerOrder> {
-  const supabase = requireSupabaseClient();
+  const supabase = await requireAuthenticatedSupabaseClient();
   const existing = await fetchOrderById(orderId);
 
   if (!existing) {
