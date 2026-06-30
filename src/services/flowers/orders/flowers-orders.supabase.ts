@@ -7,6 +7,7 @@ import type {
   ListFlowerOrdersOptions,
   UpdateFlowerOrderInput,
 } from '../../../modules/flowers/shared/types/flower-order';
+import { getLocalDayBoundsIso } from '../../../modules/flowers/shared/utils/flower-format';
 import {
   deductFlowerInventoryForOrderSupabase,
   listFlowerBranchesSupabase,
@@ -239,11 +240,13 @@ export async function listFlowerOrdersSupabase(
   }
 
   if (options.scheduledFrom) {
-    query = query.gte('scheduled_for', `${options.scheduledFrom}T00:00:00.000Z`);
+    const { startIso } = getLocalDayBoundsIso(options.scheduledFrom);
+    query = query.gte('scheduled_for', startIso);
   }
 
   if (options.scheduledTo) {
-    query = query.lte('scheduled_for', `${options.scheduledTo}T23:59:59.999Z`);
+    const { endIso } = getLocalDayBoundsIso(options.scheduledTo);
+    query = query.lte('scheduled_for', endIso);
   }
 
   const { data, error } = await query.order('scheduled_for', { ascending: false });

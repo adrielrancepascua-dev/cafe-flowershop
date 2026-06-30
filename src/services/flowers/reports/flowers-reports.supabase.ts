@@ -6,6 +6,7 @@ import type {
   FlowerReportsOptions,
 } from '../../../modules/flowers/shared/types/flower-report';
 import type { FlowerOrderStatus } from '../../../modules/flowers/shared/types/flower-order';
+import { scheduledForToDateKey } from '../../../modules/flowers/shared/utils/flower-format';
 import {
   sumStaffExpensesForPeriodSupabase,
   sumSupplierCostsForPeriodSupabase,
@@ -143,7 +144,7 @@ export async function getFlowerReportsSupabase(options: FlowerReportsOptions = {
       continue;
     }
 
-    const pickupDate = order.scheduled_for.slice(0, 10);
+    const pickupDate = scheduledForToDateKey(order.scheduled_for);
     const pickupMonth = pickupDate.slice(0, 7);
 
     const daily = dailyByDate.get(pickupDate);

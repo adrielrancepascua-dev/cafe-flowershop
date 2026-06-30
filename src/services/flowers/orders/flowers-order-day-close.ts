@@ -1,8 +1,9 @@
 import type { FlowerOrder } from '../../../modules/flowers/shared/types/flower-order';
 import { FLOWER_ORDER_TERMINAL_STATUSES } from '../../../modules/flowers/shared/types/flower-order';
+import { scheduledForToDateKey } from '../../../modules/flowers/shared/utils/flower-format';
 
 export function getPickupDateKey(iso: string): string {
-  return iso.slice(0, 10);
+  return scheduledForToDateKey(iso);
 }
 
 export function computeFlowerDayCloseStatus(

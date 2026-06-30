@@ -7,6 +7,7 @@ import {
   getSalesReportPeriodRange,
   isPickupDateInRange,
 } from '../../../modules/flowers/shared/utils/flower-report-period';
+import { scheduledForToDateKey } from '../../../modules/flowers/shared/utils/flower-format';
 import { listFlowerBranches } from '../inventory/flowers-inventory.service';
 import { listFlowerOrders } from '../orders/flowers-orders.service';
 import {
@@ -40,7 +41,7 @@ export async function getFlowerPrintableSalesReportLocal(options: {
             return false;
           }
 
-          const pickupDate = order.scheduled_for.slice(0, 10);
+          const pickupDate = scheduledForToDateKey(order.scheduled_for);
           return isPickupDateInRange(pickupDate, fromDate, toDate);
         })
         .sort(
@@ -71,7 +72,7 @@ export async function getFlowerPrintableSalesReportLocal(options: {
         net_income: salesTotal - staffExpenses - supplierCosts,
         orders: branchOrders.map((order) => ({
           order_id: order.id,
-          pickup_date: order.scheduled_for.slice(0, 10),
+          pickup_date: scheduledForToDateKey(order.scheduled_for),
           receiver: order.receiver,
           branch_name: order.branch_name,
           status: order.status,

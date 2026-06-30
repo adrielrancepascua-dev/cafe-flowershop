@@ -2,6 +2,7 @@ import type {
   FlowerReportsData,
   FlowerReportsOptions,
 } from '../../../modules/flowers/shared/types/flower-report';
+import { scheduledForToDateKey } from '../../../modules/flowers/shared/utils/flower-format';
 import { listFlowerOrders } from '../orders/flowers-orders.service';
 import {
   sumStaffExpensesForPeriod,
@@ -81,7 +82,7 @@ export async function getFlowerReportsLocal(
       continue;
     }
 
-    const pickupDate = order.scheduled_for.slice(0, 10);
+    const pickupDate = scheduledForToDateKey(order.scheduled_for);
     const dailyRow = dailyByKey.get(pickupDate);
     if (dailyRow) {
       dailyRow.order_count += 1;

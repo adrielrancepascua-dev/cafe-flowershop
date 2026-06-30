@@ -83,9 +83,16 @@ export function toDateInputValue(iso: string): string {
   }
 
   const date = new Date(iso);
-  const offset = date.getTimezoneOffset();
-  const local = new Date(date.getTime() - offset * 60_000);
-  return local.toISOString().slice(0, 16);
+  if (Number.isNaN(date.getTime())) {
+    return '';
+  }
+
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  const hours = String(date.getHours()).padStart(2, '0');
+  const minutes = String(date.getMinutes()).padStart(2, '0');
+  return `${year}-${month}-${day}T${hours}:${minutes}`;
 }
 
 export function fromDateInputValue(value: string): string {
@@ -93,7 +100,33 @@ export function fromDateInputValue(value: string): string {
     return '';
   }
 
-  return new Date(value).toISOString();
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return '';
+  }
+
+  return date.toISOString();
+}
+
+/** Calendar/report day for a pickup timestamp in the user's local timezone. */
+export function scheduledForToDateKey(iso: string): string {
+  if (!iso) {
+    return '';
+  }
+
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) {
+    return '';
+  }
+
+  return toDateKey(date);
+}
+
+export function getLocalDayBoundsIso(dateKey: string): { startIso: string; endIso: string } {
+  const [year, month, day] = dateKey.split('-').map(Number);
+  const start = new Date(year, month - 1, day, 0, 0, 0, 0);
+  const end = new Date(year, month - 1, day, 23, 59, 59, 999);
+  return { startIso: start.toISOString(), endIso: end.toISOString() };
 }
 
 export function toDateKey(date: Date): string {

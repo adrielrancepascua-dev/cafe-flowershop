@@ -23,6 +23,7 @@ import {
   ORDER_STATUS_LABELS,
   PRICE_FORMATTER,
   formatPickupDateTimeLocal,
+  scheduledForToDateKey,
   summarizeFlowerLines,
   toDateKey,
 } from '../../shared/utils/flower-format';
@@ -491,7 +492,7 @@ export default function FlowerOrdersPage() {
     const map = new Map<string, FlowerOrder[]>();
 
     for (const order of orders) {
-      const key = order.scheduled_for.slice(0, 10);
+      const key = scheduledForToDateKey(order.scheduled_for);
       const bucket = map.get(key) ?? [];
       bucket.push(order);
       map.set(key, bucket);
