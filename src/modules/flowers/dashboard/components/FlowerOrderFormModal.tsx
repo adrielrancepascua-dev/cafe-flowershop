@@ -1,5 +1,5 @@
 import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
-import { X } from 'lucide-react';
+import { Minus, Plus, X } from 'lucide-react';
 import { listFlowerInventoryStock } from '../../../../services/flowers/inventory';
 import type { FlowerProduct } from '../../shared/types/flower-product';
 import type { FlowerBranchOption } from '../../shared/types/flower-inventory';
@@ -32,11 +32,7 @@ import {
 import OrderAttachmentField from './OrderAttachmentField';
 import OrderAttachmentPreview from './OrderAttachmentPreview';
 
-type LineDraft = {
-  rowId: string;
-  productId: string;
-  quantity: string;
-};
+type ProductQuantities = Record<string, string>;
 
 type OrderFormProps = {
   open: boolean;
@@ -53,12 +49,12 @@ type OrderFormProps = {
   isSubmitting?: boolean;
 };
 
-function createLineDraft(): LineDraft {
-  return {
-    rowId: `${Date.now()}-${Math.random()}`,
-    productId: '',
-    quantity: '1',
-  };
+function quantitiesFromOrderItems(items: FlowerOrder['items']): ProductQuantities {
+  const quantities: ProductQuantities = {};
+  for (const item of items) {
+    quantities[item.product_id] = String(item.quantity);
+  }
+  return quantities;
 }
 
 function isCompleteOrderStatus(status: FlowerOrderStatus): boolean {
@@ -157,7 +153,8 @@ export default function FlowerOrderFormModal({
   const [form, setForm] = useState<CreateFlowerOrderInput>(() =>
     emptyForm(initialPickupIso ?? new Date().toISOString(), staffId, staffName),
   );
-  const [lineDrafts, setLineDrafts] = useState<LineDraft[]>([createLineDraft()]);
+  const [productQuantities, setProductQuantities] = useState<ProductQuantities>({});
+  const [flowerSearch, setFlowerSearch] = useState('');
   const [downpaymentDraft, setDownpaymentDraft] = useState('');
   const [totalAmountDraft, setTotalAmountDraft] = useState('');
   const [stockByProductId, setStockByProductId] = useState<Record<string, number>>({});
@@ -204,15 +201,8 @@ export default function FlowerOrderFormModal({
       created_by_name: order.created_by_name,
       items: order.items.map((item) => ({ ...item })),
     });
-    setLineDrafts(
-      order.items.length > 0
-        ? order.items.map((item) => ({
-            rowId: `${item.product_id}-${item.quantity}`,
-            productId: item.product_id,
-            quantity: String(item.quantity),
-          }))
-        : [createLineDraft()],
-    );
+    setProductQuantities(quantitiesFromOrderItems(order.items));
+    setFlowerSearch('');
     setDownpaymentDraft(String(order.downpayment));
     setTotalAmountDraft(String(order.total_amount));
     setStatusDraft(normalizeOrderStatusForPicker(order.status, order.claim_mode));
@@ -235,7 +225,8 @@ export default function FlowerOrderFormModal({
 
     setIsEditMode(true);
     setForm(emptyForm(initialPickupIso ?? new Date().toISOString(), staffId, staffName));
-    setLineDrafts([createLineDraft()]);
+    setProductQuantities({});
+    setFlowerSearch('');
     setDownpaymentDraft('');
     setTotalAmountDraft('');
     setStatusDraft('not_started');
@@ -301,7 +292,7 @@ export default function FlowerOrderFormModal({
     return credit;
   }, [existingOrder, form.branch_id]);
 
-  function getMaxQuantityForLine(rowId: string, productId: string): number {
+  function getMaxQuantityForProduct(productId: string): number {
     if (!productId) {
       return 0;
     }
@@ -312,53 +303,45 @@ export default function FlowerOrderFormModal({
 
     const onHand = stockByProductId[productId] ?? 0;
     const credit = creditByProductId[productId] ?? 0;
-    const usedElsewhere = lineDrafts
-      .filter((row) => row.rowId !== rowId && row.productId === productId)
-      .reduce((sum, row) => sum + (Number(row.quantity) || 0), 0);
 
-    return Math.max(0, onHand + credit - usedElsewhere);
+    return Math.max(0, onHand + credit);
   }
 
-  function clampQuantity(rowId: string, productId: string, rawValue: string): string {
-    const digits = rawValue.replace(/[^\d]/g, '');
-    if (!digits) {
-      return '';
-    }
+  function setProductQuantity(productId: string, rawValue: string) {
+    setProductQuantities((current) => {
+      const digits = rawValue.replace(/[^\d]/g, '');
+      if (!digits) {
+        const next = { ...current };
+        delete next[productId];
+        return next;
+      }
 
-    const max = getMaxQuantityForLine(rowId, productId);
-    if (max <= 0) {
-      return '0';
-    }
+      const max = getMaxQuantityForProduct(productId);
+      const qty = Math.min(max, Math.max(0, Number(digits)));
+      if (qty <= 0) {
+        const next = { ...current };
+        delete next[productId];
+        return next;
+      }
 
-    return String(Math.min(max, Math.max(1, Number(digits))));
+      return { ...current, [productId]: String(qty) };
+    });
   }
 
-  function updateLineProduct(rowId: string, productId: string) {
-    setLineDrafts((rows) =>
-      rows.map((entry) => {
-        if (entry.rowId !== rowId) {
-          return entry;
-        }
+  function adjustProductQuantity(productId: string, delta: number) {
+    setProductQuantities((current) => {
+      const currentQty = Number(current[productId]) || 0;
+      const max = getMaxQuantityForProduct(productId);
+      const nextQty = Math.min(max, Math.max(0, currentQty + delta));
 
-        const nextQuantity = entry.quantity
-          ? clampQuantity(rowId, productId, entry.quantity)
-          : productId
-            ? '1'
-            : '';
+      if (nextQty <= 0) {
+        const next = { ...current };
+        delete next[productId];
+        return next;
+      }
 
-        return { ...entry, productId, quantity: nextQuantity };
-      }),
-    );
-  }
-
-  function updateLineQuantity(rowId: string, productId: string, rawValue: string) {
-    setLineDrafts((rows) =>
-      rows.map((entry) =>
-        entry.rowId === rowId
-          ? { ...entry, quantity: clampQuantity(rowId, productId, rawValue) }
-          : entry,
-      ),
-    );
+      return { ...current, [productId]: String(nextQty) };
+    });
   }
 
   useEffect(() => {
@@ -366,35 +349,34 @@ export default function FlowerOrderFormModal({
       return;
     }
 
-    setLineDrafts((rows) =>
-      rows.map((row) => {
-        if (!row.productId) {
-          return row;
-        }
+    setProductQuantities((current) => {
+      let changed = false;
+      const next = { ...current };
 
-        const onHand = stockByProductId[row.productId] ?? 0;
-        const credit = creditByProductId[row.productId] ?? 0;
-        const usedElsewhere = rows
-          .filter((entry) => entry.rowId !== row.rowId && entry.productId === row.productId)
-          .reduce((sum, entry) => sum + (Number(entry.quantity) || 0), 0);
-        const max = Math.max(0, onHand + credit - usedElsewhere);
+      for (const [productId, qtyStr] of Object.entries(current)) {
+        const onHand = stockByProductId[productId] ?? 0;
+        const credit = creditByProductId[productId] ?? 0;
+        const max = Math.max(0, onHand + credit);
+        const qty = Number(qtyStr) || 0;
 
         if (max <= 0) {
-          if (existingOrder && row.quantity && Number(row.quantity) > 0) {
-            return row;
+          if (existingOrder && qty > 0) {
+            continue;
           }
 
-          return { ...row, quantity: '0' };
+          delete next[productId];
+          changed = true;
+          continue;
         }
 
-        const current = Number(row.quantity) || 0;
-        if (current <= max) {
-          return row;
+        if (qty > max) {
+          next[productId] = String(max);
+          changed = true;
         }
+      }
 
-        return { ...row, quantity: String(max) };
-      }),
-    );
+      return changed ? next : current;
+    });
   }, [stockByProductId, creditByProductId, form.branch_id, open, stockLoading, existingOrder]);
 
   const balance = useMemo(() => {
@@ -414,6 +396,45 @@ export default function FlowerOrderFormModal({
         .sort((left, right) => left.name.localeCompare(right.name)),
     [products],
   );
+
+  const filteredProducts = useMemo(() => {
+    const query = flowerSearch.trim().toLowerCase();
+    if (!query) {
+      return activeProducts;
+    }
+
+    return activeProducts.filter((product) => product.name.toLowerCase().includes(query));
+  }, [activeProducts, flowerSearch]);
+
+  const pickerProducts = useMemo(() => {
+    const selected: typeof activeProducts = [];
+    const unselected: typeof activeProducts = [];
+
+    for (const product of filteredProducts) {
+      if ((Number(productQuantities[product.id]) || 0) > 0) {
+        selected.push(product);
+      } else {
+        unselected.push(product);
+      }
+    }
+
+    return [...selected, ...unselected];
+  }, [filteredProducts, productQuantities, activeProducts]);
+
+  const flowerSelectionSummary = useMemo(() => {
+    let types = 0;
+    let stems = 0;
+
+    for (const qtyStr of Object.values(productQuantities)) {
+      const qty = Number(qtyStr) || 0;
+      if (qty > 0) {
+        types += 1;
+        stems += qty;
+      }
+    }
+
+    return { types, stems };
+  }, [productQuantities]);
 
   const requiresDownpaymentProof = useMemo(() => {
     if (downpaymentDraft.trim() === '') {
@@ -502,12 +523,11 @@ export default function FlowerOrderFormModal({
   }
 
   function validateForm(): CreateFlowerOrderInput | null {
-    const items = lineDrafts
-      .map((row) => {
-        const product = activeProducts.find((entry) => entry.id === row.productId);
-        const quantity = Number(row.quantity);
+    const items = activeProducts
+      .map((product) => {
+        const quantity = Number(productQuantities[product.id]);
 
-        if (!product || !Number.isFinite(quantity) || quantity <= 0) {
+        if (!Number.isFinite(quantity) || quantity <= 0) {
           return null;
         }
 
@@ -1051,104 +1071,122 @@ export default function FlowerOrderFormModal({
           </div>
 
           <div className="mt-5">
-            <div className="mb-2 flex items-center justify-between">
-              <h3 className="text-sm font-semibold text-brand-dark">Flowers &amp; fillers (type + qty)</h3>
-              {!isViewMode ? (
-                <button
-                  type="button"
-                  className="text-xs font-semibold text-brand-brown underline"
-                  onClick={() => setLineDrafts((rows) => [...rows, createLineDraft()])}
-                >
-                  Add row
-                </button>
+            <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+              <h3 className="text-sm font-semibold text-brand-dark">Flowers &amp; fillers</h3>
+              {flowerSelectionSummary.types > 0 ? (
+                <p className="text-xs font-medium text-brand-brown/75">
+                  {flowerSelectionSummary.types} type{flowerSelectionSummary.types === 1 ? '' : 's'} ·{' '}
+                  {flowerSelectionSummary.stems} stem{flowerSelectionSummary.stems === 1 ? '' : 's'}
+                </p>
+              ) : !isViewMode ? (
+                <p className="text-xs text-brand-brown/60">Tap + to add stems</p>
               ) : null}
             </div>
 
             {isViewMode ? (
               <ul className="space-y-2 rounded-xl border border-brand-muted/40 bg-brand-cream/20 p-3">
-                {lineDrafts.map((row) => {
+                {Object.entries(productQuantities).map(([productId, quantity]) => {
                   const productName =
-                    activeProducts.find((product) => product.id === row.productId)?.name ??
-                    existingOrder?.items.find((item) => item.product_id === row.productId)
-                      ?.item_name ??
+                    activeProducts.find((product) => product.id === productId)?.name ??
+                    existingOrder?.items.find((item) => item.product_id === productId)?.item_name ??
                     'Flower';
 
                   return (
-                    <li key={row.rowId} className="flex justify-between text-sm text-brand-dark">
+                    <li key={productId} className="flex justify-between text-sm text-brand-dark">
                       <span>{productName}</span>
-                      <span className="font-semibold">x{row.quantity}</span>
+                      <span className="font-semibold">x{quantity}</span>
                     </li>
                   );
                 })}
               </ul>
             ) : (
               <>
-            {!form.branch_id ? (
-              <p className="mb-2 text-xs text-amber-800">
-                Select a branch above to load stock limits for each flower type.
-              </p>
-            ) : stockLoading ? (
-              <p className="mb-2 text-xs text-brand-brown/60">Loading branch stock...</p>
-            ) : null}
+                {!form.branch_id ? (
+                  <p className="mb-2 text-xs text-amber-800">
+                    Select a branch above to load stock limits for each flower type.
+                  </p>
+                ) : stockLoading ? (
+                  <p className="mb-2 text-xs text-brand-brown/60">Loading branch stock...</p>
+                ) : null}
 
-            <div className="space-y-2">
-              {lineDrafts.map((row) => {
-                const maxQty = row.productId ? getMaxQuantityForLine(row.rowId, row.productId) : 0;
-                const showStockHint = Boolean(form.branch_id && !stockLoading && row.productId);
+                <input
+                  type="search"
+                  value={flowerSearch}
+                  onChange={(event) => setFlowerSearch(event.target.value)}
+                  placeholder="Search flowers..."
+                  className="flower-input mb-2"
+                />
 
-                return (
-                <div key={row.rowId}>
-                  <div className="grid grid-cols-1 gap-2 sm:grid-cols-[1fr_100px_auto]">
-                  <select
-                    value={row.productId}
-                    onChange={(event) => updateLineProduct(row.rowId, event.target.value)}
-                    className="flower-input min-w-0"
-                    required
-                  >
-                    <option value="">Flower type</option>
-                    {activeProducts.map((product) => (
-                      <option key={product.id} value={product.id}>
-                        {product.name}
-                        {form.branch_id && !stockLoading
-                          ? ` (${(stockByProductId[product.id] ?? 0) + (creditByProductId[product.id] ?? 0)} avail.)`
-                          : ''}
-                      </option>
-                    ))}
-                  </select>
-                  <input
-                    type="text"
-                    inputMode="numeric"
-                    value={row.quantity}
-                    onChange={(event) =>
-                      updateLineQuantity(row.rowId, row.productId, event.target.value)
-                    }
-                    className="flower-input"
-                    required
-                    disabled={!row.productId || (showStockHint && maxQty <= 0)}
-                    placeholder="Qty"
-                  />
-                  <button
-                    type="button"
-                    className="flower-btn-secondary px-3 sm:min-w-[5.5rem]"
-                    onClick={() =>
-                      setLineDrafts((rows) =>
-                        rows.length === 1 ? rows : rows.filter((entry) => entry.rowId !== row.rowId),
-                      )
-                    }
-                  >
-                    Remove
-                  </button>
+                <div className="overflow-hidden rounded-xl border border-brand-muted/40 bg-brand-cream/10">
+                  <div className="max-h-[min(50vh,420px)] overflow-y-auto divide-y divide-brand-muted/25">
+                    {pickerProducts.length === 0 ? (
+                      <p className="px-3 py-4 text-center text-sm text-brand-brown/60">
+                        No flowers match your search.
+                      </p>
+                    ) : (
+                      pickerProducts.map((product) => {
+                        const qty = Number(productQuantities[product.id]) || 0;
+                        const maxQty = getMaxQuantityForProduct(product.id);
+                        const available =
+                          form.branch_id && !stockLoading
+                            ? (stockByProductId[product.id] ?? 0) + (creditByProductId[product.id] ?? 0)
+                            : null;
+                        const isSelected = qty > 0;
+                        const isOutOfStock = available !== null && maxQty <= 0;
+
+                        return (
+                          <div
+                            key={product.id}
+                            className={`flex items-center gap-3 px-3 py-2.5 ${
+                              isSelected ? 'bg-brand-beige/50' : 'bg-white/70'
+                            }`}
+                          >
+                            <div className="min-w-0 flex-1">
+                              <p className="text-sm font-medium text-brand-dark">{product.name}</p>
+                              {available !== null ? (
+                                <p className="text-xs text-brand-brown/65">
+                                  {available} available
+                                  {isOutOfStock ? ' — out of stock' : ''}
+                                </p>
+                              ) : null}
+                            </div>
+
+                            <div className="flex shrink-0 items-center gap-1.5">
+                              <button
+                                type="button"
+                                aria-label={`Remove one ${product.name}`}
+                                disabled={qty <= 0}
+                                onClick={() => adjustProductQuantity(product.id, -1)}
+                                className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-brand-muted/50 bg-white text-brand-dark transition hover:border-brand-dark/30 disabled:cursor-not-allowed disabled:opacity-40"
+                              >
+                                <Minus className="h-4 w-4" />
+                              </button>
+                              <input
+                                type="text"
+                                inputMode="numeric"
+                                value={qty > 0 ? String(qty) : ''}
+                                placeholder="0"
+                                onChange={(event) => setProductQuantity(product.id, event.target.value)}
+                                disabled={isOutOfStock}
+                                className="flower-input h-9 w-12 px-1 text-center text-sm"
+                                aria-label={`Quantity for ${product.name}`}
+                              />
+                              <button
+                                type="button"
+                                aria-label={`Add one ${product.name}`}
+                                disabled={isOutOfStock || qty >= maxQty}
+                                onClick={() => adjustProductQuantity(product.id, 1)}
+                                className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-brand-dark/20 bg-brand-dark text-white transition hover:bg-brand-brown disabled:cursor-not-allowed disabled:opacity-40"
+                              >
+                                <Plus className="h-4 w-4" />
+                              </button>
+                            </div>
+                          </div>
+                        );
+                      })
+                    )}
                   </div>
-                  {showStockHint ? (
-                    <p className="mt-1 text-xs text-brand-brown/70">
-                      Max for this line: {maxQty}
-                      {maxQty <= 0 ? ' — out of stock at this branch' : ''}
-                    </p>
-                  ) : null}
                 </div>
-              );
-              })}
-            </div>
               </>
             )}
           </div>
