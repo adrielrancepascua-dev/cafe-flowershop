@@ -17,7 +17,8 @@ export default function FlowerProductsPage() {
     try {
       setProducts(await listFlowerProducts());
     } catch (error) {
-      setErrorMessage(error instanceof Error ? error.message : 'Failed to load products.');
+      const message = error instanceof Error ? error.message : 'Failed to load products.';
+      setErrorMessage(message);
     } finally {
       setLoading(false);
     }
