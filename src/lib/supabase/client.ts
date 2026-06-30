@@ -53,6 +53,13 @@ export function getSupabaseClient(): SupabaseClient | null {
 
   const { supabaseUrl, supabaseAnonKey } = readSupabaseEnv();
   logDebug('Creating Supabase client instance');
+
+  if (!supabaseUrl.startsWith('https://')) {
+    console.warn(
+      '[Supabase] VITE_SUPABASE_URL should start with https:// — check your Vercel environment variables.',
+    );
+  }
+
   clientCache = createClient(supabaseUrl, supabaseAnonKey);
   return clientCache;
 }
