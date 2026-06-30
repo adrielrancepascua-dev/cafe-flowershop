@@ -780,9 +780,15 @@ export default function FlowerOrdersPage() {
                   </span>
 
                   {hasOrders ? (
-                    <div className="mt-auto space-y-1 pt-1">
-                      <span className="block rounded-md bg-brand-brown px-1 py-0.5 text-center text-[9px] font-bold leading-tight text-white sm:text-[10px]">
-                        {dayOrders.length} order{dayOrders.length === 1 ? '' : 's'}
+                    <div className="mt-auto flex w-full flex-col items-center gap-0.5 pt-0.5">
+                      <span
+                        className="inline-flex w-full min-h-[15px] items-center justify-center rounded-md bg-brand-brown px-1 py-0.5 text-center text-[8px] font-semibold leading-none text-white sm:min-h-[18px] sm:px-1.5 sm:py-1 sm:text-[10px]"
+                        aria-label={`${dayOrders.length} order${dayOrders.length === 1 ? '' : 's'}`}
+                      >
+                        <span className="sm:hidden">{dayOrders.length}</span>
+                        <span className="hidden sm:inline">
+                          {dayOrders.length} order{dayOrders.length === 1 ? '' : 's'}
+                        </span>
                       </span>
                       <div className="flex justify-center gap-0.5">
                         {dayOrders.slice(0, 4).map((order) => (
