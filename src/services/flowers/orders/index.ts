@@ -1,5 +1,6 @@
 export {
   createFlowerOrder,
+  deleteFlowerOrder,
   getFlowerDayCloseStatus,
   getFlowerOrder,
   listFlowerOrders,

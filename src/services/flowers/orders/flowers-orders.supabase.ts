@@ -471,6 +471,21 @@ export async function updateFlowerOrderReadyPhotoSupabase(
   return updated;
 }
 
+export async function deleteFlowerOrderSupabase(orderId: string): Promise<void> {
+  const supabase = await requireAuthenticatedSupabaseClient();
+  const existing = await fetchOrderById(orderId);
+
+  if (!existing) {
+    throw new Error('Order not found.');
+  }
+
+  const { error } = await supabase.from('flower_orders').delete().eq('id', orderId);
+
+  if (error) {
+    throw error;
+  }
+}
+
 export async function updateFlowerOrderStatusSupabase(
   orderId: string,
   status: FlowerOrderStatus,

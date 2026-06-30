@@ -275,6 +275,18 @@ export async function updateFlowerOrderReadyPhotoLocal(
   return updated;
 }
 
+export async function deleteFlowerOrderLocal(orderId: string): Promise<void> {
+  const orders = readOrdersFromStorage();
+  const index = orders.findIndex((order) => order.id === orderId);
+
+  if (index === -1) {
+    throw new Error('Order not found.');
+  }
+
+  orders.splice(index, 1);
+  writeOrdersToStorage(orders);
+}
+
 export async function updateFlowerOrderStatusLocal(
   orderId: string,
   status: FlowerOrderStatus,

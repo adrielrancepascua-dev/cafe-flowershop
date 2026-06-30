@@ -8,6 +8,7 @@ import type {
 import { getFlowerStorageMode, shouldUseFlowerSupabase } from '../storage-mode';
 import {
   createFlowerOrderLocal,
+  deleteFlowerOrderLocal,
   getFlowerDayCloseStatusLocal,
   getFlowerOrderLocal,
   listFlowerOrdersLocal,
@@ -99,6 +100,16 @@ export async function updateFlowerOrderStatus(
       return updateFlowerOrderStatusSupabase(orderId, status);
     },
     () => updateFlowerOrderStatusLocal(orderId, status),
+  );
+}
+
+export async function deleteFlowerOrder(orderId: string): Promise<void> {
+  return withSupabaseOrders(
+    async () => {
+      const { deleteFlowerOrderSupabase } = await import('./flowers-orders.supabase');
+      return deleteFlowerOrderSupabase(orderId);
+    },
+    () => deleteFlowerOrderLocal(orderId),
   );
 }
 

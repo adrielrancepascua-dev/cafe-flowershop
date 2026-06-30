@@ -3,6 +3,7 @@ import { CalendarDays, ChevronUp, List } from 'lucide-react';
 import { listFlowerBranches } from '../../../../services/flowers/inventory';
 import {
   createFlowerOrder,
+  deleteFlowerOrder,
   getFlowerOrder,
   listFlowerOrders,
   updateFlowerOrder,
@@ -432,7 +433,7 @@ function MobileDayOrdersSheet({
 }
 
 export default function FlowerOrdersPage() {
-  const { user } = useFlowerAuth();
+  const { user, isAdmin } = useFlowerAuth();
   const [viewMode, setViewMode] = useState<ViewMode>(() => {
     if (typeof window === 'undefined') {
       return 'calendar';
@@ -604,6 +605,29 @@ export default function FlowerOrdersPage() {
     const updated = await updateFlowerOrderReadyPhoto(orderId, readyPhotoDataUrl);
     await loadData();
     setSelectedOrder(updated);
+  }
+
+  async function handleDeleteOrder(order: FlowerOrder) {
+    const confirmed = window.confirm(
+      `Delete order for ${order.receiver} (${formatPickupDateTimeLocal(order.scheduled_for)})? This cannot be undone.`,
+    );
+
+    if (!confirmed) {
+      return;
+    }
+
+    try {
+      await deleteFlowerOrder(order.id);
+
+      if (selectedOrder?.id === order.id) {
+        setFormOpen(false);
+        setSelectedOrder(null);
+      }
+
+      await loadData();
+    } catch (error) {
+      window.alert(error instanceof Error ? error.message : 'Failed to delete order.');
+    }
   }
 
   const monthLabel = cursorMonth.toLocaleDateString('en-PH', {
@@ -820,34 +844,46 @@ export default function FlowerOrdersPage() {
               emptyMessage="No orders yet. Tap New order to add one."
               getKey={(order) => order.id}
               renderCard={(order) => (
-                <button
-                  type="button"
-                  onClick={() => openExistingOrder(order)}
-                  className="w-full text-left"
-                >
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="min-w-0">
-                      <p className="font-semibold text-brand-dark">{order.receiver}</p>
-                      <p className="mt-1 text-xs text-brand-brown/60">
-                        {formatPickupDateTimeLocal(order.scheduled_for)}
+                <div className="flex items-start gap-2">
+                  <button
+                    type="button"
+                    onClick={() => openExistingOrder(order)}
+                    className="min-w-0 flex-1 text-left"
+                  >
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <p className="font-semibold text-brand-dark">{order.receiver}</p>
+                        <p className="mt-1 text-xs text-brand-brown/60">
+                          {formatPickupDateTimeLocal(order.scheduled_for)}
+                        </p>
+                      </div>
+                      <p className="shrink-0 font-semibold text-brand-dark">
+                        {PRICE_FORMATTER.format(order.total_amount)}
                       </p>
                     </div>
-                    <p className="shrink-0 font-semibold text-brand-dark">
-                      {PRICE_FORMATTER.format(order.total_amount)}
+                    <p className="mt-2 text-sm text-brand-brown/75">{order.branch_name}</p>
+                    <p className="mt-1 truncate text-xs text-brand-brown/60">
+                      {summarizeFlowerLines(order.items)}
                     </p>
-                  </div>
-                  <p className="mt-2 text-sm text-brand-brown/75">{order.branch_name}</p>
-                  <p className="mt-1 truncate text-xs text-brand-brown/60">
-                    {summarizeFlowerLines(order.items)}
-                  </p>
-                  <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
-                    <span className="rounded-full bg-brand-beige px-2.5 py-1 text-xs font-semibold text-brand-brown">
-                      {ORDER_STATUS_LABELS[order.status]}
-                    </span>
-                    <OrderDeadlineBadge order={order} nowMs={nowMs} />
-                    <span className="text-xs text-brand-brown/60">{order.created_by_name}</span>
-                  </div>
-                </button>
+                    <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
+                      <span className="rounded-full bg-brand-beige px-2.5 py-1 text-xs font-semibold text-brand-brown">
+                        {ORDER_STATUS_LABELS[order.status]}
+                      </span>
+                      <OrderDeadlineBadge order={order} nowMs={nowMs} />
+                      <span className="text-xs text-brand-brown/60">{order.created_by_name}</span>
+                    </div>
+                  </button>
+                  {isAdmin ? (
+                    <button
+                      type="button"
+                      onClick={() => void handleDeleteOrder(order)}
+                      className="shrink-0 rounded-xl border border-red-200 px-2.5 py-1.5 text-xs font-semibold text-red-700 hover:bg-red-50"
+                      aria-label={`Delete order for ${order.receiver}`}
+                    >
+                      Delete
+                    </button>
+                  ) : null}
+                </div>
               )}
             />
           </div>
@@ -864,6 +900,7 @@ export default function FlowerOrdersPage() {
                 <th className="px-3 py-2">Prep deadline</th>
                 <th className="px-3 py-2">Total</th>
                 <th className="px-3 py-2">By</th>
+                {isAdmin ? <th className="px-3 py-2">Actions</th> : null}
               </tr>
             </thead>
             <tbody>
@@ -887,11 +924,25 @@ export default function FlowerOrdersPage() {
                   </td>
                   <td className="px-3 py-2">{PRICE_FORMATTER.format(order.total_amount)}</td>
                   <td className="px-3 py-2">{order.created_by_name}</td>
+                  {isAdmin ? (
+                    <td className="px-3 py-2">
+                      <button
+                        type="button"
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          void handleDeleteOrder(order);
+                        }}
+                        className="rounded-xl border border-red-200 px-3 py-1.5 text-xs font-semibold text-red-700 hover:bg-red-50"
+                      >
+                        Delete
+                      </button>
+                    </td>
+                  ) : null}
                 </tr>
               ))}
               {orders.length === 0 ? (
                 <tr>
-                  <td colSpan={8} className="px-3 py-8 text-center text-brand-brown/60">
+                  <td colSpan={isAdmin ? 9 : 8} className="px-3 py-8 text-center text-brand-brown/60">
                     No orders yet.
                   </td>
                 </tr>
