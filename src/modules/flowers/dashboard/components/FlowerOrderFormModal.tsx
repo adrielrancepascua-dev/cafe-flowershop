@@ -805,9 +805,9 @@ export default function FlowerOrderFormModal({
           ) : null}
 
           {existingOrder && onReadyPhotoSubmit ? (
-            <div className="mb-4 rounded-xl border border-brand-muted/40 bg-white p-3">
-              <p className="text-sm font-semibold text-brand-dark">Finished order photo</p>
-              <p className="mt-1 text-xs text-brand-brown/75">
+            <div className="mb-4 rounded-xl border border-brand-muted/40 bg-white p-3 sm:p-4">
+              <p className="text-center text-sm font-semibold text-brand-dark">Finished order photo</p>
+              <p className="mt-1 text-center text-xs text-brand-brown/75">
                 Upload the completed arrangement — required 30 min before pick up or 1 hr before
                 delivery.
               </p>
@@ -822,57 +822,71 @@ export default function FlowerOrderFormModal({
                 aria-hidden
                 tabIndex={-1}
               />
-              <button
-                type="button"
-                onClick={handleChooseReadyPhotoClick}
-                className={`mt-3 w-full rounded-xl border-2 border-dashed px-4 py-4 text-center transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-accent ${
-                  hasPendingReadyPhoto
-                    ? 'border-brand-accent bg-brand-accent/10 ring-2 ring-brand-accent/25'
-                    : 'border-brand-accent bg-brand-cream/35 hover:border-brand-brown hover:bg-brand-beige/50'
-                }`}
-              >
-                <span className="block text-sm font-semibold text-brand-dark">
-                  {form.ready_photo_data_url ? 'Choose a different photo' : 'Choose finished order photo'}
-                </span>
-                <span className="mt-1 block text-xs text-brand-brown/65">Tap to select from your device</span>
-              </button>
-              <OrderAttachmentPreview
-                label="Current finished order photo"
-                value={form.ready_photo_data_url}
-              />
-              {hasPendingReadyPhoto ? (
-                <div className="mt-3 flex flex-col gap-2 sm:flex-row">
-                  <button
-                    type="button"
-                    className="flower-btn-primary w-full py-2 text-sm sm:w-auto"
-                    disabled={isSavingReadyPhoto}
-                    onClick={() => void handleSaveReadyPhoto()}
-                  >
-                    {isSavingReadyPhoto ? 'Saving photo...' : 'Save finished photo'}
-                  </button>
-                  <button
-                    type="button"
-                    className="flower-btn-secondary w-full py-2 text-sm sm:w-auto"
-                    disabled={isSavingReadyPhoto}
-                    onClick={handleCancelReadyPhotoSelection}
-                  >
-                    Cancel
-                  </button>
+              {!form.ready_photo_data_url ? (
+                <button
+                  type="button"
+                  onClick={handleChooseReadyPhotoClick}
+                  className="mx-auto mt-4 block w-full max-w-md rounded-xl border-2 border-dashed border-brand-accent bg-brand-cream/35 px-4 py-5 text-center transition hover:border-brand-brown hover:bg-brand-beige/50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-accent"
+                >
+                  <span className="block text-sm font-semibold text-brand-dark">
+                    Choose finished order photo
+                  </span>
+                  <span className="mt-1 block text-xs text-brand-brown/65">
+                    Tap to select from your device
+                  </span>
+                </button>
+              ) : (
+                <div className="mt-4 flex flex-col items-center">
+                  <OrderAttachmentPreview
+                    label="Current finished order photo"
+                    value={form.ready_photo_data_url}
+                    size="large"
+                    centered
+                    hint="Tap image to open full size."
+                  />
+                  {hasPendingReadyPhoto ? (
+                    <div className="mt-4 flex w-full max-w-md flex-col items-stretch gap-2 sm:flex-row sm:justify-center">
+                      <button
+                        type="button"
+                        className="flower-btn-primary w-full py-2 text-sm sm:w-auto"
+                        disabled={isSavingReadyPhoto}
+                        onClick={() => void handleSaveReadyPhoto()}
+                      >
+                        {isSavingReadyPhoto ? 'Saving photo...' : 'Save finished photo'}
+                      </button>
+                      <button
+                        type="button"
+                        className="flower-btn-secondary w-full py-2 text-sm sm:w-auto"
+                        disabled={isSavingReadyPhoto}
+                        onClick={handleChooseReadyPhotoClick}
+                      >
+                        Change photo
+                      </button>
+                      <button
+                        type="button"
+                        className="flower-btn-secondary w-full py-2 text-sm sm:w-auto"
+                        disabled={isSavingReadyPhoto}
+                        onClick={handleCancelReadyPhotoSelection}
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="mt-4 flex w-full max-w-md flex-col items-center gap-2 sm:flex-row sm:justify-center">
+                      <button
+                        type="button"
+                        className="flower-btn-secondary w-full py-2 text-sm sm:w-auto"
+                        onClick={handleChooseReadyPhotoClick}
+                      >
+                        Change photo
+                      </button>
+                      <p className="text-xs font-medium text-emerald-800">Photo submitted.</p>
+                    </div>
+                  )}
                 </div>
-              ) : form.ready_photo_data_url ? (
-                <div className="mt-3 flex flex-col gap-2 sm:flex-row sm:items-center">
-                  <button
-                    type="button"
-                    className="flower-btn-secondary w-full py-2 text-sm sm:w-auto"
-                    onClick={handleChooseReadyPhotoClick}
-                  >
-                    Replace photo
-                  </button>
-                  <p className="text-xs font-medium text-emerald-800">Photo submitted.</p>
-                </div>
-              ) : null}
+              )}
               {readyPhotoMessage ? (
-                <p className="mt-2 text-xs text-brand-brown/80">{readyPhotoMessage}</p>
+                <p className="mt-3 text-center text-xs text-brand-brown/80">{readyPhotoMessage}</p>
               ) : null}
             </div>
           ) : null}
