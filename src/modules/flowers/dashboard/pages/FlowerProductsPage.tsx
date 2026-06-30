@@ -56,7 +56,7 @@ export default function FlowerProductsPage() {
       />
 
       <p className="mt-2 text-sm text-brand-brown/70">
-        Active stems: {activeCount} / {products.length}
+        Active products: {activeCount} / {products.length}
       </p>
 
       <RequireFlowerAdmin>
@@ -78,7 +78,7 @@ export default function FlowerProductsPage() {
             className="flower-input"
           />
           <button type="submit" className="flower-btn-primary">
-            Add stem
+            Add product
           </button>
         </form>
       </RequireFlowerAdmin>
