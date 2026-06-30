@@ -88,8 +88,8 @@ export default function FlowerReportsPage() {
           const closeStatus = await getFlowerDayCloseStatus(effectiveReportDate);
           setBlockedMessage(
             closeStatus.total_orders === 0
-              ? `Reports unlock after today (${formatReportDateLabel(effectiveReportDate)}) once orders are scheduled and all are marked picked up, delivered, or completed.`
-              : `Reports locked — ${closeStatus.open_orders} order(s) still open for today. Mark all as picked up/delivered/completed first.`,
+              ? `Reports unlock after today (${formatReportDateLabel(effectiveReportDate)}) once orders are scheduled and all are marked picked up or delivered.`
+              : `Reports locked — ${closeStatus.open_orders} order(s) still open for today. Mark all as picked up or delivered first.`,
           );
           setReportsData(emptyReports());
           return;

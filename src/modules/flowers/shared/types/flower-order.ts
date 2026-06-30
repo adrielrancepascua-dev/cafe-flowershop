@@ -20,9 +20,21 @@ export const FLOWER_ORDER_STATUS_SEQUENCE: FlowerOrderStatus[] = [
   'ready',
   'picked_up',
   'delivered',
-  'completed',
   'cancelled',
 ];
+
+export const FLOWER_ORDER_COMPLETE_STATUSES: FlowerOrderStatus[] = ['picked_up', 'delivered'];
+
+export function normalizeOrderStatusForPicker(
+  status: FlowerOrderStatus,
+  claimMode: FlowerClaimMode,
+): FlowerOrderStatus {
+  if (status === 'completed') {
+    return claimMode === 'delivery' ? 'delivered' : 'picked_up';
+  }
+
+  return status;
+}
 
 export interface FlowerOrderItem {
   id?: number;

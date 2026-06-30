@@ -1,10 +1,12 @@
-import { Fragment, useEffect, useMemo, useState } from 'react';
+import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
 import { X } from 'lucide-react';
 import { listFlowerInventoryStock } from '../../../../services/flowers/inventory';
 import type { FlowerProduct } from '../../shared/types/flower-product';
 import type { FlowerBranchOption } from '../../shared/types/flower-inventory';
 import {
+  FLOWER_ORDER_COMPLETE_STATUSES,
   FLOWER_ORDER_STATUS_SEQUENCE,
+  normalizeOrderStatusForPicker,
   type CreateFlowerOrderInput,
   type FlowerClaimMode,
   type FlowerOrder,
@@ -53,6 +55,57 @@ function createLineDraft(): LineDraft {
     productId: '',
     quantity: '1',
   };
+}
+
+function isCompleteOrderStatus(status: FlowerOrderStatus): boolean {
+  return FLOWER_ORDER_COMPLETE_STATUSES.includes(status);
+}
+
+function orderStatusButtonClassName({
+  status,
+  isSelected,
+  isCurrentStatus,
+}: {
+  status: FlowerOrderStatus;
+  isSelected: boolean;
+  isCurrentStatus: boolean;
+}): string {
+  const isCancelled = status === 'cancelled';
+  const isComplete = isCompleteOrderStatus(status);
+
+  if (isSelected) {
+    if (isCancelled) {
+      return 'border-red-700 bg-red-700 text-white';
+    }
+
+    if (isComplete) {
+      return 'border-emerald-700 bg-emerald-700 text-white shadow-sm';
+    }
+
+    return 'border-brand-dark bg-brand-dark text-white';
+  }
+
+  if (isCurrentStatus) {
+    if (isComplete) {
+      return 'border-emerald-600 bg-emerald-50 text-emerald-900 ring-1 ring-emerald-200';
+    }
+
+    if (isCancelled) {
+      return 'border-red-300 bg-red-50 text-red-900';
+    }
+
+    return 'border-brand-dark/30 bg-brand-beige text-brand-dark';
+  }
+
+  if (isComplete) {
+    return 'border-emerald-300 bg-emerald-50/70 text-emerald-900 hover:border-emerald-500';
+  }
+
+  if (isCancelled) {
+    return 'border-red-200 bg-white text-red-800 hover:border-red-400';
+  }
+
+  return 'border-brand-muted/50 bg-white text-brand-brown hover:border-brand-dark/40';
 }
 
 function emptyForm(
@@ -112,9 +165,16 @@ export default function FlowerOrderFormModal({
   const [deadlineNowMs, setDeadlineNowMs] = useState(() => Date.now());
   const [isSavingReadyPhoto, setIsSavingReadyPhoto] = useState(false);
   const [readyPhotoMessage, setReadyPhotoMessage] = useState('');
+  const readyPhotoInputRef = useRef<HTMLInputElement>(null);
 
   const isViewMode = Boolean(existingOrder && !isEditMode);
   const readOnlyFieldClass = isViewMode ? 'bg-brand-beige/40 text-brand-brown/90' : '';
+  const displayOrderStatus = existingOrder
+    ? normalizeOrderStatusForPicker(existingOrder.status, existingOrder.claim_mode)
+    : 'not_started';
+  const hasPendingReadyPhoto = Boolean(
+    existingOrder && form.ready_photo_data_url !== existingOrder.ready_photo_data_url,
+  );
 
   function loadExistingOrderIntoForm(order: FlowerOrder) {
     setForm({
@@ -149,9 +209,10 @@ export default function FlowerOrderFormModal({
     );
     setDownpaymentDraft(String(order.downpayment));
     setTotalAmountDraft(String(order.total_amount));
-    setStatusDraft(order.status);
+    setStatusDraft(normalizeOrderStatusForPicker(order.status, order.claim_mode));
     setStatusMessage('');
     setErrorMessage('');
+    setReadyPhotoMessage('');
   }
 
   useEffect(() => {
@@ -417,6 +478,22 @@ export default function FlowerOrderFormModal({
     }
   }
 
+  function handleCancelReadyPhotoSelection() {
+    if (!existingOrder) {
+      return;
+    }
+
+    updateField('ready_photo_data_url', existingOrder.ready_photo_data_url);
+    setReadyPhotoMessage('');
+    if (readyPhotoInputRef.current) {
+      readyPhotoInputRef.current.value = '';
+    }
+  }
+
+  function handleChooseReadyPhotoClick() {
+    readyPhotoInputRef.current?.click();
+  }
+
   function validateForm(): CreateFlowerOrderInput | null {
     const items = lineDrafts
       .map((row) => {
@@ -581,7 +658,7 @@ export default function FlowerOrderFormModal({
         deadlineNowMs,
       )
     ) {
-      setStatusDraft(existingOrder.status);
+      setStatusDraft(normalizeOrderStatusForPicker(existingOrder.status, existingOrder.claim_mode));
       setStatusMessage(
         'Submit the finished order photo before updating status — due 30 min before pick up or 1 hr before delivery.',
       );
@@ -594,7 +671,7 @@ export default function FlowerOrderFormModal({
     try {
       await onStatusChange(existingOrder.id, nextStatus);
     } catch (error) {
-      setStatusDraft(existingOrder.status);
+      setStatusDraft(normalizeOrderStatusForPicker(existingOrder.status, existingOrder.claim_mode));
       setStatusMessage(
         error instanceof Error ? error.message : 'Could not update order status.',
       );
@@ -651,7 +728,7 @@ export default function FlowerOrderFormModal({
                 >
                   {FLOWER_ORDER_STATUS_SEQUENCE.map((status, index) => {
                     const isSelected = statusDraft === status;
-                    const isSaved = existingOrder.status === status;
+                    const isCurrentStatus = displayOrderStatus === status;
                     const isCancelled = status === 'cancelled';
 
                     return (
@@ -682,17 +759,13 @@ export default function FlowerOrderFormModal({
 
                             void handleStatusSelect(status);
                           }}
-                          className={`shrink-0 rounded-lg border px-2.5 py-2 text-xs font-semibold transition sm:px-3 sm:text-sm ${
-                            isSelected
-                              ? isCancelled
-                                ? 'border-red-700 bg-red-700 text-white'
-                                : 'border-brand-dark bg-brand-dark text-white'
-                              : isSaved && isViewMode
-                                ? 'border-brand-dark/30 bg-brand-beige text-brand-dark'
-                                : isCancelled
-                                  ? 'border-red-200 bg-white text-red-800 hover:border-red-400'
-                                  : 'border-brand-muted/50 bg-white text-brand-brown hover:border-brand-dark/40'
-                          }`}
+                          className={`shrink-0 rounded-lg border px-2.5 py-2 text-xs font-semibold transition sm:px-3 sm:text-sm ${orderStatusButtonClassName(
+                            {
+                              status,
+                              isSelected,
+                              isCurrentStatus,
+                            },
+                          )}`}
                         >
                           {ORDER_STATUS_LABELS[status]}
                         </button>
@@ -705,7 +778,7 @@ export default function FlowerOrderFormModal({
                 <button
                   type="button"
                   className="flower-btn-secondary mt-3 w-full px-4 py-2.5 text-sm sm:w-auto"
-                  disabled={statusDraft === existingOrder.status}
+                  disabled={statusDraft === displayOrderStatus}
                   onClick={() => void handleStatusSelect(statusDraft)}
                 >
                   Apply status
@@ -739,28 +812,64 @@ export default function FlowerOrderFormModal({
                 delivery.
               </p>
               <input
+                ref={readyPhotoInputRef}
                 type="file"
                 accept="image/*"
                 onChange={(event) =>
                   void handleFileChange('ready_photo_data_url', event.target.files?.[0] ?? null)
                 }
-                className="mt-2 block w-full text-xs"
+                className="sr-only"
+                aria-hidden
+                tabIndex={-1}
               />
+              <button
+                type="button"
+                onClick={handleChooseReadyPhotoClick}
+                className={`mt-3 w-full rounded-xl border-2 border-dashed px-4 py-4 text-center transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-accent ${
+                  hasPendingReadyPhoto
+                    ? 'border-brand-accent bg-brand-accent/10 ring-2 ring-brand-accent/25'
+                    : 'border-brand-accent bg-brand-cream/35 hover:border-brand-brown hover:bg-brand-beige/50'
+                }`}
+              >
+                <span className="block text-sm font-semibold text-brand-dark">
+                  {form.ready_photo_data_url ? 'Choose a different photo' : 'Choose finished order photo'}
+                </span>
+                <span className="mt-1 block text-xs text-brand-brown/65">Tap to select from your device</span>
+              </button>
               <OrderAttachmentPreview
                 label="Current finished order photo"
                 value={form.ready_photo_data_url}
               />
-              {form.ready_photo_data_url !== existingOrder.ready_photo_data_url ? (
-                <button
-                  type="button"
-                  className="flower-btn-primary mt-3 w-full py-2 text-sm sm:w-auto"
-                  disabled={isSavingReadyPhoto}
-                  onClick={() => void handleSaveReadyPhoto()}
-                >
-                  {isSavingReadyPhoto ? 'Saving photo...' : 'Save finished photo'}
-                </button>
+              {hasPendingReadyPhoto ? (
+                <div className="mt-3 flex flex-col gap-2 sm:flex-row">
+                  <button
+                    type="button"
+                    className="flower-btn-primary w-full py-2 text-sm sm:w-auto"
+                    disabled={isSavingReadyPhoto}
+                    onClick={() => void handleSaveReadyPhoto()}
+                  >
+                    {isSavingReadyPhoto ? 'Saving photo...' : 'Save finished photo'}
+                  </button>
+                  <button
+                    type="button"
+                    className="flower-btn-secondary w-full py-2 text-sm sm:w-auto"
+                    disabled={isSavingReadyPhoto}
+                    onClick={handleCancelReadyPhotoSelection}
+                  >
+                    Cancel
+                  </button>
+                </div>
               ) : form.ready_photo_data_url ? (
-                <p className="mt-2 text-xs font-medium text-emerald-800">Photo submitted.</p>
+                <div className="mt-3 flex flex-col gap-2 sm:flex-row sm:items-center">
+                  <button
+                    type="button"
+                    className="flower-btn-secondary w-full py-2 text-sm sm:w-auto"
+                    onClick={handleChooseReadyPhotoClick}
+                  >
+                    Replace photo
+                  </button>
+                  <p className="text-xs font-medium text-emerald-800">Photo submitted.</p>
+                </div>
               ) : null}
               {readyPhotoMessage ? (
                 <p className="mt-2 text-xs text-brand-brown/80">{readyPhotoMessage}</p>

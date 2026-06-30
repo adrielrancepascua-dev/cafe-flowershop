@@ -35,7 +35,9 @@ export default function OrderAttachmentPreview({
           className="max-h-36 w-auto max-w-full rounded-lg border border-brand-muted/40 object-cover"
         />
       </a>
-      <p className="mt-1 text-[11px] text-brand-brown/55">Tap image to open full size. Upload a new file to replace.</p>
+      <p className="mt-1 text-[11px] text-brand-brown/55">
+        Tap image to open full size. Use Replace photo to upload a new one.
+      </p>
     </div>
   );
 }
