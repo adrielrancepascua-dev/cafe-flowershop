@@ -3,6 +3,8 @@ import type {
   CreateFlowerSupplierCostInput,
   FlowerStaffExpense,
   FlowerSupplierCost,
+  UpdateFlowerStaffExpenseInput,
+  UpdateFlowerSupplierCostInput,
 } from '../../../modules/flowers/shared/types/flower-expense';
 import { FLOWER_BRANCHES_MOCK, FLOWER_STEMS_MOCK } from '../../../modules/flowers/shared/data/flowers.mock';
 
@@ -93,6 +95,41 @@ export async function createFlowerStaffExpenseLocal(
   return created;
 }
 
+export async function updateFlowerStaffExpenseLocal(
+  input: UpdateFlowerStaffExpenseInput,
+): Promise<FlowerStaffExpense> {
+  const expenses = readExpenses();
+  const index = expenses.findIndex((expense) => expense.id === input.id);
+
+  if (index === -1) {
+    throw new Error('Expense not found.');
+  }
+
+  const updated: FlowerStaffExpense = {
+    ...expenses[index],
+    branch_id: input.branch_id,
+    branch_name: getBranchName(input.branch_id),
+    amount: input.amount,
+    description: input.description.trim(),
+    expense_date: input.expense_date,
+  };
+
+  expenses[index] = updated;
+  writeExpenses(expenses);
+  return updated;
+}
+
+export async function deleteFlowerStaffExpenseLocal(expenseId: string): Promise<void> {
+  const expenses = readExpenses();
+  const nextExpenses = expenses.filter((expense) => expense.id !== expenseId);
+
+  if (nextExpenses.length === expenses.length) {
+    throw new Error('Expense not found.');
+  }
+
+  writeExpenses(nextExpenses);
+}
+
 export async function listFlowerSupplierCostsLocal(): Promise<FlowerSupplierCost[]> {
   return readSupplierCosts().sort(
     (a, b) => new Date(b.cost_date).getTime() - new Date(a.cost_date).getTime(),
@@ -123,6 +160,47 @@ export async function createFlowerSupplierCostLocal(
 
   writeSupplierCosts([created, ...costs]);
   return created;
+}
+
+export async function updateFlowerSupplierCostLocal(
+  input: UpdateFlowerSupplierCostInput,
+): Promise<FlowerSupplierCost> {
+  const costs = readSupplierCosts();
+  const index = costs.findIndex((cost) => cost.id === input.id);
+
+  if (index === -1) {
+    throw new Error('Supplier cost not found.');
+  }
+
+  const product = input.product_id
+    ? FLOWER_STEMS_MOCK.find((stem) => stem.id === input.product_id)
+    : null;
+
+  const updated: FlowerSupplierCost = {
+    ...costs[index],
+    branch_id: input.branch_id,
+    branch_name: getBranchName(input.branch_id),
+    product_id: input.product_id ?? null,
+    product_name: product?.name ?? null,
+    amount: input.amount,
+    description: input.description.trim(),
+    cost_date: input.cost_date,
+  };
+
+  costs[index] = updated;
+  writeSupplierCosts(costs);
+  return updated;
+}
+
+export async function deleteFlowerSupplierCostLocal(costId: string): Promise<void> {
+  const costs = readSupplierCosts();
+  const nextCosts = costs.filter((cost) => cost.id !== costId);
+
+  if (nextCosts.length === costs.length) {
+    throw new Error('Supplier cost not found.');
+  }
+
+  writeSupplierCosts(nextCosts);
 }
 
 export async function sumStaffExpensesForPeriodLocal(options: {

@@ -19,6 +19,14 @@ export interface CreateFlowerStaffExpenseInput {
   expense_date: string;
 }
 
+export interface UpdateFlowerStaffExpenseInput {
+  id: string;
+  branch_id: string;
+  amount: number;
+  description: string;
+  expense_date: string;
+}
+
 export interface FlowerSupplierCost {
   id: string;
   branch_id: string;
@@ -41,4 +49,13 @@ export interface CreateFlowerSupplierCostInput {
   cost_date: string;
   created_by_id: string;
   created_by_name: string;
+}
+
+export interface UpdateFlowerSupplierCostInput {
+  id: string;
+  branch_id: string;
+  product_id?: string | null;
+  amount: number;
+  description: string;
+  cost_date: string;
 }

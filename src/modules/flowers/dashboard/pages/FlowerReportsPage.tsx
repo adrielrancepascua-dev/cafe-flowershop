@@ -2,10 +2,16 @@ import { useEffect, useState } from 'react';
 import { listFlowerBranches } from '../../../../services/flowers/inventory';
 import { getFlowerDayCloseStatus } from '../../../../services/flowers/orders';
 import { canStaffAccessReports, getFlowerReports } from '../../../../services/flowers/reports';
-import { createFlowerSupplierCost } from '../../../../services/flowers/expenses/flowers-expenses.service';
+import {
+  createFlowerSupplierCost,
+  deleteFlowerSupplierCost,
+  listFlowerSupplierCosts,
+  updateFlowerSupplierCost,
+} from '../../../../services/flowers/expenses/flowers-expenses.service';
 import { useFlowerAuth } from '../../../../lib/auth/FlowerAuthContext';
 import type { FlowerReportsData } from '../../shared/types/flower-report';
 import type { FlowerBranchOption } from '../../shared/types/flower-inventory';
+import type { FlowerSupplierCost } from '../../shared/types/flower-expense';
 import FlowerPageHeader from '../../shared/components/FlowerPageHeader';
 import FlowerPrintableSalesReportPanel from '../components/FlowerPrintableSalesReportPanel';
 import { PRICE_FORMATTER, toDateKey } from '../../shared/utils/flower-format';
@@ -44,9 +50,27 @@ export default function FlowerReportsPage() {
   const [supplierAmount, setSupplierAmount] = useState('');
   const [supplierDescription, setSupplierDescription] = useState('');
   const [supplierBranchId, setSupplierBranchId] = useState('');
+  const [supplierCosts, setSupplierCosts] = useState<FlowerSupplierCost[]>([]);
+  const [editingSupplierCostId, setEditingSupplierCostId] = useState<string | null>(null);
+  const [supplierEditDraft, setSupplierEditDraft] = useState<{
+    cost_date: string;
+    branch_id: string;
+    amount: string;
+    description: string;
+  } | null>(null);
+  const [supplierMessage, setSupplierMessage] = useState('');
+  const [supplierErrorMessage, setSupplierErrorMessage] = useState('');
 
   const staffReportDate = toDateKey(new Date());
   const effectiveReportDate = isAdmin ? reportDate : staffReportDate;
+
+  async function loadSupplierCosts() {
+    if (!isAdmin) {
+      return;
+    }
+
+    setSupplierCosts(await listFlowerSupplierCosts());
+  }
 
   async function loadReports() {
     if (!user) {
@@ -79,6 +103,7 @@ export default function FlowerReportsPage() {
         advanceLimit: isAdmin ? undefined : 0,
       });
       setReportsData(data);
+      await loadSupplierCosts();
     } catch (error) {
       setBlockedMessage(error instanceof Error ? error.message : 'Failed to load reports.');
     } finally {
@@ -121,7 +146,72 @@ export default function FlowerReportsPage() {
 
     setSupplierAmount('');
     setSupplierDescription('');
+    setSupplierMessage('Supplier cost added.');
+    setSupplierErrorMessage('');
     await loadReports();
+  }
+
+  function startEditingSupplierCost(cost: FlowerSupplierCost) {
+    setEditingSupplierCostId(cost.id);
+    setSupplierEditDraft({
+      cost_date: cost.cost_date,
+      branch_id: cost.branch_id,
+      amount: String(cost.amount),
+      description: cost.description,
+    });
+    setSupplierMessage('');
+    setSupplierErrorMessage('');
+  }
+
+  function cancelEditingSupplierCost() {
+    setEditingSupplierCostId(null);
+    setSupplierEditDraft(null);
+  }
+
+  async function handleSaveSupplierCost(costId: string) {
+    if (!supplierEditDraft) {
+      return;
+    }
+
+    const amount = Number(supplierEditDraft.amount);
+    if (!Number.isFinite(amount) || amount <= 0 || !supplierEditDraft.description.trim() || !supplierEditDraft.branch_id) {
+      setSupplierErrorMessage('Enter a valid amount, description, and branch.');
+      return;
+    }
+
+    try {
+      await updateFlowerSupplierCost({
+        id: costId,
+        branch_id: supplierEditDraft.branch_id,
+        amount,
+        description: supplierEditDraft.description,
+        cost_date: supplierEditDraft.cost_date,
+      });
+      cancelEditingSupplierCost();
+      setSupplierMessage('Supplier cost updated.');
+      setSupplierErrorMessage('');
+      await loadReports();
+    } catch (error) {
+      setSupplierErrorMessage(error instanceof Error ? error.message : 'Failed to update supplier cost.');
+    }
+  }
+
+  async function handleDeleteSupplierCost(costId: string) {
+    if (!window.confirm('Delete this supplier cost entry?')) {
+      return;
+    }
+
+    try {
+      await deleteFlowerSupplierCost(costId);
+      if (editingSupplierCostId === costId) {
+        cancelEditingSupplierCost();
+      }
+      setSupplierMessage('Supplier cost deleted.');
+      setSupplierErrorMessage('');
+      await loadReports();
+    } catch (error) {
+      setSupplierErrorMessage(error instanceof Error ? error.message : 'Failed to delete supplier cost.');
+    }
   }
 
   return (
@@ -176,19 +266,148 @@ export default function FlowerReportsPage() {
           </div>
 
           {isAdmin ? (
-            <form onSubmit={handleSupplierCost} className="mt-6 rounded-2xl border border-brand-muted/40 bg-brand-cream/20 p-4">
-              <h3 className="text-sm font-semibold text-brand-dark">Log supplier cost (admin)</h3>
-              <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-4">
-                <select value={supplierBranchId} onChange={(e) => setSupplierBranchId(e.target.value)} className="flower-input" required>
-                  {branches.map((branch) => (
-                    <option key={branch.id} value={branch.id}>{branch.name}</option>
-                  ))}
-                </select>
-                <input type="number" min="0" step="0.01" value={supplierAmount} onChange={(e) => setSupplierAmount(e.target.value)} placeholder="Amount" className="flower-input" required />
-                <input type="text" value={supplierDescription} onChange={(e) => setSupplierDescription(e.target.value)} placeholder="Description" className="flower-input" required />
-                <button type="submit" className="flower-btn-primary">Add supplier cost</button>
+            <div className="mt-6 rounded-2xl border border-brand-muted/40 bg-brand-cream/20 p-4">
+              <form onSubmit={handleSupplierCost}>
+                <h3 className="text-sm font-semibold text-brand-dark">Log supplier cost (admin)</h3>
+                <p className="mt-1 text-xs text-brand-brown/60">
+                  Edit or delete incorrect supplier entries below.
+                </p>
+                <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-4">
+                  <select value={supplierBranchId} onChange={(e) => setSupplierBranchId(e.target.value)} className="flower-input" required>
+                    {branches.map((branch) => (
+                      <option key={branch.id} value={branch.id}>{branch.name}</option>
+                    ))}
+                  </select>
+                  <input type="number" min="0" step="0.01" value={supplierAmount} onChange={(e) => setSupplierAmount(e.target.value)} placeholder="Amount" className="flower-input" required />
+                  <input type="text" value={supplierDescription} onChange={(e) => setSupplierDescription(e.target.value)} placeholder="Description" className="flower-input" required />
+                  <button type="submit" className="flower-btn-primary">Add supplier cost</button>
+                </div>
+              </form>
+
+              {supplierMessage ? <p className="mt-3 text-sm text-emerald-700">{supplierMessage}</p> : null}
+              {supplierErrorMessage ? <p className="mt-3 text-sm text-red-700">{supplierErrorMessage}</p> : null}
+
+              <div className="mt-4 overflow-x-auto rounded-xl border border-brand-muted/40 bg-white">
+                <table className="min-w-full text-left text-sm">
+                  <thead className="bg-brand-beige/40 text-brand-brown">
+                    <tr>
+                      <th className="px-3 py-2">Date</th>
+                      <th className="px-3 py-2">Branch</th>
+                      <th className="px-3 py-2">Description</th>
+                      <th className="px-3 py-2">Amount</th>
+                      <th className="px-3 py-2">Logged by</th>
+                      <th className="px-3 py-2">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {supplierCosts.map((cost) =>
+                      editingSupplierCostId === cost.id && supplierEditDraft ? (
+                        <tr key={cost.id} className="border-t border-brand-muted/30 bg-brand-cream/30">
+                          <td className="px-3 py-2">
+                            <input
+                              type="date"
+                              value={supplierEditDraft.cost_date}
+                              onChange={(e) =>
+                                setSupplierEditDraft((current) =>
+                                  current ? { ...current, cost_date: e.target.value } : current,
+                                )
+                              }
+                              className="flower-input min-w-[140px]"
+                            />
+                          </td>
+                          <td className="px-3 py-2">
+                            <select
+                              value={supplierEditDraft.branch_id}
+                              onChange={(e) =>
+                                setSupplierEditDraft((current) =>
+                                  current ? { ...current, branch_id: e.target.value } : current,
+                                )
+                              }
+                              className="flower-input min-w-[120px]"
+                            >
+                              {branches.map((branch) => (
+                                <option key={branch.id} value={branch.id}>{branch.name}</option>
+                              ))}
+                            </select>
+                          </td>
+                          <td className="px-3 py-2">
+                            <input
+                              type="text"
+                              value={supplierEditDraft.description}
+                              onChange={(e) =>
+                                setSupplierEditDraft((current) =>
+                                  current ? { ...current, description: e.target.value } : current,
+                                )
+                              }
+                              className="flower-input min-w-[160px]"
+                            />
+                          </td>
+                          <td className="px-3 py-2">
+                            <input
+                              type="number"
+                              min="0"
+                              step="0.01"
+                              value={supplierEditDraft.amount}
+                              onChange={(e) =>
+                                setSupplierEditDraft((current) =>
+                                  current ? { ...current, amount: e.target.value } : current,
+                                )
+                              }
+                              className="flower-input min-w-[100px]"
+                            />
+                          </td>
+                          <td className="px-3 py-2">{cost.created_by_name}</td>
+                          <td className="px-3 py-2">
+                            <div className="flex flex-wrap gap-2">
+                              <button
+                                type="button"
+                                onClick={() => void handleSaveSupplierCost(cost.id)}
+                                className="flower-btn-primary px-3 py-1.5 text-xs"
+                              >
+                                Save
+                              </button>
+                              <button
+                                type="button"
+                                onClick={cancelEditingSupplierCost}
+                                className="flower-btn-secondary px-3 py-1.5 text-xs"
+                              >
+                                Cancel
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      ) : (
+                        <tr key={cost.id} className="border-t border-brand-muted/30">
+                          <td className="px-3 py-2">{cost.cost_date}</td>
+                          <td className="px-3 py-2">{cost.branch_name}</td>
+                          <td className="px-3 py-2">{cost.description}</td>
+                          <td className="px-3 py-2">{PRICE_FORMATTER.format(cost.amount)}</td>
+                          <td className="px-3 py-2">{cost.created_by_name}</td>
+                          <td className="px-3 py-2">
+                            <div className="flex flex-wrap gap-2">
+                              <button
+                                type="button"
+                                onClick={() => startEditingSupplierCost(cost)}
+                                className="flower-btn-secondary px-3 py-1.5 text-xs"
+                              >
+                                Edit
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => void handleDeleteSupplierCost(cost.id)}
+                                className="rounded-xl border border-red-200 px-3 py-1.5 text-xs font-semibold text-red-700 hover:bg-red-50"
+                              >
+                                Delete
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      ),
+                    )}
+                  </tbody>
+                </table>
               </div>
-            </form>
+            </div>
           ) : null}
 
           {isAdmin ? (
