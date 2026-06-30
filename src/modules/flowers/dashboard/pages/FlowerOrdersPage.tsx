@@ -16,6 +16,8 @@ import type { FlowerProduct } from '../../shared/types/flower-product';
 import FlowerPageHeader from '../../shared/components/FlowerPageHeader';
 import FlowerMobileCardList from '../../shared/components/FlowerMobileCardList';
 import FlowerOrderFormModal from '../components/FlowerOrderFormModal';
+import OrderDeadlineAlertsPanel from '../components/OrderDeadlineAlertsPanel';
+import OrderDeadlineBadge from '../components/OrderDeadlineBadge';
 import {
   ORDER_STATUS_LABELS,
   PRICE_FORMATTER,
@@ -53,9 +55,11 @@ function getMonthMatrix(year: number, month: number) {
 function DayOrderList({
   orders,
   onSelectOrder,
+  nowMs,
 }: {
   orders: FlowerOrder[];
   onSelectOrder: (order: FlowerOrder) => void;
+  nowMs: number;
 }) {
   if (orders.length === 0) {
     return (
@@ -83,13 +87,16 @@ function DayOrderList({
                 {summarizeFlowerLines(order.items)}
               </p>
             </div>
-            <div className="flex shrink-0 items-center gap-3 sm:flex-col sm:items-end sm:gap-1">
+            <div className="flex shrink-0 flex-col items-start gap-1.5 sm:items-end">
+              <OrderDeadlineBadge order={order} nowMs={nowMs} />
+              <div className="flex items-center gap-3 sm:flex-col sm:items-end sm:gap-1">
               <span className="rounded-full bg-brand-beige px-2.5 py-1 text-xs font-semibold text-brand-brown">
                 {ORDER_STATUS_LABELS[order.status]}
               </span>
               <span className="text-sm font-semibold text-brand-dark">
                 {PRICE_FORMATTER.format(order.total_amount)}
               </span>
+              </div>
             </div>
           </button>
         </li>
@@ -161,6 +168,7 @@ function MobileDayOrdersSheet({
   phase,
   selectedDayLabel,
   orders,
+  nowMs,
   onClose,
   onExpand,
   onCollapse,
@@ -170,6 +178,7 @@ function MobileDayOrdersSheet({
   phase: MobileSheetPhase;
   selectedDayLabel: string;
   orders: FlowerOrder[];
+  nowMs: number;
   onClose: () => void;
   onExpand: () => void;
   onCollapse: () => void;
@@ -411,7 +420,7 @@ function MobileDayOrdersSheet({
               onNewOrder={onNewOrder}
             />
             <div className="flower-scroll min-h-0 flex-1 touch-pan-y overflow-y-auto overscroll-contain pb-[calc(4.5rem+env(safe-area-inset-bottom))]">
-              <DayOrderList orders={orders} onSelectOrder={onSelectOrder} />
+              <DayOrderList orders={orders} onSelectOrder={onSelectOrder} nowMs={nowMs} />
             </div>
           </>
         ) : null}
@@ -441,10 +450,19 @@ export default function FlowerOrdersPage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [selectedDateKey, setSelectedDateKey] = useState<string | null>(null);
   const [mobileSheetPhase, setMobileSheetPhase] = useState<MobileSheetPhase>('closed');
+  const [nowMs, setNowMs] = useState(() => Date.now());
 
   useEffect(() => {
     window.localStorage.setItem('pp_orders_view', viewMode);
   }, [viewMode]);
+
+  useEffect(() => {
+    const intervalId = window.setInterval(() => {
+      setNowMs(Date.now());
+    }, 60_000);
+
+    return () => window.clearInterval(intervalId);
+  }, []);
 
   async function loadData() {
     try {
@@ -642,6 +660,10 @@ export default function FlowerOrdersPage() {
         </button>
       </div>
 
+      {!loading ? (
+        <OrderDeadlineAlertsPanel orders={orders} onSelectOrder={openExistingOrder} />
+      ) : null}
+
       {loading ? (
         <p className="mt-6 text-sm text-brand-brown/60">Loading orders...</p>
       ) : viewMode === 'calendar' ? (
@@ -743,7 +765,11 @@ export default function FlowerOrdersPage() {
                   onClose={closeDaySheet}
                   onNewOrder={openNewOrderForSelectedDate}
                 />
-                <DayOrderList orders={selectedDayOrders} onSelectOrder={openExistingOrder} />
+                <DayOrderList
+                  orders={selectedDayOrders}
+                  onSelectOrder={openExistingOrder}
+                  nowMs={nowMs}
+                />
               </div>
 
               {mobileSheetPhase !== 'closed' ? (
@@ -751,6 +777,7 @@ export default function FlowerOrdersPage() {
                   phase={mobileSheetPhase}
                   selectedDayLabel={selectedDayLabel}
                   orders={selectedDayOrders}
+                  nowMs={nowMs}
                   onClose={closeDaySheet}
                   onExpand={expandMobileDaySheet}
                   onCollapse={collapseMobileDaySheet}
@@ -793,10 +820,11 @@ export default function FlowerOrdersPage() {
                   <p className="mt-1 truncate text-xs text-brand-brown/60">
                     {summarizeFlowerLines(order.items)}
                   </p>
-                  <div className="mt-3 flex items-center justify-between gap-2">
+                  <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
                     <span className="rounded-full bg-brand-beige px-2.5 py-1 text-xs font-semibold text-brand-brown">
                       {ORDER_STATUS_LABELS[order.status]}
                     </span>
+                    <OrderDeadlineBadge order={order} nowMs={nowMs} />
                     <span className="text-xs text-brand-brown/60">{order.created_by_name}</span>
                   </div>
                 </button>
@@ -813,6 +841,7 @@ export default function FlowerOrdersPage() {
                 <th className="px-3 py-2">Branch</th>
                 <th className="px-3 py-2">Flowers</th>
                 <th className="px-3 py-2">Status</th>
+                <th className="px-3 py-2">Prep deadline</th>
                 <th className="px-3 py-2">Total</th>
                 <th className="px-3 py-2">By</th>
               </tr>
@@ -833,13 +862,16 @@ export default function FlowerOrdersPage() {
                     {summarizeFlowerLines(order.items)}
                   </td>
                   <td className="px-3 py-2">{ORDER_STATUS_LABELS[order.status]}</td>
+                  <td className="px-3 py-2">
+                    <OrderDeadlineBadge order={order} nowMs={nowMs} />
+                  </td>
                   <td className="px-3 py-2">{PRICE_FORMATTER.format(order.total_amount)}</td>
                   <td className="px-3 py-2">{order.created_by_name}</td>
                 </tr>
               ))}
               {orders.length === 0 ? (
                 <tr>
-                  <td colSpan={7} className="px-3 py-8 text-center text-brand-brown/60">
+                  <td colSpan={8} className="px-3 py-8 text-center text-brand-brown/60">
                     No orders yet.
                   </td>
                 </tr>

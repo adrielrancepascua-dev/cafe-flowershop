@@ -14,6 +14,16 @@ export const FLOWER_ORDER_TERMINAL_STATUSES: FlowerOrderStatus[] = [
   'completed',
 ];
 
+/** Left-to-right status picker order in the orders UI. */
+export const FLOWER_ORDER_STATUS_SEQUENCE: FlowerOrderStatus[] = [
+  'not_started',
+  'ready',
+  'picked_up',
+  'delivered',
+  'completed',
+  'cancelled',
+];
+
 export interface FlowerOrderItem {
   id?: number;
   product_id: string;

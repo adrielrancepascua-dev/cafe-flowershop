@@ -1,13 +1,14 @@
-import { useEffect, useMemo, useState } from 'react';
+import { Fragment, useEffect, useMemo, useState } from 'react';
 import { X } from 'lucide-react';
 import { listFlowerInventoryStock } from '../../../../services/flowers/inventory';
 import type { FlowerProduct } from '../../shared/types/flower-product';
 import type { FlowerBranchOption } from '../../shared/types/flower-inventory';
-import type {
-  CreateFlowerOrderInput,
-  FlowerClaimMode,
-  FlowerOrder,
-  FlowerOrderStatus,
+import {
+  FLOWER_ORDER_STATUS_SEQUENCE,
+  type CreateFlowerOrderInput,
+  type FlowerClaimMode,
+  type FlowerOrder,
+  type FlowerOrderStatus,
 } from '../../shared/types/flower-order';
 import {
   ORDER_STATUS_LABELS,
@@ -17,6 +18,11 @@ import {
   readFileAsDataUrl,
   toDateInputValue,
 } from '../../shared/utils/flower-format';
+import {
+  getOrderPrepDeadlineInfo,
+  urgencyBadgeClassName,
+  urgencyPanelClassName,
+} from '../../shared/utils/flower-order-deadlines';
 import OrderAttachmentPreview from './OrderAttachmentPreview';
 
 type LineDraft = {
@@ -99,6 +105,7 @@ export default function FlowerOrderFormModal({
   const [statusMessage, setStatusMessage] = useState('');
   const [errorMessage, setErrorMessage] = useState('');
   const [isEditMode, setIsEditMode] = useState(false);
+  const [deadlineNowMs, setDeadlineNowMs] = useState(() => Date.now());
 
   const isViewMode = Boolean(existingOrder && !isEditMode);
   const readOnlyFieldClass = isViewMode ? 'bg-brand-beige/40 text-brand-brown/90' : '';
@@ -161,6 +168,24 @@ export default function FlowerOrderFormModal({
     setStatusMessage('');
     setErrorMessage('');
   }, [open, existingOrder, initialPickupIso, staffId, staffName]);
+
+  useEffect(() => {
+    if (!open || !existingOrder || existingOrder.status !== 'not_started') {
+      return;
+    }
+
+    setDeadlineNowMs(Date.now());
+    const intervalId = window.setInterval(() => {
+      setDeadlineNowMs(Date.now());
+    }, 60_000);
+
+    return () => window.clearInterval(intervalId);
+  }, [open, existingOrder]);
+
+  const prepDeadline =
+    existingOrder && existingOrder.status === 'not_started'
+      ? getOrderPrepDeadlineInfo(existingOrder, deadlineNowMs)
+      : null;
 
   useEffect(() => {
     if (!open || !form.branch_id || isViewMode) {
@@ -555,52 +580,91 @@ export default function FlowerOrderFormModal({
           {existingOrder && onStatusChange ? (
             <div className="mb-4 rounded-xl border border-brand-muted/40 bg-white p-3">
               <p className="text-sm font-semibold text-brand-dark">Order status</p>
-              {isViewMode ? (
-                <p className="mt-1 text-sm text-brand-brown/80">
-                  Current:{' '}
-                  <span className="font-medium text-brand-dark">
-                    {ORDER_STATUS_LABELS[statusDraft]}
-                  </span>
-                </p>
-              ) : null}
-              <div className={`mt-2 ${isViewMode ? 'flex flex-col gap-2 sm:flex-row sm:items-end' : ''}`}>
-                <label className={`block text-sm font-medium text-brand-brown ${isViewMode ? 'flex-1' : 'md:col-span-2'}`}>
-                  {isViewMode ? 'Change status' : 'Status'}
-                  <select
-                    value={statusDraft}
-                    onChange={(event) => {
-                      const nextStatus = event.target.value as FlowerOrderStatus;
-                      if (isViewMode) {
-                        setStatusDraft(nextStatus);
-                        setStatusMessage('');
-                        return;
-                      }
+              <div className="mt-2 overflow-x-auto pb-1">
+                <div
+                  className="flex min-w-max items-center gap-1 sm:gap-1.5"
+                  role="listbox"
+                  aria-label="Order status"
+                >
+                  {FLOWER_ORDER_STATUS_SEQUENCE.map((status, index) => {
+                    const isSelected = statusDraft === status;
+                    const isSaved = existingOrder.status === status;
+                    const isCancelled = status === 'cancelled';
 
-                      void handleStatusSelect(nextStatus);
-                    }}
-                    className="flower-input mt-1.5"
-                  >
-                    {Object.entries(ORDER_STATUS_LABELS).map(([value, label]) => (
-                      <option key={value} value={value}>
-                        {label}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                {isViewMode ? (
-                  <button
-                    type="button"
-                    className="flower-btn-secondary shrink-0 px-4 py-2.5 text-sm"
-                    disabled={statusDraft === existingOrder.status}
-                    onClick={() => void handleStatusSelect(statusDraft)}
-                  >
-                    Apply status
-                  </button>
-                ) : null}
+                    return (
+                      <Fragment key={status}>
+                        {isCancelled ? (
+                          <span
+                            className="mx-1 h-8 w-px shrink-0 bg-brand-muted/50"
+                            aria-hidden="true"
+                          />
+                        ) : index > 0 ? (
+                          <span
+                            className="shrink-0 px-0.5 text-sm text-brand-muted/50"
+                            aria-hidden="true"
+                          >
+                            →
+                          </span>
+                        ) : null}
+                        <button
+                          type="button"
+                          role="option"
+                          aria-selected={isSelected}
+                          onClick={() => {
+                            if (isViewMode) {
+                              setStatusDraft(status);
+                              setStatusMessage('');
+                              return;
+                            }
+
+                            void handleStatusSelect(status);
+                          }}
+                          className={`shrink-0 rounded-lg border px-2.5 py-2 text-xs font-semibold transition sm:px-3 sm:text-sm ${
+                            isSelected
+                              ? isCancelled
+                                ? 'border-red-700 bg-red-700 text-white'
+                                : 'border-brand-dark bg-brand-dark text-white'
+                              : isSaved && isViewMode
+                                ? 'border-brand-dark/30 bg-brand-beige text-brand-dark'
+                                : isCancelled
+                                  ? 'border-red-200 bg-white text-red-800 hover:border-red-400'
+                                  : 'border-brand-muted/50 bg-white text-brand-brown hover:border-brand-dark/40'
+                          }`}
+                        >
+                          {ORDER_STATUS_LABELS[status]}
+                        </button>
+                      </Fragment>
+                    );
+                  })}
+                </div>
               </div>
-              {statusMessage ? (
-                <span className="mt-1 block text-xs text-red-700">{statusMessage}</span>
+              {isViewMode ? (
+                <button
+                  type="button"
+                  className="flower-btn-secondary mt-3 w-full px-4 py-2.5 text-sm sm:w-auto"
+                  disabled={statusDraft === existingOrder.status}
+                  onClick={() => void handleStatusSelect(statusDraft)}
+                >
+                  Apply status
+                </button>
               ) : null}
+              {statusMessage ? (
+                <span className="mt-2 block text-xs text-red-700">{statusMessage}</span>
+              ) : null}
+            </div>
+          ) : null}
+
+          {prepDeadline && prepDeadline.urgency !== 'none' ? (
+            <div
+              className={`mb-4 rounded-xl border px-3 py-2.5 ${urgencyPanelClassName(prepDeadline.urgency)}`}
+            >
+              <p className="text-sm font-semibold text-brand-dark">Prep deadline</p>
+              <p className="mt-1 text-sm text-brand-brown/85">{prepDeadline.detail}</p>
+              <span
+                className={`mt-2 inline-flex rounded-full border px-2.5 py-0.5 text-xs font-semibold ${urgencyBadgeClassName(prepDeadline.urgency)}`}
+              >
+                {prepDeadline.message}
+              </span>
             </div>
           ) : null}
 
