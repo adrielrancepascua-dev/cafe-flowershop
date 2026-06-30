@@ -1,7 +1,14 @@
-import type { FlowerClaimMode, FlowerOrder } from '../types/flower-order';
+import type { FlowerClaimMode, FlowerOrder, FlowerOrderStatus } from '../types/flower-order';
 
-const PICKUP_PREP_LEAD_MS = 30 * 60 * 1000;
-const DELIVERY_PREP_LEAD_MS = 60 * 60 * 1000;
+const PICKUP_PHOTO_LEAD_MS = 30 * 60 * 1000;
+const DELIVERY_PHOTO_LEAD_MS = 60 * 60 * 1000;
+
+const PHOTO_BLOCK_STATUSES: FlowerOrderStatus[] = [
+  'ready',
+  'picked_up',
+  'delivered',
+  'completed',
+];
 
 export type OrderPrepDeadlineUrgency = 'none' | 'notice' | 'warning' | 'critical' | 'overdue';
 
@@ -17,11 +24,11 @@ export interface OrderPrepDeadlineInfo {
   detail: string;
 }
 
-function getPrepLeadMs(claimMode: FlowerClaimMode): number {
-  return claimMode === 'delivery' ? DELIVERY_PREP_LEAD_MS : PICKUP_PREP_LEAD_MS;
+function getPhotoLeadMs(claimMode: FlowerClaimMode): number {
+  return claimMode === 'delivery' ? DELIVERY_PHOTO_LEAD_MS : PICKUP_PHOTO_LEAD_MS;
 }
 
-function getPrepLeadMinutes(claimMode: FlowerClaimMode): number {
+function getPhotoLeadMinutes(claimMode: FlowerClaimMode): number {
   return claimMode === 'delivery' ? 60 : 30;
 }
 
@@ -36,16 +43,21 @@ function formatMinutesRemaining(totalMinutes: number): string {
   return minutes > 0 ? `${hours}h ${minutes}m` : `${hours}h`;
 }
 
-function resolveUrgency(minutesUntilDeadline: number): OrderPrepDeadlineUrgency {
+function resolveUrgency(
+  minutesUntilDeadline: number,
+  status: FlowerOrderStatus,
+): OrderPrepDeadlineUrgency {
   if (minutesUntilDeadline < 0) {
     return 'overdue';
   }
 
-  if (minutesUntilDeadline <= 30) {
+  const nearMultiplier = status === 'not_started' ? 1 : 0.85;
+
+  if (minutesUntilDeadline <= 30 * nearMultiplier) {
     return 'critical';
   }
 
-  if (minutesUntilDeadline <= 120) {
+  if (minutesUntilDeadline <= 120 * nearMultiplier) {
     return 'warning';
   }
 
@@ -56,11 +68,40 @@ function resolveUrgency(minutesUntilDeadline: number): OrderPrepDeadlineUrgency 
   return 'none';
 }
 
+function buildPhotoMessage(
+  claimMode: FlowerClaimMode,
+  minutesUntilDeadline: number,
+): string {
+  const timeLabel = formatMinutesRemaining(minutesUntilDeadline);
+
+  if (minutesUntilDeadline < 0) {
+    return `Submit photo (${timeLabel} overdue)`;
+  }
+
+  if (claimMode === 'delivery') {
+    return `Submit photo (${timeLabel} remaining)`;
+  }
+
+  return `Submit photo (${timeLabel} remaining)`;
+}
+
 export function getOrderPrepDeadlineInfo(
-  order: Pick<FlowerOrder, 'id' | 'status' | 'scheduled_for' | 'claim_mode'>,
+  order: Pick<
+    FlowerOrder,
+    'id' | 'status' | 'scheduled_for' | 'claim_mode' | 'ready_photo_data_url'
+  >,
   nowMs: number = Date.now(),
 ): OrderPrepDeadlineInfo | null {
-  if (order.status !== 'not_started') {
+  if (order.ready_photo_data_url) {
+    return null;
+  }
+
+  if (
+    order.status === 'cancelled' ||
+    order.status === 'picked_up' ||
+    order.status === 'delivered' ||
+    order.status === 'completed'
+  ) {
     return null;
   }
 
@@ -69,26 +110,17 @@ export function getOrderPrepDeadlineInfo(
     return null;
   }
 
-  const leadMs = getPrepLeadMs(order.claim_mode);
-  const leadMinutes = getPrepLeadMinutes(order.claim_mode);
+  const leadMs = getPhotoLeadMs(order.claim_mode);
+  const leadMinutes = getPhotoLeadMinutes(order.claim_mode);
   const prepDeadlineMs = scheduledMs - leadMs;
   const minutesUntilDeadline = (prepDeadlineMs - nowMs) / 60_000;
-  const urgency = resolveUrgency(minutesUntilDeadline);
+  const urgency = resolveUrgency(minutesUntilDeadline, order.status);
 
   const claimLabel = order.claim_mode === 'delivery' ? 'delivery' : 'pick up';
   const detail =
     order.claim_mode === 'delivery'
-      ? 'Finish and photo-ready 1 hour before delivery.'
-      : 'Finish and photo-ready 30 minutes before pick up.';
-
-  let message: string;
-  if (minutesUntilDeadline < 0) {
-    message = `Prep overdue by ${formatMinutesRemaining(minutesUntilDeadline)}`;
-  } else if (minutesUntilDeadline <= 30) {
-    message = `Prep due in ${formatMinutesRemaining(minutesUntilDeadline)} — start now`;
-  } else {
-    message = `Prep due in ${formatMinutesRemaining(minutesUntilDeadline)}`;
-  }
+      ? `Upload a photo of the finished order at least 1 hour before delivery.`
+      : `Upload a photo of the finished order at least 30 minutes before pick up.`;
 
   return {
     orderId: order.id,
@@ -98,13 +130,13 @@ export function getOrderPrepDeadlineInfo(
     leadMinutes,
     minutesUntilDeadline,
     urgency,
-    message,
-    detail: `${detail} (${claimLabel} at ${new Date(scheduledMs).toLocaleString('en-PH', {
+    message: buildPhotoMessage(order.claim_mode, minutesUntilDeadline),
+    detail: `${detail} Scheduled ${claimLabel}: ${new Date(scheduledMs).toLocaleString('en-PH', {
       month: 'short',
       day: 'numeric',
       hour: 'numeric',
       minute: '2-digit',
-    })})`,
+    })}`,
   };
 }
 
@@ -132,31 +164,44 @@ export function listActiveOrderPrepDeadlines(
     .sort((left, right) => left.minutesUntilDeadline - right.minutesUntilDeadline);
 }
 
+export function isReadyPhotoRequiredForStatusChange(
+  order: FlowerOrder,
+  nextStatus: FlowerOrderStatus,
+  nowMs: number = Date.now(),
+): boolean {
+  if (order.ready_photo_data_url || !PHOTO_BLOCK_STATUSES.includes(nextStatus)) {
+    return false;
+  }
+
+  const info = getOrderPrepDeadlineInfo(order, nowMs);
+  return Boolean(info && info.minutesUntilDeadline <= 0);
+}
+
 export function urgencyPanelClassName(urgency: OrderPrepDeadlineUrgency): string {
   switch (urgency) {
     case 'overdue':
-      return 'border-red-300/80 bg-gradient-to-r from-red-50 to-rose-50/80';
+      return 'border-red-400 bg-red-100';
     case 'critical':
-      return 'border-red-200/70 bg-gradient-to-r from-red-50/90 to-orange-50/70 animate-pulse';
+      return 'border-red-300 bg-red-50';
     case 'warning':
-      return 'border-amber-200/80 bg-gradient-to-r from-amber-50 to-orange-50/60';
+      return 'border-amber-300 bg-amber-50';
     case 'notice':
-      return 'border-brand-muted/50 bg-gradient-to-r from-brand-cream/80 to-brand-beige/40';
+      return 'border-brand-muted/50 bg-brand-cream/80';
     default:
-      return 'border-brand-muted/40 bg-brand-cream/30';
+      return 'border-brand-muted/40 bg-brand-cream/40';
   }
 }
 
 export function urgencyBadgeClassName(urgency: OrderPrepDeadlineUrgency): string {
   switch (urgency) {
     case 'overdue':
-      return 'border-red-200 bg-red-100 text-red-900';
+      return 'border-red-300 bg-red-200 text-red-950';
     case 'critical':
-      return 'border-red-200 bg-red-50 text-red-800 animate-pulse';
+      return 'border-red-300 bg-red-100 text-red-900';
     case 'warning':
-      return 'border-amber-200 bg-amber-50 text-amber-950';
+      return 'border-amber-300 bg-amber-100 text-amber-950';
     case 'notice':
-      return 'border-brand-muted/40 bg-brand-beige/60 text-brand-brown/80';
+      return 'border-brand-muted/40 bg-brand-beige/70 text-brand-brown/85';
     default:
       return 'border-brand-muted/30 bg-white text-brand-brown/70';
   }

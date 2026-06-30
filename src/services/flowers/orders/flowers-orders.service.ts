@@ -12,6 +12,7 @@ import {
   getFlowerOrderLocal,
   listFlowerOrdersLocal,
   updateFlowerOrderLocal,
+  updateFlowerOrderReadyPhotoLocal,
   updateFlowerOrderStatusLocal,
 } from './flowers-orders.local';
 
@@ -72,6 +73,19 @@ export async function updateFlowerOrder(input: UpdateFlowerOrderInput): Promise<
       return updateFlowerOrderSupabase(input);
     },
     () => updateFlowerOrderLocal(input),
+  );
+}
+
+export async function updateFlowerOrderReadyPhoto(
+  orderId: string,
+  readyPhotoDataUrl: string,
+): Promise<FlowerOrder> {
+  return withSupabaseOrders(
+    async () => {
+      const { updateFlowerOrderReadyPhotoSupabase } = await import('./flowers-orders.supabase');
+      return updateFlowerOrderReadyPhotoSupabase(orderId, readyPhotoDataUrl);
+    },
+    () => updateFlowerOrderReadyPhotoLocal(orderId, readyPhotoDataUrl),
   );
 }
 

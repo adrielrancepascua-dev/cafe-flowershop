@@ -61,22 +61,29 @@ export async function resolveOrderAttachments(input: {
   photo_inspo_data_url: string;
   proof_dp_data_url: string;
   order_form_ss_data_url: string;
+  ready_photo_data_url?: string;
 }): Promise<{
   photo_inspo_data_url: string;
   proof_dp_data_url: string;
   order_form_ss_data_url: string;
+  ready_photo_data_url: string;
 }> {
-  const [photo_inspo_data_url, proof_dp_data_url, order_form_ss_data_url] = await Promise.all([
-    resolveOrderAttachmentUrl(input.photo_inspo_data_url, input.orderId, 'inspo'),
-    input.proof_dp_data_url
-      ? resolveOrderAttachmentUrl(input.proof_dp_data_url, input.orderId, 'proof-dp')
-      : Promise.resolve(''),
-    resolveOrderAttachmentUrl(input.order_form_ss_data_url, input.orderId, 'order-form'),
-  ]);
+  const [photo_inspo_data_url, proof_dp_data_url, order_form_ss_data_url, ready_photo_data_url] =
+    await Promise.all([
+      resolveOrderAttachmentUrl(input.photo_inspo_data_url, input.orderId, 'inspo'),
+      input.proof_dp_data_url
+        ? resolveOrderAttachmentUrl(input.proof_dp_data_url, input.orderId, 'proof-dp')
+        : Promise.resolve(''),
+      resolveOrderAttachmentUrl(input.order_form_ss_data_url, input.orderId, 'order-form'),
+      input.ready_photo_data_url
+        ? resolveOrderAttachmentUrl(input.ready_photo_data_url, input.orderId, 'ready-photo')
+        : Promise.resolve(''),
+    ]);
 
   return {
     photo_inspo_data_url,
     proof_dp_data_url,
     order_form_ss_data_url,
+    ready_photo_data_url,
   };
 }

@@ -48,6 +48,7 @@ create table if not exists public.flower_orders (
   photo_inspo_data_url text not null default '',
   proof_dp_data_url text not null default '',
   order_form_ss_data_url text not null default '',
+  ready_photo_data_url text not null default '',
   created_by_id text not null,
   created_by_name text not null,
   inventory_deducted boolean not null default false,

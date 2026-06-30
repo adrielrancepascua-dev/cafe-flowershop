@@ -20,6 +20,7 @@ import {
 } from '../../shared/utils/flower-format';
 import {
   getOrderPrepDeadlineInfo,
+  isReadyPhotoRequiredForStatusChange,
   urgencyBadgeClassName,
   urgencyPanelClassName,
 } from '../../shared/utils/flower-order-deadlines';
@@ -36,6 +37,7 @@ type OrderFormProps = {
   onClose: () => void;
   onSubmit: (input: CreateFlowerOrderInput) => Promise<void>;
   onStatusChange?: (orderId: string, status: FlowerOrderStatus) => Promise<void>;
+  onReadyPhotoSubmit?: (orderId: string, readyPhotoDataUrl: string) => Promise<void>;
   branches: FlowerBranchOption[];
   products: FlowerProduct[];
   initialPickupIso?: string;
@@ -74,6 +76,7 @@ function emptyForm(
     photo_inspo_data_url: '',
     proof_dp_data_url: '',
     order_form_ss_data_url: '',
+    ready_photo_data_url: '',
     created_by_id: staffId,
     created_by_name: staffName,
     items: [],
@@ -85,6 +88,7 @@ export default function FlowerOrderFormModal({
   onClose,
   onSubmit,
   onStatusChange,
+  onReadyPhotoSubmit,
   branches,
   products,
   initialPickupIso,
@@ -106,6 +110,8 @@ export default function FlowerOrderFormModal({
   const [errorMessage, setErrorMessage] = useState('');
   const [isEditMode, setIsEditMode] = useState(false);
   const [deadlineNowMs, setDeadlineNowMs] = useState(() => Date.now());
+  const [isSavingReadyPhoto, setIsSavingReadyPhoto] = useState(false);
+  const [readyPhotoMessage, setReadyPhotoMessage] = useState('');
 
   const isViewMode = Boolean(existingOrder && !isEditMode);
   const readOnlyFieldClass = isViewMode ? 'bg-brand-beige/40 text-brand-brown/90' : '';
@@ -127,6 +133,7 @@ export default function FlowerOrderFormModal({
       photo_inspo_data_url: order.photo_inspo_data_url,
       proof_dp_data_url: order.proof_dp_data_url,
       order_form_ss_data_url: order.order_form_ss_data_url,
+      ready_photo_data_url: order.ready_photo_data_url,
       created_by_id: order.created_by_id,
       created_by_name: order.created_by_name,
       items: order.items.map((item) => ({ ...item })),
@@ -170,7 +177,7 @@ export default function FlowerOrderFormModal({
   }, [open, existingOrder, initialPickupIso, staffId, staffName]);
 
   useEffect(() => {
-    if (!open || !existingOrder || existingOrder.status !== 'not_started') {
+    if (!open || !existingOrder || existingOrder.ready_photo_data_url) {
       return;
     }
 
@@ -182,10 +189,15 @@ export default function FlowerOrderFormModal({
     return () => window.clearInterval(intervalId);
   }, [open, existingOrder]);
 
-  const prepDeadline =
-    existingOrder && existingOrder.status === 'not_started'
-      ? getOrderPrepDeadlineInfo(existingOrder, deadlineNowMs)
-      : null;
+  const prepDeadline = existingOrder
+    ? getOrderPrepDeadlineInfo(
+        {
+          ...existingOrder,
+          ready_photo_data_url: form.ready_photo_data_url,
+        },
+        deadlineNowMs,
+      )
+    : null;
 
   useEffect(() => {
     if (!open || !form.branch_id || isViewMode) {
@@ -356,7 +368,11 @@ export default function FlowerOrderFormModal({
   }
 
   async function handleFileChange(
-    key: 'photo_inspo_data_url' | 'proof_dp_data_url' | 'order_form_ss_data_url',
+    key:
+      | 'photo_inspo_data_url'
+      | 'proof_dp_data_url'
+      | 'order_form_ss_data_url'
+      | 'ready_photo_data_url',
     file: File | null,
   ) {
     if (!file) {
@@ -366,6 +382,39 @@ export default function FlowerOrderFormModal({
 
     const dataUrl = await readFileAsDataUrl(file);
     updateField(key, dataUrl);
+    if (key === 'ready_photo_data_url') {
+      setReadyPhotoMessage('');
+    }
+  }
+
+  async function handleSaveReadyPhoto() {
+    if (!existingOrder || !onReadyPhotoSubmit) {
+      return;
+    }
+
+    if (!form.ready_photo_data_url) {
+      setReadyPhotoMessage('Choose a finished order photo first.');
+      return;
+    }
+
+    if (form.ready_photo_data_url === existingOrder.ready_photo_data_url) {
+      setReadyPhotoMessage('Photo is already saved.');
+      return;
+    }
+
+    setIsSavingReadyPhoto(true);
+    setReadyPhotoMessage('');
+
+    try {
+      await onReadyPhotoSubmit(existingOrder.id, form.ready_photo_data_url);
+      setReadyPhotoMessage('Finished order photo saved.');
+    } catch (error) {
+      setReadyPhotoMessage(
+        error instanceof Error ? error.message : 'Could not save finished order photo.',
+      );
+    } finally {
+      setIsSavingReadyPhoto(false);
+    }
   }
 
   function validateForm(): CreateFlowerOrderInput | null {
@@ -525,6 +574,20 @@ export default function FlowerOrderFormModal({
       return;
     }
 
+    if (
+      isReadyPhotoRequiredForStatusChange(
+        { ...existingOrder, ready_photo_data_url: form.ready_photo_data_url },
+        nextStatus,
+        deadlineNowMs,
+      )
+    ) {
+      setStatusDraft(existingOrder.status);
+      setStatusMessage(
+        'Submit the finished order photo before updating status — due 30 min before pick up or 1 hr before delivery.',
+      );
+      return;
+    }
+
     setStatusDraft(nextStatus);
     setStatusMessage('');
 
@@ -658,13 +721,50 @@ export default function FlowerOrderFormModal({
             <div
               className={`mb-4 rounded-xl border px-3 py-2.5 ${urgencyPanelClassName(prepDeadline.urgency)}`}
             >
-              <p className="text-sm font-semibold text-brand-dark">Prep deadline</p>
+              <p className="text-sm font-semibold text-red-950">Photo deadline</p>
               <p className="mt-1 text-sm text-brand-brown/85">{prepDeadline.detail}</p>
               <span
                 className={`mt-2 inline-flex rounded-full border px-2.5 py-0.5 text-xs font-semibold ${urgencyBadgeClassName(prepDeadline.urgency)}`}
               >
                 {prepDeadline.message}
               </span>
+            </div>
+          ) : null}
+
+          {existingOrder && onReadyPhotoSubmit ? (
+            <div className="mb-4 rounded-xl border border-brand-muted/40 bg-white p-3">
+              <p className="text-sm font-semibold text-brand-dark">Finished order photo</p>
+              <p className="mt-1 text-xs text-brand-brown/75">
+                Upload the completed arrangement — required 30 min before pick up or 1 hr before
+                delivery.
+              </p>
+              <input
+                type="file"
+                accept="image/*"
+                onChange={(event) =>
+                  void handleFileChange('ready_photo_data_url', event.target.files?.[0] ?? null)
+                }
+                className="mt-2 block w-full text-xs"
+              />
+              <OrderAttachmentPreview
+                label="Current finished order photo"
+                value={form.ready_photo_data_url}
+              />
+              {form.ready_photo_data_url !== existingOrder.ready_photo_data_url ? (
+                <button
+                  type="button"
+                  className="flower-btn-primary mt-3 w-full py-2 text-sm sm:w-auto"
+                  disabled={isSavingReadyPhoto}
+                  onClick={() => void handleSaveReadyPhoto()}
+                >
+                  {isSavingReadyPhoto ? 'Saving photo...' : 'Save finished photo'}
+                </button>
+              ) : form.ready_photo_data_url ? (
+                <p className="mt-2 text-xs font-medium text-emerald-800">Photo submitted.</p>
+              ) : null}
+              {readyPhotoMessage ? (
+                <p className="mt-2 text-xs text-brand-brown/80">{readyPhotoMessage}</p>
+              ) : null}
             </div>
           ) : null}
 

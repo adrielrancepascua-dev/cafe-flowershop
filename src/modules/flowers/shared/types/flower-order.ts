@@ -51,6 +51,7 @@ export interface FlowerOrder {
   photo_inspo_data_url: string;
   proof_dp_data_url: string;
   order_form_ss_data_url: string;
+  ready_photo_data_url: string;
   created_at: string;
   created_by_id: string;
   created_by_name: string;
@@ -80,6 +81,7 @@ export interface CreateFlowerOrderInput {
   photo_inspo_data_url: string;
   proof_dp_data_url: string;
   order_form_ss_data_url: string;
+  ready_photo_data_url: string;
   created_by_id: string;
   created_by_name: string;
   items: CreateFlowerOrderItemInput[];

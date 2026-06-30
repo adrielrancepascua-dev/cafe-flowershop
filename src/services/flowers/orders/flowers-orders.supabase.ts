@@ -12,7 +12,7 @@ import {
   listFlowerBranchesSupabase,
   validateFlowerOrderStockSupabase,
 } from '../inventory/flowers-inventory.supabase';
-import { resolveOrderAttachments } from './flowers-order-attachments';
+import { resolveOrderAttachmentUrl, resolveOrderAttachments } from './flowers-order-attachments';
 import {
   computeFlowerDayCloseStatus,
   getOrdersPendingInventoryDeduction,
@@ -45,6 +45,7 @@ type OrderDbRow = {
   photo_inspo_data_url: string;
   proof_dp_data_url: string;
   order_form_ss_data_url: string;
+  ready_photo_data_url: string;
   created_by_id: string;
   created_by_name: string;
   inventory_deducted: boolean;
@@ -72,6 +73,7 @@ const ORDER_SELECT = `
   photo_inspo_data_url,
   proof_dp_data_url,
   order_form_ss_data_url,
+  ready_photo_data_url,
   created_by_id,
   created_by_name,
   inventory_deducted,
@@ -130,6 +132,7 @@ function mapOrderRow(row: OrderDbRow): FlowerOrder {
     photo_inspo_data_url: row.photo_inspo_data_url ?? '',
     proof_dp_data_url: row.proof_dp_data_url ?? '',
     order_form_ss_data_url: row.order_form_ss_data_url ?? '',
+    ready_photo_data_url: row.ready_photo_data_url ?? '',
     created_at: row.created_at,
     created_by_id: row.created_by_id,
     created_by_name: row.created_by_name,
@@ -275,6 +278,7 @@ export async function createFlowerOrderSupabase(
     photo_inspo_data_url: input.photo_inspo_data_url,
     proof_dp_data_url: input.proof_dp_data_url,
     order_form_ss_data_url: input.order_form_ss_data_url,
+    ready_photo_data_url: input.ready_photo_data_url,
   });
 
   const balance = Math.max(0, input.total_amount - input.downpayment);
@@ -299,6 +303,7 @@ export async function createFlowerOrderSupabase(
     photo_inspo_data_url: attachments.photo_inspo_data_url,
     proof_dp_data_url: attachments.proof_dp_data_url,
     order_form_ss_data_url: attachments.order_form_ss_data_url,
+    ready_photo_data_url: attachments.ready_photo_data_url,
     created_by_id: input.created_by_id,
     created_by_name: input.created_by_name,
     inventory_deducted: false,
@@ -355,6 +360,7 @@ export async function updateFlowerOrderSupabase(
     photo_inspo_data_url: input.photo_inspo_data_url,
     proof_dp_data_url: input.proof_dp_data_url,
     order_form_ss_data_url: input.order_form_ss_data_url,
+    ready_photo_data_url: input.ready_photo_data_url || existing.ready_photo_data_url,
   });
 
   const balance = Math.max(0, input.total_amount - input.downpayment);
@@ -384,6 +390,7 @@ export async function updateFlowerOrderSupabase(
       photo_inspo_data_url: attachments.photo_inspo_data_url,
       proof_dp_data_url: attachments.proof_dp_data_url,
       order_form_ss_data_url: attachments.order_form_ss_data_url,
+      ready_photo_data_url: attachments.ready_photo_data_url || existing.ready_photo_data_url,
       created_by_id: input.created_by_id,
       created_by_name: input.created_by_name,
     })
@@ -418,6 +425,44 @@ export async function updateFlowerOrderSupabase(
   const updated = await fetchOrderById(input.id);
   if (!updated) {
     throw new Error('Order was updated but could not be loaded.');
+  }
+
+  return updated;
+}
+
+export async function updateFlowerOrderReadyPhotoSupabase(
+  orderId: string,
+  readyPhotoDataUrl: string,
+): Promise<FlowerOrder> {
+  const supabase = await requireAuthenticatedSupabaseClient();
+  const existing = await fetchOrderById(orderId);
+
+  if (!existing) {
+    throw new Error('Order not found.');
+  }
+
+  if (!readyPhotoDataUrl) {
+    throw new Error('Finished order photo is required.');
+  }
+
+  const ready_photo_data_url = await resolveOrderAttachmentUrl(
+    readyPhotoDataUrl,
+    orderId,
+    'ready-photo',
+  );
+
+  const { error } = await supabase
+    .from('flower_orders')
+    .update({ ready_photo_data_url })
+    .eq('id', orderId);
+
+  if (error) {
+    throw error;
+  }
+
+  const updated = await fetchOrderById(orderId);
+  if (!updated) {
+    throw new Error('Order photo was saved but could not be loaded.');
   }
 
   return updated;

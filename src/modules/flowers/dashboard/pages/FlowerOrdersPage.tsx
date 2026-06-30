@@ -6,6 +6,7 @@ import {
   getFlowerOrder,
   listFlowerOrders,
   updateFlowerOrder,
+  updateFlowerOrderReadyPhoto,
   updateFlowerOrderStatus,
 } from '../../../../services/flowers/orders';
 import { listFlowerProducts } from '../../../../services/flowers/products';
@@ -582,8 +583,14 @@ export default function FlowerOrdersPage() {
   async function handleStatusChange(orderId: string, status: FlowerOrder['status']) {
     await updateFlowerOrderStatus(orderId, status);
     await loadData();
-    const refreshed = (await listFlowerOrders()).find((order) => order.id === orderId) ?? null;
+    const refreshed = (await getFlowerOrder(orderId)) ?? null;
     setSelectedOrder(refreshed);
+  }
+
+  async function handleReadyPhotoSubmit(orderId: string, readyPhotoDataUrl: string) {
+    const updated = await updateFlowerOrderReadyPhoto(orderId, readyPhotoDataUrl);
+    await loadData();
+    setSelectedOrder(updated);
   }
 
   const monthLabel = cursorMonth.toLocaleDateString('en-PH', {
@@ -888,6 +895,7 @@ export default function FlowerOrdersPage() {
           onClose={() => setFormOpen(false)}
           onSubmit={handleCreate}
           onStatusChange={handleStatusChange}
+          onReadyPhotoSubmit={handleReadyPhotoSubmit}
           branches={branches}
           products={products}
           initialPickupIso={initialPickupIso}

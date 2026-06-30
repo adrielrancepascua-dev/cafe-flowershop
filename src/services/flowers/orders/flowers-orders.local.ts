@@ -179,6 +179,7 @@ function buildOrderFromInput(
     photo_inspo_data_url: input.photo_inspo_data_url,
     proof_dp_data_url: input.proof_dp_data_url,
     order_form_ss_data_url: input.order_form_ss_data_url,
+    ready_photo_data_url: input.ready_photo_data_url ?? existing?.ready_photo_data_url ?? '',
     created_at: existing?.created_at ?? new Date().toISOString(),
     created_by_id: input.created_by_id,
     created_by_name: input.created_by_name,
@@ -245,6 +246,33 @@ function buildCreditFromOrderItems(
   }
 
   return credit;
+}
+
+export async function updateFlowerOrderReadyPhotoLocal(
+  orderId: string,
+  readyPhotoDataUrl: string,
+): Promise<FlowerOrder> {
+  const orders = readOrdersFromStorage();
+  const index = orders.findIndex((order) => order.id === orderId);
+
+  if (index === -1) {
+    throw new Error('Order not found.');
+  }
+
+  if (!readyPhotoDataUrl) {
+    throw new Error('Finished order photo is required.');
+  }
+
+  const updated: FlowerOrder = {
+    ...orders[index],
+    ready_photo_data_url: readyPhotoDataUrl,
+    items: orders[index].items.map((item) => ({ ...item })),
+  };
+
+  orders[index] = updated;
+  writeOrdersToStorage(orders);
+
+  return updated;
 }
 
 export async function updateFlowerOrderStatusLocal(
