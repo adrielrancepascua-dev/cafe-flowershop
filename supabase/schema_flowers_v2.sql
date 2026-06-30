@@ -195,6 +195,11 @@ create policy "flower_order_attachments_select"
   to authenticated
   using (bucket_id = 'order-attachments');
 
+create policy "flower_order_attachments_public_read"
+  on storage.objects for select
+  to public
+  using (bucket_id = 'order-attachments');
+
 create policy "flower_order_attachments_insert"
   on storage.objects for insert
   to authenticated

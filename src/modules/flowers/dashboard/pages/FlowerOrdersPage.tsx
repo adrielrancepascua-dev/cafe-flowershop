@@ -3,6 +3,7 @@ import { CalendarDays, ChevronUp, List } from 'lucide-react';
 import { listFlowerBranches } from '../../../../services/flowers/inventory';
 import {
   createFlowerOrder,
+  getFlowerOrder,
   listFlowerOrders,
   updateFlowerOrder,
   updateFlowerOrderStatus,
@@ -521,10 +522,19 @@ export default function FlowerOrdersPage() {
     setFormOpen(true);
   }
 
-  function openExistingOrder(order: FlowerOrder) {
-    setSelectedOrder(order);
+  async function openExistingOrder(order: FlowerOrder) {
     setInitialPickupIso(undefined);
     setFormOpen(true);
+    setSelectedOrder(order);
+
+    try {
+      const fresh = await getFlowerOrder(order.id);
+      if (fresh) {
+        setSelectedOrder(fresh);
+      }
+    } catch {
+      setSelectedOrder(order);
+    }
   }
 
   async function handleCreate(input: Parameters<typeof createFlowerOrder>[0]) {

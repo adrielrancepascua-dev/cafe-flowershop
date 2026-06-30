@@ -16,6 +16,7 @@ import {
   readFileAsDataUrl,
   toDateInputValue,
 } from '../../shared/utils/flower-format';
+import OrderAttachmentPreview from './OrderAttachmentPreview';
 
 type LineDraft = {
   rowId: string;
@@ -170,7 +171,7 @@ export default function FlowerOrderFormModal({
   }, [open, form.branch_id]);
 
   const creditByProductId = useMemo(() => {
-    if (!existingOrder?.inventory_deducted || existingOrder.branch_id !== form.branch_id) {
+    if (!existingOrder || existingOrder.branch_id !== form.branch_id) {
       return {};
     }
 
@@ -261,6 +262,10 @@ export default function FlowerOrderFormModal({
         const max = Math.max(0, onHand + credit - usedElsewhere);
 
         if (max <= 0) {
+          if (existingOrder && row.quantity && Number(row.quantity) > 0) {
+            return row;
+          }
+
           return { ...row, quantity: '0' };
         }
 
@@ -272,7 +277,7 @@ export default function FlowerOrderFormModal({
         return { ...row, quantity: String(max) };
       }),
     );
-  }, [stockByProductId, creditByProductId, form.branch_id, open, stockLoading]);
+  }, [stockByProductId, creditByProductId, form.branch_id, open, stockLoading, existingOrder]);
 
   const balance = useMemo(() => {
     const total = totalAmountDraft === '' ? 0 : Number(totalAmountDraft);
@@ -285,7 +290,10 @@ export default function FlowerOrderFormModal({
   }, [totalAmountDraft, downpaymentDraft]);
 
   const activeProducts = useMemo(
-    () => products.filter((product) => product.is_active),
+    () =>
+      products
+        .filter((product) => product.is_active)
+        .sort((left, right) => left.name.localeCompare(right.name)),
     [products],
   );
 
@@ -776,6 +784,7 @@ export default function FlowerOrderFormModal({
                 className="mt-1.5 block w-full text-xs"
                 required={!form.photo_inspo_data_url}
               />
+              <OrderAttachmentPreview label="Current inspo photo" value={form.photo_inspo_data_url} />
             </label>
             <label className="block text-sm font-medium text-brand-brown">
               Proof of DP
@@ -791,6 +800,7 @@ export default function FlowerOrderFormModal({
                 className="mt-1.5 block w-full text-xs"
                 required={requiresDownpaymentProof && !form.proof_dp_data_url}
               />
+              <OrderAttachmentPreview label="Current DP proof" value={form.proof_dp_data_url} />
             </label>
             <label className="block text-sm font-medium text-brand-brown">
               SS of order form
@@ -803,6 +813,7 @@ export default function FlowerOrderFormModal({
                 className="mt-1.5 block w-full text-xs"
                 required={!form.order_form_ss_data_url}
               />
+              <OrderAttachmentPreview label="Current order form SS" value={form.order_form_ss_data_url} />
             </label>
           </div>
 
