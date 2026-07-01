@@ -63,7 +63,8 @@
 
 @media print {
   @page {
-    margin: 12mm;
+    size: 80mm auto;
+    margin: 2mm;
   }
 
   body {
@@ -87,12 +88,110 @@
     display: none !important;
   }
 
-  #flower-printable-sales-report {
-    break-inside: avoid;
+  .flower-thermal-print-root {
+    display: block !important;
+    width: 80mm;
+    max-width: 80mm;
+    margin: 0 auto;
+    padding: 0;
+    background: white !important;
   }
 
-  #flower-printable-inventory-stock {
-    break-inside: avoid;
+  .flower-thermal-print {
+    width: 72mm;
+    max-width: 72mm;
+    margin: 0 auto;
+    font-family: Arial, Helvetica, sans-serif;
+    font-size: 11px;
+    line-height: 1.35;
+    color: #000 !important;
+    background: white !important;
+  }
+
+  .flower-thermal-print * {
+    color: #000 !important;
+    background: transparent !important;
+    box-shadow: none !important;
+    border-color: #000 !important;
+  }
+
+  .flower-thermal-slip {
+    padding: 3mm 0 8mm;
+    page-break-after: always;
+    break-after: page;
+  }
+
+  .flower-thermal-slip:last-child {
+    page-break-after: auto;
+    break-after: auto;
+  }
+
+  .flower-thermal-brand,
+  .flower-thermal-order-ref,
+  .flower-thermal-fulfillment,
+  .flower-thermal-section-title,
+  .flower-thermal-bold {
+    font-weight: 700;
+  }
+
+  .flower-thermal-brand,
+  .flower-thermal-order-ref,
+  .flower-thermal-fulfillment,
+  .flower-thermal-date,
+  .flower-thermal-time,
+  .flower-thermal-branch,
+  .flower-thermal-section-title,
+  .flower-thermal-line,
+  .flower-thermal-stock-line {
+    margin: 0;
+    text-align: left;
+    letter-spacing: 0.01em;
+  }
+
+  .flower-thermal-order-ref {
+    font-size: 13px;
+  }
+
+  .flower-thermal-fulfillment,
+  .flower-thermal-date,
+  .flower-thermal-time {
+    font-size: 12px;
+  }
+
+  .flower-thermal-section-title {
+    margin-top: 3mm;
+    font-size: 11px;
+    text-transform: uppercase;
+  }
+
+  .flower-thermal-line {
+    margin-top: 1.5mm;
+    font-size: 11px;
+    text-transform: uppercase;
+  }
+
+  .flower-thermal-wrap {
+    white-space: pre-wrap;
+    text-transform: uppercase;
+  }
+
+  .flower-thermal-stock-line {
+    display: flex;
+    justify-content: space-between;
+    gap: 3mm;
+    margin-top: 1.5mm;
+    font-size: 11px;
+    text-transform: uppercase;
+  }
+
+  .flower-thermal-divider {
+    height: 0;
+    margin: 3mm 0;
+    border-top: 1px dashed #000;
+  }
+
+  .flower-thermal-block + .flower-thermal-block {
+    margin-top: 3mm;
   }
 
   .break-inside-avoid {

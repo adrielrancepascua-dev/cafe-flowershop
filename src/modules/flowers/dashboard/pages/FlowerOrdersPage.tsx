@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { CalendarDays, ChevronUp, List } from 'lucide-react';
+import { CalendarDays, ChevronUp, List, Printer } from 'lucide-react';
 import { listFlowerBranches } from '../../../../services/flowers/inventory';
 import {
   createFlowerOrder,
@@ -17,6 +17,7 @@ import type { FlowerBranchOption } from '../../shared/types/flower-inventory';
 import type { FlowerProduct } from '../../shared/types/flower-product';
 import FlowerPageHeader from '../../shared/components/FlowerPageHeader';
 import FlowerMobileCardList from '../../shared/components/FlowerMobileCardList';
+import { FlowerThermalDailyOrdersDocument } from '../../shared/components/FlowerThermalPrint';
 import FlowerOrderFormModal from '../components/FlowerOrderFormModal';
 import OrderDeadlineAlertsPanel from '../components/OrderDeadlineAlertsPanel';
 import OrderDeadlineBadge from '../components/OrderDeadlineBadge';
@@ -113,11 +114,13 @@ function DayOrdersPanelHeader({
   orderCount,
   onClose,
   onNewOrder,
+  onPrint,
 }: {
   selectedDayLabel: string;
   orderCount: number;
   onClose: () => void;
   onNewOrder: () => void;
+  onPrint?: () => void;
 }) {
   return (
     <div className="shrink-0 border-b border-brand-muted/30 px-4 py-3">
@@ -134,7 +137,17 @@ function DayOrdersPanelHeader({
           </p>
         </div>
       </div>
-      <div className="mt-3 flex gap-2">
+      <div className="mt-3 flex flex-wrap gap-2">
+        {orderCount > 0 && onPrint ? (
+          <button
+            type="button"
+            className="flower-btn-secondary inline-flex flex-1 items-center justify-center gap-1.5 py-2 text-xs"
+            onClick={onPrint}
+          >
+            <Printer className="h-3.5 w-3.5" />
+            Print day
+          </button>
+        ) : null}
         <button type="button" className="flower-btn-secondary flex-1 py-2 text-xs" onClick={onClose}>
           Close
         </button>
@@ -177,6 +190,7 @@ function MobileDayOrdersSheet({
   onCollapse,
   onNewOrder,
   onSelectOrder,
+  onPrint,
 }: {
   phase: MobileSheetPhase;
   selectedDayLabel: string;
@@ -187,6 +201,7 @@ function MobileDayOrdersSheet({
   onCollapse: () => void;
   onNewOrder: () => void;
   onSelectOrder: (order: FlowerOrder) => void;
+  onPrint?: () => void;
 }) {
   const sheetRef = useRef<HTMLDivElement>(null);
   const dragZoneRef = useRef<HTMLDivElement>(null);
@@ -421,6 +436,7 @@ function MobileDayOrdersSheet({
               orderCount={orders.length}
               onClose={onClose}
               onNewOrder={onNewOrder}
+              onPrint={onPrint}
             />
             <div className="flower-scroll min-h-0 flex-1 touch-pan-y overflow-y-auto overscroll-contain pb-[calc(4.5rem+env(safe-area-inset-bottom))]">
               <DayOrderList orders={orders} onSelectOrder={onSelectOrder} nowMs={nowMs} />
@@ -654,8 +670,44 @@ export default function FlowerOrdersPage() {
       })
     : '';
 
+  const printableOrders = useMemo(() => {
+    if (viewMode === 'calendar' && selectedDateKey) {
+      return selectedDayOrders;
+    }
+
+    if (viewMode === 'list') {
+      return [...orders].sort(
+        (left, right) =>
+          new Date(left.scheduled_for).getTime() - new Date(right.scheduled_for).getTime(),
+      );
+    }
+
+    return [];
+  }, [orders, selectedDateKey, selectedDayOrders, viewMode]);
+
+  const printableOrdersLabel = useMemo(() => {
+    if (viewMode === 'calendar' && selectedDateKey) {
+      return selectedDayLabel;
+    }
+
+    if (viewMode === 'list') {
+      if (branchFilter === 'all') {
+        return 'All orders';
+      }
+
+      return `${branches.find((branch) => branch.id === branchFilter)?.name ?? 'Branch'} orders`;
+    }
+
+    return '';
+  }, [branchFilter, branches, selectedDateKey, selectedDayLabel, viewMode]);
+
+  function handlePrintOrders() {
+    window.print();
+  }
+
   return (
     <div className="animate-fade-in">
+      <div className="print:hidden">
       <FlowerPageHeader
         label="Daily Orders"
         title="Orders"
@@ -702,6 +754,17 @@ export default function FlowerOrdersPage() {
         >
           New order
         </button>
+
+        {!loading && printableOrders.length > 0 ? (
+          <button
+            type="button"
+            className="flower-btn-secondary inline-flex items-center gap-1.5"
+            onClick={handlePrintOrders}
+          >
+            <Printer className="h-4 w-4" />
+            {viewMode === 'calendar' ? 'Print day' : 'Print orders'}
+          </button>
+        ) : null}
       </div>
 
       {!loading ? (
@@ -814,6 +877,7 @@ export default function FlowerOrdersPage() {
                   orderCount={selectedDayOrders.length}
                   onClose={closeDaySheet}
                   onNewOrder={openNewOrderForSelectedDate}
+                  onPrint={handlePrintOrders}
                 />
                 <DayOrderList
                   orders={selectedDayOrders}
@@ -833,6 +897,7 @@ export default function FlowerOrdersPage() {
                   onCollapse={collapseMobileDaySheet}
                   onNewOrder={openNewOrderForSelectedDate}
                   onSelectOrder={openExistingOrder}
+                  onPrint={handlePrintOrders}
                 />
               ) : null}
             </>
@@ -983,6 +1048,14 @@ export default function FlowerOrdersPage() {
           staffId={user.id}
           staffName={user.display_name}
           isSubmitting={isSubmitting}
+        />
+      ) : null}
+      </div>
+
+      {printableOrders.length > 0 ? (
+        <FlowerThermalDailyOrdersDocument
+          dayLabel={printableOrdersLabel}
+          orders={printableOrders}
         />
       ) : null}
     </div>

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   adjustFlowerInventory,
   listFlowerBranches,
@@ -184,9 +184,18 @@ export default function FlowerInventoryPage() {
   const [activeTab, setActiveTab] = useState<InventoryTab>('stock');
   const [fromBranchStock, setFromBranchStock] = useState<FlowerInventoryStockRow[]>([]);
   const [fromBranchStockLoading, setFromBranchStockLoading] = useState(false);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const isFirstLoadRef = useRef(true);
 
   async function loadData() {
-    setLoading(true);
+    const isFirstLoad = isFirstLoadRef.current;
+
+    if (isFirstLoad) {
+      setLoading(true);
+    } else {
+      setIsRefreshing(true);
+    }
+
     try {
       const stockBranchId = selectedBranchId === 'all' ? undefined : selectedBranchId;
       const movementBranchId =
@@ -203,6 +212,8 @@ export default function FlowerInventoryPage() {
       setErrorMessage(error instanceof Error ? error.message : 'Failed to load inventory.');
     } finally {
       setLoading(false);
+      setIsRefreshing(false);
+      isFirstLoadRef.current = false;
     }
   }
 
@@ -391,7 +402,7 @@ export default function FlowerInventoryPage() {
         <p className="mt-3 text-sm text-red-700">{errorMessage}</p>
       ) : null}
 
-      {loading ? (
+      {loading && stockRows.length === 0 ? (
         <p className="mt-6 text-sm text-brand-brown/60">Loading inventory...</p>
       ) : activeTab === 'transfer' && isAdmin ? (
         <>
@@ -559,6 +570,7 @@ export default function FlowerInventoryPage() {
               {isAllBranchesView
                 ? `Showing combined totals for all branches (${totalUnitsOnHand} units on hand).`
                 : `Showing stock for ${selectedBranchName} (${totalUnitsOnHand} units on hand).`}
+              {isRefreshing ? ' · Updating…' : ''}
             </p>
           </div>
 
@@ -691,8 +703,7 @@ export default function FlowerInventoryPage() {
         <FlowerInventoryStockPrint
           branchId={selectedBranchId}
           branchLabel={selectedBranchName}
-          disabled={loading}
-          controlsOnly
+          disabled={loading && stockRows.length === 0}
         />
       ) : null}
     </div>
