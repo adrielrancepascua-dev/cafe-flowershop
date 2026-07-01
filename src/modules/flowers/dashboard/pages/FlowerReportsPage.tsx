@@ -116,6 +116,7 @@ export default function FlowerReportsPage() {
         dailyDays: isAdmin ? undefined : 1,
         monthlyMonths: isAdmin ? undefined : 0,
         advanceLimit: isAdmin ? undefined : 0,
+        audience: isAdmin ? 'admin' : 'staff',
       });
       setReportsData(data);
       await loadSupplierCosts();
@@ -239,8 +240,8 @@ export default function FlowerReportsPage() {
           isAdmin
             ? 'Net income = total sales − staff expenses − supplier costs. Pick any date to review history.'
             : staffBranchName
-              ? `Today's ${staffBranchName} totals only. Unlocks after all orders for this branch on ${formatReportDateLabel(staffReportDate)} are closed.`
-              : `Today's totals only. Unlocks after all orders for your branch on ${formatReportDateLabel(staffReportDate)} are closed.`
+              ? `Today's ${staffBranchName} sales and logged expenses. Supplier costs and net income are owner-only.`
+              : `Today's sales and logged expenses for your branch. Supplier costs and net income are owner-only.`
         }
       />
 
@@ -284,11 +285,15 @@ export default function FlowerReportsPage() {
         <p className="mt-6 text-sm text-brand-brown/60">Loading reports...</p>
       ) : !blockedMessage ? (
         <>
-          <div className="mt-5 grid grid-cols-2 gap-3 lg:grid-cols-4">
+          <div className={`mt-5 grid grid-cols-2 gap-3 ${isAdmin ? 'lg:grid-cols-4' : ''}`}>
             <MetricCard label="Total sales" value={PRICE_FORMATTER.format(reportsData.financial.total_sales)} />
             <MetricCard label="Staff expenses" value={PRICE_FORMATTER.format(reportsData.financial.staff_expenses)} />
-            <MetricCard label="Supplier costs" value={PRICE_FORMATTER.format(reportsData.financial.supplier_costs)} />
-            <MetricCard label="Net income" value={PRICE_FORMATTER.format(reportsData.financial.net_income)} accent />
+            {isAdmin ? (
+              <>
+                <MetricCard label="Supplier costs" value={PRICE_FORMATTER.format(reportsData.financial.supplier_costs)} />
+                <MetricCard label="Net income" value={PRICE_FORMATTER.format(reportsData.financial.net_income)} accent />
+              </>
+            ) : null}
           </div>
 
           {isAdmin ? (

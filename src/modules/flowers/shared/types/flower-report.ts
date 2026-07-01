@@ -44,6 +44,8 @@ export interface FlowerReportsOptions {
   monthlyMonths?: number;
   advanceLimit?: number;
   reportDate?: string;
+  /** When staff, supplier costs and net income are omitted. */
+  audience?: 'admin' | 'staff';
 }
 
 export interface FlowerDayCloseStatus {

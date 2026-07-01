@@ -11,7 +11,14 @@ import {
   type FlowerClaimMode,
   type FlowerOrder,
   type FlowerOrderStatus,
+  type FlowerPaymentMode,
 } from '../../shared/types/flower-order';
+import {
+  FLOWER_PAYMENT_MODES,
+  FLOWER_PAYMENT_MODE_LABELS,
+  formatFlowerPaymentModeLabel,
+  normalizeFlowerPaymentMode,
+} from '../../shared/utils/flower-payment';
 import {
   ORDER_STATUS_LABELS,
   PRICE_FORMATTER,
@@ -39,6 +46,7 @@ type OrderFormProps = {
   onSubmit: (input: CreateFlowerOrderInput) => Promise<void>;
   onStatusChange?: (orderId: string, status: FlowerOrderStatus) => Promise<void>;
   onReadyPhotoSubmit?: (orderId: string, readyPhotoDataUrl: string) => Promise<void>;
+  onBalancePaid?: (orderId: string, balancePaymentMode: FlowerPaymentMode) => Promise<void>;
   branches: FlowerBranchOption[];
   products: FlowerProduct[];
   initialPickupIso?: string;
@@ -122,6 +130,7 @@ function emptyForm(
     greeting_card: '',
     special_instructions: '',
     downpayment: 0,
+    payment_mode: 'cash',
     payment_reference: '',
     total_amount: 0,
     notes: '',
@@ -141,6 +150,7 @@ export default function FlowerOrderFormModal({
   onSubmit,
   onStatusChange,
   onReadyPhotoSubmit,
+  onBalancePaid,
   branches,
   products,
   initialPickupIso,
@@ -160,6 +170,9 @@ export default function FlowerOrderFormModal({
   const [stockLoading, setStockLoading] = useState(false);
   const [statusDraft, setStatusDraft] = useState<FlowerOrderStatus>('not_started');
   const [statusMessage, setStatusMessage] = useState('');
+  const [balancePaymentMode, setBalancePaymentMode] = useState<FlowerPaymentMode>('cash');
+  const [balancePaidMessage, setBalancePaidMessage] = useState('');
+  const [isMarkingBalancePaid, setIsMarkingBalancePaid] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
   const [isEditMode, setIsEditMode] = useState(false);
   const [deadlineNowMs, setDeadlineNowMs] = useState(() => Date.now());
@@ -192,6 +205,7 @@ export default function FlowerOrderFormModal({
       greeting_card: order.greeting_card,
       special_instructions: order.special_instructions,
       downpayment: order.downpayment,
+      payment_mode: normalizeFlowerPaymentMode(order.payment_mode),
       payment_reference: order.payment_reference,
       total_amount: order.total_amount,
       notes: order.notes,
@@ -675,8 +689,39 @@ export default function FlowerOrderFormModal({
     }
   }
 
+  async function handleMarkBalancePaid() {
+    if (!existingOrder || !onBalancePaid) {
+      return;
+    }
+
+    setIsMarkingBalancePaid(true);
+    setBalancePaidMessage('');
+
+    try {
+      await onBalancePaid(existingOrder.id, balancePaymentMode);
+      setBalancePaidMessage('Balance marked as paid.');
+      setStatusMessage('');
+    } catch (error) {
+      setBalancePaidMessage(
+        error instanceof Error ? error.message : 'Could not mark balance as paid.',
+      );
+    } finally {
+      setIsMarkingBalancePaid(false);
+    }
+  }
+
   async function handleStatusSelect(nextStatus: FlowerOrderStatus) {
     if (!existingOrder || !onStatusChange) {
+      return;
+    }
+
+    if (
+      (nextStatus === 'picked_up' || nextStatus === 'delivered') &&
+      existingOrder.balance > 0 &&
+      !existingOrder.balance_paid
+    ) {
+      setStatusDraft(normalizeOrderStatusForPicker(existingOrder.status, existingOrder.claim_mode));
+      setStatusMessage('Mark the remaining balance as paid before completing this order.');
       return;
     }
 
@@ -1250,6 +1295,83 @@ export default function FlowerOrderFormModal({
               />
             </label>
           </div>
+
+          <label className="mt-3 block text-sm font-medium text-brand-brown">
+            Mode of payment (downpayment)
+            {isViewMode ? (
+              <p className={`flower-input mt-1.5 ${readOnlyFieldClass}`}>
+                {formatFlowerPaymentModeLabel(form.payment_mode)}
+              </p>
+            ) : (
+              <select
+                value={form.payment_mode}
+                onChange={(event) =>
+                  updateField('payment_mode', event.target.value as FlowerPaymentMode)
+                }
+                className="flower-input mt-1.5"
+                required
+              >
+                {FLOWER_PAYMENT_MODES.map((mode) => (
+                  <option key={mode} value={mode}>
+                    {FLOWER_PAYMENT_MODE_LABELS[mode]}
+                  </option>
+                ))}
+              </select>
+            )}
+          </label>
+
+          {existingOrder && existingOrder.balance > 0 && !existingOrder.balance_paid ? (
+            <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50 p-4">
+              <p className="text-sm font-semibold text-amber-950">Balance due at pick up / delivery</p>
+              <p className="mt-1 text-sm text-amber-900">
+                {PRICE_FORMATTER.format(existingOrder.balance)} remaining — collect before marking picked up or
+                delivered.
+              </p>
+              {onBalancePaid ? (
+                <div className="mt-3 flex flex-col gap-3 sm:flex-row sm:items-end">
+                  <label className="block flex-1 text-sm font-medium text-amber-950">
+                    Balance payment mode
+                    <select
+                      value={balancePaymentMode}
+                      onChange={(event) =>
+                        setBalancePaymentMode(event.target.value as FlowerPaymentMode)
+                      }
+                      className="flower-input mt-1.5 bg-white"
+                    >
+                      {FLOWER_PAYMENT_MODES.map((mode) => (
+                        <option key={mode} value={mode}>
+                          {FLOWER_PAYMENT_MODE_LABELS[mode]}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <button
+                    type="button"
+                    onClick={() => void handleMarkBalancePaid()}
+                    disabled={isMarkingBalancePaid}
+                    className="flower-btn-primary shrink-0"
+                  >
+                    {isMarkingBalancePaid ? 'Saving...' : 'Mark balance paid'}
+                  </button>
+                </div>
+              ) : null}
+              {balancePaidMessage ? (
+                <p
+                  className={`mt-2 text-sm ${balancePaidMessage.includes('paid') ? 'text-emerald-800' : 'text-red-700'}`}
+                >
+                  {balancePaidMessage}
+                </p>
+              ) : null}
+            </div>
+          ) : existingOrder?.balance_paid ? (
+            <p className="mt-4 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-900">
+              Balance paid
+              {existingOrder.balance_payment_mode
+                ? ` via ${formatFlowerPaymentModeLabel(existingOrder.balance_payment_mode)}`
+                : ''}
+              .
+            </p>
+          ) : null}
 
           <label className="mt-3 block text-sm font-medium text-brand-brown">
             Reference #

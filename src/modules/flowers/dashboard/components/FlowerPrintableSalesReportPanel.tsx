@@ -46,6 +46,7 @@ export default function FlowerPrintableSalesReportPanel({
       anchorDate,
       period: effectivePeriod,
       branchId,
+      audience: isAdmin ? 'admin' : 'staff',
     })
       .then(setReport)
       .catch((error) => {
@@ -107,7 +108,9 @@ export default function FlowerPrintableSalesReportPanel({
         </div>
       </section>
 
-      {report ? <FlowerThermalSalesReportDocument report={report} /> : null}
+      {report ? (
+        <FlowerThermalSalesReportDocument report={report} showProfitDetails={isAdmin} />
+      ) : null}
     </>
   );
 }

@@ -8,6 +8,8 @@ export type FlowerOrderStatus =
 
 export type FlowerClaimMode = 'pickup' | 'delivery';
 
+export type FlowerPaymentMode = 'cash' | 'gcash' | 'bank';
+
 export const FLOWER_ORDER_TERMINAL_STATUSES: FlowerOrderStatus[] = [
   'picked_up',
   'delivered',
@@ -57,9 +59,12 @@ export interface FlowerOrder {
   greeting_card: string;
   special_instructions: string;
   downpayment: number;
+  payment_mode: FlowerPaymentMode;
   payment_reference: string;
   total_amount: number;
   balance: number;
+  balance_paid: boolean;
+  balance_payment_mode: FlowerPaymentMode | '';
   notes: string;
   photo_inspo_data_url: string;
   proof_dp_data_url: string;
@@ -88,6 +93,7 @@ export interface CreateFlowerOrderInput {
   greeting_card: string;
   special_instructions: string;
   downpayment: number;
+  payment_mode: FlowerPaymentMode;
   payment_reference: string;
   total_amount: number;
   notes: string;

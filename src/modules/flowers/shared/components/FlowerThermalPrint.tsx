@@ -14,6 +14,7 @@ import {
   formatThermalTimeLine,
 } from '../utils/flower-thermal-format';
 import { ORDER_STATUS_LABELS, PRICE_FORMATTER } from '../utils/flower-format';
+import { formatFlowerPaymentModeLabel } from '../utils/flower-payment';
 
 type FlowerThermalPrintRootProps = {
   id?: string;
@@ -74,6 +75,14 @@ export function FlowerThermalOrderSlip({ order }: { order: FlowerOrder }) {
       <p className="flower-thermal-line">TOTAL: {PRICE_FORMATTER.format(order.total_amount)}</p>
       <p className="flower-thermal-line">DOWN: {PRICE_FORMATTER.format(order.downpayment)}</p>
       <p className="flower-thermal-line">BALANCE: {PRICE_FORMATTER.format(order.balance)}</p>
+      <p className="flower-thermal-line">
+        DP VIA: {formatFlowerPaymentModeLabel(order.payment_mode).toUpperCase()}
+      </p>
+      {order.balance_paid && order.balance_payment_mode ? (
+        <p className="flower-thermal-line">
+          BAL VIA: {formatFlowerPaymentModeLabel(order.balance_payment_mode).toUpperCase()}
+        </p>
+      ) : null}
       {order.payment_reference.trim() ? (
         <p className="flower-thermal-line">REF: {order.payment_reference.trim().toUpperCase()}</p>
       ) : null}
@@ -261,8 +270,10 @@ export function FlowerThermalInventoryStockDocument({
 
 export function FlowerThermalSalesReportDocument({
   report,
+  showProfitDetails = true,
 }: {
   report: FlowerPrintableSalesReport;
+  showProfitDetails?: boolean;
 }) {
   return (
     <FlowerThermalPrintRoot id="flower-printable-sales-report">
@@ -284,12 +295,16 @@ export function FlowerThermalSalesReportDocument({
             <p className="flower-thermal-line">
               STAFF EXP: {PRICE_FORMATTER.format(branch.staff_expenses)}
             </p>
-            <p className="flower-thermal-line">
-              SUPPLIER: {PRICE_FORMATTER.format(branch.supplier_costs)}
-            </p>
-            <p className="flower-thermal-line flower-thermal-bold">
-              NET: {PRICE_FORMATTER.format(branch.net_income)}
-            </p>
+            {showProfitDetails ? (
+              <>
+                <p className="flower-thermal-line">
+                  SUPPLIER: {PRICE_FORMATTER.format(branch.supplier_costs)}
+                </p>
+                <p className="flower-thermal-line flower-thermal-bold">
+                  NET: {PRICE_FORMATTER.format(branch.net_income)}
+                </p>
+              </>
+            ) : null}
           </div>
         ))}
 
@@ -301,12 +316,16 @@ export function FlowerThermalSalesReportDocument({
         <p className="flower-thermal-line">
           STAFF EXP: {PRICE_FORMATTER.format(report.totals.staff_expenses)}
         </p>
-        <p className="flower-thermal-line">
-          SUPPLIER: {PRICE_FORMATTER.format(report.totals.supplier_costs)}
-        </p>
-        <p className="flower-thermal-line flower-thermal-bold">
-          NET: {PRICE_FORMATTER.format(report.totals.net_income)}
-        </p>
+        {showProfitDetails ? (
+          <>
+            <p className="flower-thermal-line">
+              SUPPLIER: {PRICE_FORMATTER.format(report.totals.supplier_costs)}
+            </p>
+            <p className="flower-thermal-line flower-thermal-bold">
+              NET: {PRICE_FORMATTER.format(report.totals.net_income)}
+            </p>
+          </>
+        ) : null}
       </section>
 
       {report.branches.flatMap((branch) =>

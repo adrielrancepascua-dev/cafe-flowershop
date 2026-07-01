@@ -8,6 +8,8 @@ import type {
   UpdateFlowerOrderInput,
 } from '../../../modules/flowers/shared/types/flower-order';
 import { getLocalDayBoundsIso } from '../../../modules/flowers/shared/utils/flower-format';
+import { normalizeFlowerPaymentMode } from '../../../modules/flowers/shared/utils/flower-payment';
+import type { FlowerPaymentMode } from '../../../modules/flowers/shared/types/flower-order';
 import {
   deductFlowerInventoryForOrderSupabase,
   listFlowerBranchesSupabase,
@@ -39,9 +41,12 @@ type OrderDbRow = {
   greeting_card: string;
   special_instructions: string;
   downpayment: number;
+  payment_mode?: string;
   payment_reference: string;
   total_amount: number;
   balance: number;
+  balance_paid?: boolean;
+  balance_payment_mode?: string;
   notes: string;
   photo_inspo_data_url: string;
   proof_dp_data_url: string;
@@ -67,9 +72,12 @@ const ORDER_SELECT = `
   greeting_card,
   special_instructions,
   downpayment,
+  payment_mode,
   payment_reference,
   total_amount,
   balance,
+  balance_paid,
+  balance_payment_mode,
   notes,
   photo_inspo_data_url,
   proof_dp_data_url,
@@ -126,9 +134,14 @@ function mapOrderRow(row: OrderDbRow): FlowerOrder {
     greeting_card: row.greeting_card ?? '',
     special_instructions: row.special_instructions ?? '',
     downpayment: Number(row.downpayment),
+    payment_mode: normalizeFlowerPaymentMode(row.payment_mode),
     payment_reference: row.payment_reference ?? '',
     total_amount: Number(row.total_amount),
     balance: Number(row.balance),
+    balance_paid: Boolean(row.balance_paid),
+    balance_payment_mode: row.balance_payment_mode
+      ? normalizeFlowerPaymentMode(row.balance_payment_mode)
+      : '',
     notes: row.notes ?? '',
     photo_inspo_data_url: row.photo_inspo_data_url ?? '',
     proof_dp_data_url: row.proof_dp_data_url ?? '',
@@ -299,9 +312,12 @@ export async function createFlowerOrderSupabase(
     greeting_card: input.greeting_card.trim(),
     special_instructions: input.special_instructions.trim(),
     downpayment: input.downpayment,
+    payment_mode: normalizeFlowerPaymentMode(input.payment_mode),
     payment_reference: input.payment_reference.trim(),
     total_amount: input.total_amount,
     balance,
+    balance_paid: balance === 0,
+    balance_payment_mode: '',
     notes: input.notes.trim(),
     photo_inspo_data_url: attachments.photo_inspo_data_url,
     proof_dp_data_url: attachments.proof_dp_data_url,
@@ -366,7 +382,10 @@ export async function updateFlowerOrderSupabase(
     ready_photo_data_url: input.ready_photo_data_url || existing.ready_photo_data_url,
   });
 
-  const balance = Math.max(0, input.total_amount - input.downpayment);
+  const nextBalance = existing.balance_paid
+    ? 0
+    : Math.max(0, input.total_amount - input.downpayment);
+  const nextDownpayment = existing.balance_paid ? input.total_amount : input.downpayment;
   const creditByProductId =
     existing.inventory_deducted && existing.branch_id === input.branch_id
       ? buildCreditFromOrderItems(existing.items)
@@ -385,10 +404,13 @@ export async function updateFlowerOrderSupabase(
       wrapper_color: input.wrapper_color.trim(),
       greeting_card: input.greeting_card.trim(),
       special_instructions: input.special_instructions.trim(),
-      downpayment: input.downpayment,
+      downpayment: nextDownpayment,
+      payment_mode: normalizeFlowerPaymentMode(input.payment_mode),
       payment_reference: input.payment_reference.trim(),
       total_amount: input.total_amount,
-      balance,
+      balance: nextBalance,
+      balance_paid: existing.balance_paid || nextBalance === 0,
+      balance_payment_mode: existing.balance_payment_mode,
       notes: input.notes.trim(),
       photo_inspo_data_url: attachments.photo_inspo_data_url,
       proof_dp_data_url: attachments.proof_dp_data_url,
@@ -497,6 +519,14 @@ export async function updateFlowerOrderStatusSupabase(
     throw new Error('Order not found.');
   }
 
+  if (
+    (status === 'picked_up' || status === 'delivered') &&
+    existing.balance > 0 &&
+    !existing.balance_paid
+  ) {
+    throw new Error('Mark the remaining balance as paid before completing this order.');
+  }
+
   const { error } = await supabase.from('flower_orders').update({ status }).eq('id', orderId);
 
   if (error) {
@@ -509,6 +539,43 @@ export async function updateFlowerOrderStatusSupabase(
   const updated = await fetchOrderById(orderId);
   if (!updated) {
     throw new Error('Order status was updated but could not be loaded.');
+  }
+
+  return updated;
+}
+
+export async function markFlowerOrderBalancePaidSupabase(
+  orderId: string,
+  balancePaymentMode: FlowerPaymentMode,
+): Promise<FlowerOrder> {
+  const supabase = await requireAuthenticatedSupabaseClient();
+  const existing = await fetchOrderById(orderId);
+
+  if (!existing) {
+    throw new Error('Order not found.');
+  }
+
+  if (existing.balance <= 0 || existing.balance_paid) {
+    throw new Error('This order has no remaining balance to collect.');
+  }
+
+  const { error } = await supabase
+    .from('flower_orders')
+    .update({
+      downpayment: existing.total_amount,
+      balance: 0,
+      balance_paid: true,
+      balance_payment_mode: balancePaymentMode,
+    })
+    .eq('id', orderId);
+
+  if (error) {
+    throw error;
+  }
+
+  const updated = await fetchOrderById(orderId);
+  if (!updated) {
+    throw new Error('Balance was updated but the order could not be loaded.');
   }
 
   return updated;

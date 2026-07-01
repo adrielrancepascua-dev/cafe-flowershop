@@ -5,9 +5,11 @@ import type {
   CreateFlowerOrderInput,
   FlowerOrder,
   FlowerOrderStatus,
+  FlowerPaymentMode,
   ListFlowerOrdersOptions,
   UpdateFlowerOrderInput,
 } from '../../../modules/flowers/shared/types/flower-order';
+import { normalizeFlowerPaymentMode } from '../../../modules/flowers/shared/utils/flower-payment';
 import { buildOrderId } from '../../orders/order-id';
 import {
   deductFlowerInventoryForOrderLocal,
@@ -50,7 +52,16 @@ function readOrdersFromStorage(): FlowerOrder[] {
     }
 
     const parsed = JSON.parse(raw) as FlowerOrder[];
-    return Array.isArray(parsed) ? parsed : [];
+    return Array.isArray(parsed)
+      ? parsed.map((order) => ({
+          ...order,
+          payment_mode: normalizeFlowerPaymentMode(order.payment_mode),
+          balance_paid: Boolean(order.balance_paid),
+          balance_payment_mode: order.balance_payment_mode
+            ? normalizeFlowerPaymentMode(order.balance_payment_mode)
+            : '',
+        }))
+      : [];
   } catch {
     return cloneOrders(FLOWER_ORDERS_SEED);
   }
@@ -157,7 +168,10 @@ function buildOrderFromInput(
   branchName: string,
   existing?: FlowerOrder,
 ): FlowerOrder {
-  const balance = Math.max(0, input.total_amount - input.downpayment);
+  const balance = existing?.balance_paid
+    ? 0
+    : Math.max(0, input.total_amount - input.downpayment);
+  const downpayment = existing?.balance_paid ? input.total_amount : input.downpayment;
 
   return {
     id: existing?.id ?? buildOrderId().replace('ORD-', 'PP-'),
@@ -171,10 +185,13 @@ function buildOrderFromInput(
     wrapper_color: input.wrapper_color.trim(),
     greeting_card: input.greeting_card.trim(),
     special_instructions: input.special_instructions.trim(),
-    downpayment: input.downpayment,
+    downpayment,
+    payment_mode: normalizeFlowerPaymentMode(input.payment_mode),
     payment_reference: input.payment_reference.trim(),
     total_amount: input.total_amount,
     balance,
+    balance_paid: existing?.balance_paid ?? balance === 0,
+    balance_payment_mode: existing?.balance_payment_mode ?? '',
     notes: input.notes.trim(),
     photo_inspo_data_url: input.photo_inspo_data_url,
     proof_dp_data_url: input.proof_dp_data_url,
@@ -300,6 +317,14 @@ export async function updateFlowerOrderStatusLocal(
 
   const current = orders[index];
 
+  if (
+    (status === 'picked_up' || status === 'delivered') &&
+    current.balance > 0 &&
+    !current.balance_paid
+  ) {
+    throw new Error('Mark the remaining balance as paid before completing this order.');
+  }
+
   const order: FlowerOrder = {
     ...current,
     status,
@@ -313,6 +338,36 @@ export async function updateFlowerOrderStatusLocal(
 
   const refreshed = readOrdersFromStorage().find((entry) => entry.id === orderId);
   return refreshed ?? order;
+}
+
+export async function markFlowerOrderBalancePaidLocal(
+  orderId: string,
+  balancePaymentMode: FlowerPaymentMode,
+): Promise<FlowerOrder> {
+  const orders = readOrdersFromStorage();
+  const index = orders.findIndex((order) => order.id === orderId);
+
+  if (index === -1) {
+    throw new Error('Order not found.');
+  }
+
+  const current = orders[index];
+  if (current.balance <= 0 || current.balance_paid) {
+    throw new Error('This order has no remaining balance to collect.');
+  }
+
+  const updated: FlowerOrder = {
+    ...current,
+    downpayment: current.total_amount,
+    balance: 0,
+    balance_paid: true,
+    balance_payment_mode: balancePaymentMode,
+    items: current.items.map((item) => ({ ...item })),
+  };
+
+  orders[index] = updated;
+  writeOrdersToStorage(orders);
+  return updated;
 }
 
 export async function getFlowerDayCloseStatusLocal(

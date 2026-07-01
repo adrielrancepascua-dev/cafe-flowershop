@@ -9,10 +9,11 @@ import {
   updateFlowerOrder,
   updateFlowerOrderReadyPhoto,
   updateFlowerOrderStatus,
+  markFlowerOrderBalancePaid,
 } from '../../../../services/flowers/orders';
 import { listFlowerProducts } from '../../../../services/flowers/products';
 import { useFlowerAuth } from '../../../../lib/auth/FlowerAuthContext';
-import type { FlowerOrder } from '../../shared/types/flower-order';
+import type { FlowerOrder, FlowerPaymentMode } from '../../shared/types/flower-order';
 import type { FlowerBranchOption } from '../../shared/types/flower-inventory';
 import type { FlowerProduct } from '../../shared/types/flower-product';
 import FlowerPageHeader from '../../shared/components/FlowerPageHeader';
@@ -643,6 +644,12 @@ export default function FlowerOrdersPage() {
     setSelectedOrder(updated);
   }
 
+  async function handleBalancePaid(orderId: string, balancePaymentMode: FlowerPaymentMode) {
+    const updated = await markFlowerOrderBalancePaid(orderId, balancePaymentMode);
+    await loadData();
+    setSelectedOrder(updated);
+  }
+
   function requestDeleteOrder(order: FlowerOrder) {
     setDeleteErrorMessage('');
     setOrderPendingDelete(order);
@@ -1122,6 +1129,7 @@ export default function FlowerOrdersPage() {
           onSubmit={handleCreate}
           onStatusChange={handleStatusChange}
           onReadyPhotoSubmit={handleReadyPhotoSubmit}
+          onBalancePaid={handleBalancePaid}
           branches={branches}
           products={products}
           initialPickupIso={initialPickupIso}

@@ -7,4 +7,5 @@ export {
   updateFlowerOrder,
   updateFlowerOrderReadyPhoto,
   updateFlowerOrderStatus,
+  markFlowerOrderBalancePaid,
 } from './flowers-orders.service';

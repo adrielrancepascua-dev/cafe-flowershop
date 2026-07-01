@@ -2,6 +2,7 @@ import type {
   CreateFlowerOrderInput,
   FlowerOrder,
   FlowerOrderStatus,
+  FlowerPaymentMode,
   ListFlowerOrdersOptions,
   UpdateFlowerOrderInput,
 } from '../../../modules/flowers/shared/types/flower-order';
@@ -15,6 +16,7 @@ import {
   updateFlowerOrderLocal,
   updateFlowerOrderReadyPhotoLocal,
   updateFlowerOrderStatusLocal,
+  markFlowerOrderBalancePaidLocal,
 } from './flowers-orders.local';
 
 async function withSupabaseOrders<T>(
@@ -100,6 +102,19 @@ export async function updateFlowerOrderStatus(
       return updateFlowerOrderStatusSupabase(orderId, status);
     },
     () => updateFlowerOrderStatusLocal(orderId, status),
+  );
+}
+
+export async function markFlowerOrderBalancePaid(
+  orderId: string,
+  balancePaymentMode: FlowerPaymentMode,
+): Promise<FlowerOrder> {
+  return withSupabaseOrders(
+    async () => {
+      const { markFlowerOrderBalancePaidSupabase } = await import('./flowers-orders.supabase');
+      return markFlowerOrderBalancePaidSupabase(orderId, balancePaymentMode);
+    },
+    () => markFlowerOrderBalancePaidLocal(orderId, balancePaymentMode),
   );
 }
 
