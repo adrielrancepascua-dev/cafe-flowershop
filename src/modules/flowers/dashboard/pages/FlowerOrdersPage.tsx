@@ -451,7 +451,8 @@ function MobileDayOrdersSheet({
 }
 
 export default function FlowerOrdersPage() {
-  const { user, isAdmin } = useFlowerAuth();
+  const { user, isAdmin, isLoading: authLoading } = useFlowerAuth();
+  const staffBranchId = !isAdmin ? user?.branch_id ?? null : null;
   const [viewMode, setViewMode] = useState<ViewMode>(() => {
     if (typeof window === 'undefined') {
       return 'calendar';
@@ -464,6 +465,7 @@ export default function FlowerOrdersPage() {
   const [branches, setBranches] = useState<FlowerBranchOption[]>([]);
   const [products, setProducts] = useState<FlowerProduct[]>([]);
   const [branchFilter, setBranchFilter] = useState('all');
+  const branchFilterInitializedRef = useRef(false);
   const [loading, setLoading] = useState(true);
   const [formOpen, setFormOpen] = useState(false);
   const [selectedOrder, setSelectedOrder] = useState<FlowerOrder | null>(null);
@@ -523,8 +525,20 @@ export default function FlowerOrdersPage() {
   }
 
   useEffect(() => {
+    if (authLoading) {
+      return;
+    }
+
+    if (!branchFilterInitializedRef.current) {
+      branchFilterInitializedRef.current = true;
+      if (staffBranchId) {
+        setBranchFilter(staffBranchId);
+        return;
+      }
+    }
+
     void loadData();
-  }, [branchFilter]);
+  }, [branchFilter, authLoading, staffBranchId]);
 
   const ordersByDate = useMemo(() => {
     const map = new Map<string, FlowerOrder[]>();

@@ -202,9 +202,11 @@ function StockAdjustControls({
 type InventoryTab = 'stock' | 'transfer';
 
 export default function FlowerInventoryPage() {
-  const { isAdmin, isLoading: authLoading } = useFlowerAuth();
+  const { user, isAdmin, isLoading: authLoading } = useFlowerAuth();
+  const staffBranchId = !isAdmin ? user?.branch_id ?? null : null;
   const [branches, setBranches] = useState<FlowerBranchOption[]>([]);
   const [selectedBranchId, setSelectedBranchId] = useState('all');
+  const branchFilterInitializedRef = useRef(false);
   const [stockRows, setStockRows] = useState<FlowerInventoryStockRow[]>([]);
   const [movementRows, setMovementRows] = useState<FlowerInventoryMovementRow[]>([]);
   const [loading, setLoading] = useState(true);
@@ -259,8 +261,16 @@ export default function FlowerInventoryPage() {
       return;
     }
 
+    if (!branchFilterInitializedRef.current) {
+      branchFilterInitializedRef.current = true;
+      if (staffBranchId) {
+        setSelectedBranchId(staffBranchId);
+        return;
+      }
+    }
+
     void loadData();
-  }, [selectedBranchId, activeTab, authLoading]);
+  }, [selectedBranchId, activeTab, authLoading, staffBranchId]);
 
   useEffect(() => {
     setColorFilter('all');
