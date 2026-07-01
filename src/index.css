@@ -61,6 +61,25 @@
   }
 }
 
+@media (max-width: 1023px) {
+  .flower-dashboard,
+  .flower-dashboard * {
+    -webkit-user-select: none;
+    user-select: none;
+    -webkit-touch-callout: none;
+  }
+
+  .flower-dashboard input,
+  .flower-dashboard textarea,
+  .flower-dashboard select,
+  .flower-dashboard [contenteditable='true'],
+  .flower-dashboard .flower-allow-select {
+    -webkit-user-select: text;
+    user-select: text;
+    -webkit-touch-callout: default;
+  }
+}
+
 .flower-thermal-print-root {
   position: fixed;
   left: 0;

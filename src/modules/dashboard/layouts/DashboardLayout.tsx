@@ -19,7 +19,7 @@ export default function DashboardLayout() {
   const dashboardLinks = FLOWER_LINKS.filter((link) => !link.adminOnly || isAdmin);
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-brand-cream via-brand-light to-brand-beige/30 font-sans text-brand-dark">
+    <div className="flower-dashboard min-h-screen bg-gradient-to-b from-brand-cream via-brand-light to-brand-beige/30 font-sans text-brand-dark">
       <header className="sticky top-0 z-40 border-b border-brand-muted/40 bg-white/90 backdrop-blur-md">
         <div className="mx-auto flex w-full max-w-7xl items-center justify-between gap-3 px-4 py-3.5 sm:px-6 sm:py-4 lg:px-8">
           <FlowerBrandLogo size="sm" subtitle="Back office" className="min-w-0 flex-1" />
