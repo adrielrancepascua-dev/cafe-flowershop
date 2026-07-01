@@ -1,5 +1,6 @@
 import { Fragment, useEffect, useMemo, useState } from 'react';
 import { listFlowerProducts, createFlowerProduct, updateFlowerProduct, toggleFlowerProductActive, deleteFlowerProduct } from '../../../../services/flowers/products';
+import { productColorColumnSupported } from '../../../../services/flowers/products/flowers-products.supabase';
 import type { FlowerProduct } from '../../shared/types/flower-product';
 import FlowerPageHeader from '../../shared/components/FlowerPageHeader';
 import { RequireFlowerAdmin } from '../components/RequireFlowerAuth';
@@ -36,11 +37,14 @@ export default function FlowerProductsPage() {
   const [newColor, setNewColor] = useState<string>(FLOWER_PRODUCT_COLOR_OPTIONS[0]);
   const [newCost, setNewCost] = useState('');
   const [errorMessage, setErrorMessage] = useState('');
+  const [colorMigrationNeeded, setColorMigrationNeeded] = useState(false);
 
   async function loadProducts() {
     setLoading(true);
     try {
-      setProducts(await listFlowerProducts());
+      const loaded = await listFlowerProducts();
+      setProducts(loaded);
+      setColorMigrationNeeded(!productColorColumnSupported());
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Failed to load products.';
       setErrorMessage(message);
@@ -126,6 +130,14 @@ export default function FlowerProductsPage() {
           </button>
         </form>
       </RequireFlowerAdmin>
+
+      {colorMigrationNeeded ? (
+        <p className="mt-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-950">
+          Color categories are not saved yet — run{' '}
+          <span className="font-semibold">supabase/add_flower_product_color.sql</span> in Supabase once.
+          Products still load; everything shows as Uncategorized until then.
+        </p>
+      ) : null}
 
       {errorMessage ? (
         <p className="mt-4 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">

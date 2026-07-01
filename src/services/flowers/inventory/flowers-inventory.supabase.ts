@@ -15,6 +15,10 @@ import {
   compareFlowerProductColorLabels,
   normalizeFlowerProductColor,
 } from '../../../modules/flowers/shared/utils/flower-product-colors';
+import {
+  queryFlowerProductSummariesWithColorFallback,
+  type FlowerProductSummaryDbRow,
+} from '../products/flowers-products-supabase.shared';
 
 type BranchRow = {
   id: string;
@@ -106,16 +110,12 @@ async function listBranchesInternal(options: ListFlowerInventoryOptions = {}): P
 async function listProductsInternal(): Promise<ProductRow[]> {
   const supabase = await requireAuthenticatedSupabaseClient();
 
-  const { data, error } = await supabase
-    .from('flower_products')
-    .select('id, name, color, is_active')
-    .order('name', { ascending: true });
+  const rows = await queryFlowerProductSummariesWithColorFallback(async (columns) => {
+    const result = await supabase.from('flower_products').select(columns).order('name', { ascending: true });
+    return { data: result.data as FlowerProductSummaryDbRow[] | null, error: result.error };
+  });
 
-  if (error) {
-    throw error;
-  }
-
-  return (data as ProductRow[] | null) ?? [];
+  return rows as ProductRow[];
 }
 
 export async function listFlowerBranchesSupabase(): Promise<FlowerBranchOption[]> {
@@ -248,17 +248,18 @@ export async function listFlowerInventoryMovementsSupabase(
   const branchIds = [...new Set(movementRows.map((row) => row.branch_id))];
   const productIds = [...new Set(movementRows.map((row) => row.product_id))];
 
-  const [{ data: branchesData, error: branchesError }, { data: productsData, error: productsError }] = await Promise.all([
+  const [branchesResult, productsData] = await Promise.all([
     supabase.from('flower_branches').select('id, name, is_active').in('id', branchIds),
-    supabase.from('flower_products').select('id, name, color, is_active').in('id', productIds),
+    queryFlowerProductSummariesWithColorFallback(async (columns) => {
+      const result = await supabase.from('flower_products').select(columns).in('id', productIds);
+      return { data: result.data as FlowerProductSummaryDbRow[] | null, error: result.error };
+    }),
   ]);
+
+  const { data: branchesData, error: branchesError } = branchesResult;
 
   if (branchesError) {
     throw branchesError;
-  }
-
-  if (productsError) {
-    throw productsError;
   }
 
   const branchMap = new Map<string, string>();
@@ -267,7 +268,7 @@ export async function listFlowerInventoryMovementsSupabase(
   }
 
   const productMap = new Map<string, string>();
-  for (const product of (productsData as ProductRow[] | null) ?? []) {
+  for (const product of productsData) {
     productMap.set(product.id, product.name);
   }
 
