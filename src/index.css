@@ -99,6 +99,10 @@
     display: none !important;
   }
 
+  .flower-demo-banner {
+    display: none !important;
+  }
+
   .flower-thermal-print-root {
     display: block !important;
     position: static !important;
