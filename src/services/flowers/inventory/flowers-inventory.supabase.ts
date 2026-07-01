@@ -11,6 +11,10 @@ import type {
   TransferFlowerInventoryInput,
 } from '../../../modules/flowers/shared/types/flower-inventory';
 import { getLocalDayBoundsIso } from '../../../modules/flowers/shared/utils/flower-format';
+import {
+  compareFlowerProductColorLabels,
+  normalizeFlowerProductColor,
+} from '../../../modules/flowers/shared/utils/flower-product-colors';
 
 type BranchRow = {
   id: string;
@@ -21,6 +25,7 @@ type BranchRow = {
 type ProductRow = {
   id: string;
   name: string;
+  color: string;
   is_active: boolean;
 };
 
@@ -103,7 +108,7 @@ async function listProductsInternal(): Promise<ProductRow[]> {
 
   const { data, error } = await supabase
     .from('flower_products')
-    .select('id, name, is_active')
+    .select('id, name, color, is_active')
     .order('name', { ascending: true });
 
   if (error) {
@@ -177,6 +182,7 @@ export async function listFlowerInventoryStockSupabase(
         branch_name: branch.name,
         product_id: product.id,
         product_name: product.name,
+        product_color: normalizeFlowerProductColor(product.color),
         product_is_active: Boolean(product.is_active),
         on_hand: Number(stock?.on_hand ?? 0),
         last_updated: stock?.updated_at ?? null,
@@ -187,6 +193,11 @@ export async function listFlowerInventoryStockSupabase(
   rows.sort((a, b) => {
     if (a.branch_name !== b.branch_name) {
       return a.branch_name.localeCompare(b.branch_name);
+    }
+
+    const colorCompare = compareFlowerProductColorLabels(a.product_color, b.product_color);
+    if (colorCompare !== 0) {
+      return colorCompare;
     }
 
     return a.product_name.localeCompare(b.product_name);
@@ -239,7 +250,7 @@ export async function listFlowerInventoryMovementsSupabase(
 
   const [{ data: branchesData, error: branchesError }, { data: productsData, error: productsError }] = await Promise.all([
     supabase.from('flower_branches').select('id, name, is_active').in('id', branchIds),
-    supabase.from('flower_products').select('id, name, is_active').in('id', productIds),
+    supabase.from('flower_products').select('id, name, color, is_active').in('id', productIds),
   ]);
 
   if (branchesError) {

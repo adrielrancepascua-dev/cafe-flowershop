@@ -1,6 +1,7 @@
 export interface FlowerProduct {
   id: string;
   name: string;
+  color: string;
   unit_cost: number;
   is_active: boolean;
   created_at: string;
@@ -8,12 +9,14 @@ export interface FlowerProduct {
 
 export interface CreateFlowerProductInput {
   name: string;
+  color: string;
   unit_cost: number;
   is_active?: boolean;
 }
 
 export interface UpdateFlowerProductInput {
   name: string;
+  color: string;
   unit_cost: number;
 }
 

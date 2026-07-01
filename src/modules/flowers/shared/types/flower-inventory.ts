@@ -17,6 +17,7 @@ export interface FlowerInventoryStockRow {
   branch_name: string;
   product_id: string;
   product_name: string;
+  product_color: string;
   product_is_active: boolean;
   on_hand: number;
   last_updated: string | null;

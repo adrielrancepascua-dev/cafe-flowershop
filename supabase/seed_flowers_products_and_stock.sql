@@ -1,19 +1,20 @@
 -- Papers & Petals — seed products + starting stock (run after schema_flowers_v2.sql)
 -- Safe to re-run: uses ON CONFLICT upserts.
 
-insert into public.flower_products (id, name, unit_cost, is_active) values
-  ('stem-rose-red', 'Red Rose', 45, true),
-  ('stem-rose-pink', 'Pink Rose', 45, true),
-  ('stem-tulip', 'Tulip', 55, true),
-  ('stem-sunflower', 'Sunflower', 40, true),
-  ('stem-carnation', 'Carnation', 35, true),
-  ('stem-lily', 'Lily', 60, true),
-  ('stem-babys-breath', 'Baby''s Breath', 25, true),
-  ('stem-eucalyptus', 'Eucalyptus', 30, true),
-  ('stem-hydrangea', 'Hydrangea', 75, true),
-  ('stem-gerbera', 'Gerbera', 38, true)
+insert into public.flower_products (id, name, color, unit_cost, is_active) values
+  ('stem-rose-red', 'Red Rose', 'Red', 45, true),
+  ('stem-rose-pink', 'Pink Rose', 'Pink', 45, true),
+  ('stem-tulip', 'Tulip', 'Mixed', 55, true),
+  ('stem-sunflower', 'Sunflower', 'Yellow', 40, true),
+  ('stem-carnation', 'Carnation', 'Pink', 35, true),
+  ('stem-lily', 'Lily', 'White', 60, true),
+  ('stem-babys-breath', 'Baby''s Breath', 'White', 25, true),
+  ('stem-eucalyptus', 'Eucalyptus', 'Green', 30, true),
+  ('stem-hydrangea', 'Hydrangea', 'Blue', 75, true),
+  ('stem-gerbera', 'Gerbera', 'Orange', 38, true)
 on conflict (id) do update set
   name = excluded.name,
+  color = excluded.color,
   unit_cost = excluded.unit_cost,
   is_active = excluded.is_active;
 

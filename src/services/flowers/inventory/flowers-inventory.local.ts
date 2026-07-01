@@ -13,6 +13,10 @@ import type {
   TransferFlowerInventoryInput,
 } from '../../../modules/flowers/shared/types/flower-inventory';
 import { listFlowerStemsLocal } from '../products/flowers-products.local';
+import {
+  compareFlowerProductColorLabels,
+  normalizeFlowerProductColor,
+} from '../../../modules/flowers/shared/utils/flower-product-colors';
 
 const INVENTORY_STORAGE_KEY = 'papers_petals_flower_inventory_v2';
 const MOVEMENTS_STORAGE_KEY = 'papers_petals_flower_inventory_movements_v2';
@@ -128,6 +132,7 @@ export async function listFlowerInventoryStockLocal(
         branch_name: getBranchName(branchId),
         product_id: product.id,
         product_name: product.name,
+        product_color: normalizeFlowerProductColor(product.color),
         product_is_active: product.is_active,
         on_hand: onHand,
         last_updated: null,
@@ -139,6 +144,11 @@ export async function listFlowerInventoryStockLocal(
     const branchCompare = a.branch_name.localeCompare(b.branch_name);
     if (branchCompare !== 0) {
       return branchCompare;
+    }
+
+    const colorCompare = compareFlowerProductColorLabels(a.product_color, b.product_color);
+    if (colorCompare !== 0) {
+      return colorCompare;
     }
 
     return a.product_name.localeCompare(b.product_name);

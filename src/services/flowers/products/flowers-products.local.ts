@@ -6,6 +6,7 @@ import type {
   FlowerProduct,
   UpdateFlowerProductInput,
 } from '../../../modules/flowers/shared/types/flower-product';
+import { normalizeFlowerProductColor } from '../../../modules/flowers/shared/utils/flower-product-colors';
 
 const PRODUCTS_STORAGE_KEY = 'papers_petals_flower_stems_v2';
 const PRODUCTS_SEEDED_KEY = 'papers_petals_flower_stems_seeded_v2';
@@ -31,7 +32,12 @@ function readProductsFromStorage(): FlowerProduct[] {
     }
 
     const parsed = JSON.parse(raw) as FlowerProduct[];
-    return Array.isArray(parsed) ? parsed : [];
+    return Array.isArray(parsed)
+      ? parsed.map((product) => ({
+          ...product,
+          color: normalizeFlowerProductColor(product.color),
+        }))
+      : [];
   } catch {
     return FLOWER_STEMS_MOCK.map((product) => ({ ...product }));
   }
@@ -54,6 +60,7 @@ export async function createFlowerStemLocal(input: CreateFlowerProductInput): Pr
   const created: FlowerProduct = {
     id: `stem-${Date.now()}`,
     name: input.name.trim(),
+    color: normalizeFlowerProductColor(input.color),
     unit_cost: input.unit_cost,
     is_active: input.is_active ?? true,
     created_at: new Date().toISOString(),
@@ -77,6 +84,7 @@ export async function updateFlowerStemLocal(
   products[index] = {
     ...products[index],
     name: input.name.trim(),
+    color: normalizeFlowerProductColor(input.color),
     unit_cost: input.unit_cost,
   };
 

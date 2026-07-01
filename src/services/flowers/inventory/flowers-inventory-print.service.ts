@@ -4,6 +4,7 @@ import type {
   FlowerPrintableInventoryStockReport,
   FlowerPrintableInventoryStockSection,
 } from '../../../modules/flowers/shared/types/flower-inventory';
+import { compareFlowerProductColorLabels } from '../../../modules/flowers/shared/utils/flower-product-colors';
 import { listFlowerInventoryStock } from './flowers-inventory.service';
 
 function buildStockSection(
@@ -13,7 +14,14 @@ function buildStockSection(
 ): FlowerPrintableInventoryStockSection {
   const productRows = rows
     .filter((row) => row.branch_id === branchId)
-    .sort((left, right) => left.product_name.localeCompare(right.product_name))
+    .sort((left, right) => {
+      const colorCompare = compareFlowerProductColorLabels(left.product_color, right.product_color);
+      if (colorCompare !== 0) {
+        return colorCompare;
+      }
+
+      return left.product_name.localeCompare(right.product_name);
+    })
     .map((row) => ({
       product_name: row.product_name,
       on_hand: row.on_hand,

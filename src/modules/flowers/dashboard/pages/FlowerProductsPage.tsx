@@ -1,14 +1,39 @@
-import { useEffect, useMemo, useState } from 'react';
+import { Fragment, useEffect, useMemo, useState } from 'react';
 import { listFlowerProducts, createFlowerProduct, updateFlowerProduct, toggleFlowerProductActive, deleteFlowerProduct } from '../../../../services/flowers/products';
 import type { FlowerProduct } from '../../shared/types/flower-product';
 import FlowerPageHeader from '../../shared/components/FlowerPageHeader';
 import { RequireFlowerAdmin } from '../components/RequireFlowerAuth';
 import { PRICE_FORMATTER } from '../../shared/utils/flower-format';
+import {
+  compareFlowerProductColorLabels,
+  FLOWER_PRODUCT_COLOR_OPTIONS,
+  flowerProductColorSwatchClass,
+  normalizeFlowerProductColor,
+} from '../../shared/utils/flower-product-colors';
+
+function groupProductsByColor(products: FlowerProduct[]) {
+  const buckets = new Map<string, FlowerProduct[]>();
+
+  for (const product of products) {
+    const color = normalizeFlowerProductColor(product.color);
+    const bucket = buckets.get(color) ?? [];
+    bucket.push(product);
+    buckets.set(color, bucket);
+  }
+
+  return [...buckets.entries()]
+    .sort(([left], [right]) => compareFlowerProductColorLabels(left, right))
+    .map(([color, colorProducts]) => ({
+      color,
+      products: [...colorProducts].sort((left, right) => left.name.localeCompare(right.name)),
+    }));
+}
 
 export default function FlowerProductsPage() {
   const [products, setProducts] = useState<FlowerProduct[]>([]);
   const [loading, setLoading] = useState(true);
   const [newName, setNewName] = useState('');
+  const [newColor, setNewColor] = useState<string>(FLOWER_PRODUCT_COLOR_OPTIONS[0]);
   const [newCost, setNewCost] = useState('');
   const [errorMessage, setErrorMessage] = useState('');
 
@@ -33,16 +58,19 @@ export default function FlowerProductsPage() {
     [products],
   );
 
+  const productsByColor = useMemo(() => groupProductsByColor(products), [products]);
+
   async function handleCreate(event: React.FormEvent) {
     event.preventDefault();
     const unit_cost = Number(newCost);
-    if (!newName.trim() || !Number.isFinite(unit_cost) || unit_cost < 0) {
-      setErrorMessage('Enter a valid name and cost.');
+    if (!newName.trim() || !Number.isFinite(unit_cost) || unit_cost < 0 || !newColor) {
+      setErrorMessage('Enter a valid name, color, and cost.');
       return;
     }
 
-    await createFlowerProduct({ name: newName, unit_cost });
+    await createFlowerProduct({ name: newName, color: newColor, unit_cost });
     setNewName('');
+    setNewColor(FLOWER_PRODUCT_COLOR_OPTIONS[0]);
     setNewCost('');
     setErrorMessage('');
     await loadProducts();
@@ -53,7 +81,7 @@ export default function FlowerProductsPage() {
       <FlowerPageHeader
         label="Flower Types"
         title="Products"
-        description="Singular flower types with cost only — no fixed selling price and no images."
+        description="Flower stems with a color category for inventory grouping. Set color here — stock pages group by it."
       />
 
       <p className="mt-2 text-sm text-brand-brown/70">
@@ -61,7 +89,10 @@ export default function FlowerProductsPage() {
       </p>
 
       <RequireFlowerAdmin>
-        <form onSubmit={handleCreate} className="mt-5 grid grid-cols-1 gap-3 rounded-2xl border border-brand-muted/40 bg-brand-cream/20 p-4 sm:grid-cols-[1fr_160px_auto]">
+        <form
+          onSubmit={handleCreate}
+          className="mt-5 grid grid-cols-1 gap-3 rounded-2xl border border-brand-muted/40 bg-brand-cream/20 p-4 sm:grid-cols-[1fr_140px_160px_auto]"
+        >
           <input
             type="text"
             value={newName}
@@ -69,6 +100,18 @@ export default function FlowerProductsPage() {
             placeholder="Flower name (e.g. Red Rose)"
             className="flower-input"
           />
+          <select
+            value={newColor}
+            onChange={(event) => setNewColor(event.target.value)}
+            className="flower-input"
+            required
+          >
+            {FLOWER_PRODUCT_COLOR_OPTIONS.map((color) => (
+              <option key={color} value={color}>
+                {color}
+              </option>
+            ))}
+          </select>
           <input
             type="number"
             min="0"
@@ -94,9 +137,14 @@ export default function FlowerProductsPage() {
         <p className="mt-6 text-sm text-brand-brown/60">Loading products...</p>
       ) : (
         <>
-          <div className="mt-5 space-y-3 md:hidden">
-            {products.map((product) => (
-              <ProductCard key={product.id} product={product} onChanged={loadProducts} />
+          <div className="mt-5 space-y-5 md:hidden">
+            {productsByColor.map((section) => (
+              <div key={section.color} className="space-y-3">
+                <ProductColorSectionHeader color={section.color} count={section.products.length} />
+                {section.products.map((product) => (
+                  <ProductCard key={product.id} product={product} onChanged={loadProducts} />
+                ))}
+              </div>
             ))}
           </div>
 
@@ -105,6 +153,7 @@ export default function FlowerProductsPage() {
               <thead className="bg-brand-beige/40 text-brand-brown">
                 <tr>
                   <th className="min-w-[12rem] px-3 py-2">Name</th>
+                  <th className="px-3 py-2">Color</th>
                   <th className="px-3 py-2">Unit cost</th>
                   <th className="px-3 py-2">Status</th>
                   <RequireFlowerAdmin silent>
@@ -113,14 +162,40 @@ export default function FlowerProductsPage() {
                 </tr>
               </thead>
               <tbody>
-                {products.map((product) => (
-                  <ProductRow key={product.id} product={product} onChanged={loadProducts} />
+                {productsByColor.map((section) => (
+                  <Fragment key={section.color}>
+                    <tr className="border-t border-brand-muted/30 bg-brand-beige/25">
+                      <td colSpan={5} className="px-3 py-2">
+                        <ProductColorSectionHeader color={section.color} count={section.products.length} />
+                      </td>
+                    </tr>
+                    {section.products.map((product) => (
+                      <ProductRow key={product.id} product={product} onChanged={loadProducts} />
+                    ))}
+                  </Fragment>
                 ))}
               </tbody>
             </table>
           </div>
         </>
       )}
+    </div>
+  );
+}
+
+function ProductColorSectionHeader({ color, count }: { color: string; count: number }) {
+  return (
+    <div className="flex items-center justify-between gap-3">
+      <div className="flex items-center gap-2.5">
+        <span
+          className={`h-4 w-4 shrink-0 rounded-full ${flowerProductColorSwatchClass(color)}`}
+          aria-hidden="true"
+        />
+        <p className="font-semibold text-brand-dark">{color}</p>
+      </div>
+      <p className="text-xs font-medium text-brand-brown/70">
+        {count} product{count === 1 ? '' : 's'}
+      </p>
     </div>
   );
 }
@@ -175,14 +250,17 @@ function ProductCard({
   onChanged: () => Promise<void>;
 }) {
   const [name, setName] = useState(product.name);
+  const [color, setColor] = useState(normalizeFlowerProductColor(product.color));
 
   useEffect(() => {
     setName(product.name);
-  }, [product.id, product.name]);
+    setColor(normalizeFlowerProductColor(product.color));
+  }, [product.id, product.name, product.color]);
 
   async function save() {
     await updateFlowerProduct(product.id, {
       name,
+      color,
       unit_cost: product.unit_cost,
     });
     await onChanged();
@@ -197,6 +275,21 @@ function ProductCard({
           onChange={(event) => setName(event.target.value)}
           className="flower-input mt-1.5"
         />
+      </label>
+
+      <label className="mt-3 block text-xs font-medium uppercase tracking-wide text-brand-brown/60">
+        Color category
+        <select
+          value={color}
+          onChange={(event) => setColor(event.target.value)}
+          className="flower-input mt-1.5"
+        >
+          {FLOWER_PRODUCT_COLOR_OPTIONS.map((option) => (
+            <option key={option} value={option}>
+              {option}
+            </option>
+          ))}
+        </select>
       </label>
 
       <div className="mt-3 flex items-center justify-between gap-3">
@@ -224,14 +317,17 @@ function ProductRow({
   onChanged: () => Promise<void>;
 }) {
   const [name, setName] = useState(product.name);
+  const [color, setColor] = useState(normalizeFlowerProductColor(product.color));
 
   useEffect(() => {
     setName(product.name);
-  }, [product.id, product.name]);
+    setColor(normalizeFlowerProductColor(product.color));
+  }, [product.id, product.name, product.color]);
 
   async function save() {
     await updateFlowerProduct(product.id, {
       name,
+      color,
       unit_cost: product.unit_cost,
     });
     await onChanged();
@@ -241,6 +337,19 @@ function ProductRow({
     <tr className="border-t border-brand-muted/30">
       <td className="min-w-[12rem] px-3 py-2">
         <input value={name} onChange={(event) => setName(event.target.value)} className="flower-input min-w-[10rem]" />
+      </td>
+      <td className="px-3 py-2">
+        <select
+          value={color}
+          onChange={(event) => setColor(event.target.value)}
+          className="flower-input min-w-[120px]"
+        >
+          {FLOWER_PRODUCT_COLOR_OPTIONS.map((option) => (
+            <option key={option} value={option}>
+              {option}
+            </option>
+          ))}
+        </select>
       </td>
       <td className="px-3 py-2 whitespace-nowrap">{PRICE_FORMATTER.format(product.unit_cost)}</td>
       <td className="px-3 py-2">
