@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { Printer } from 'lucide-react';
 import {
   createFlowerStaffExpense,
   deleteFlowerStaffExpense,
@@ -11,6 +12,10 @@ import type { FlowerStaffExpense } from '../../shared/types/flower-expense';
 import type { FlowerBranchOption } from '../../shared/types/flower-inventory';
 import FlowerPageHeader from '../../shared/components/FlowerPageHeader';
 import FlowerMobileCardList from '../../shared/components/FlowerMobileCardList';
+import {
+  FlowerThermalExpensesDocument,
+  type FlowerThermalExpenseSection,
+} from '../../shared/components/FlowerThermalPrint';
 import { PRICE_FORMATTER, toDateKey } from '../../shared/utils/flower-format';
 
 type ExpenseDraft = {
@@ -50,6 +55,68 @@ export default function FlowerExpensesPage() {
 
     return expenses.filter((expense) => expense.branch_id === branchFilter);
   }, [expenses, branchFilter, isAdmin]);
+
+  const printableExpenseSections = useMemo((): FlowerThermalExpenseSection[] => {
+    if (visibleExpenses.length === 0) {
+      return [];
+    }
+
+    if (isAdmin && branchFilter === 'all') {
+      const byBranch = new Map<string, FlowerThermalExpenseSection>();
+
+      for (const expense of visibleExpenses) {
+        const existing = byBranch.get(expense.branch_id);
+        if (existing) {
+          existing.expenses.push(expense);
+          continue;
+        }
+
+        byBranch.set(expense.branch_id, {
+          branch_id: expense.branch_id,
+          branch_name: expense.branch_name,
+          expenses: [expense],
+        });
+      }
+
+      return [...byBranch.values()].sort((left, right) =>
+        left.branch_name.localeCompare(right.branch_name),
+      );
+    }
+
+    const branchId = isAdmin ? branchFilter : staffBranchId;
+    const branchName = isAdmin
+      ? branches.find((branch) => branch.id === branchFilter)?.name ?? 'Branch'
+      : staffBranchName ?? 'Branch';
+
+    if (!branchId) {
+      return [];
+    }
+
+    return [
+      {
+        branch_id: branchId,
+        branch_name: branchName,
+        expenses: visibleExpenses,
+      },
+    ];
+  }, [visibleExpenses, isAdmin, branchFilter, branches, staffBranchId, staffBranchName]);
+
+  const canPrintExpenses = printableExpenseSections.some((section) => section.expenses.length > 0);
+  const [expensesPrintTimestamp, setExpensesPrintTimestamp] = useState('');
+
+  function handlePrintExpenses() {
+    setExpensesPrintTimestamp(
+      new Date().toLocaleString('en-PH', {
+        dateStyle: 'medium',
+        timeStyle: 'short',
+      }),
+    );
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        window.print();
+      });
+    });
+  }
 
   async function loadData() {
     const [expenseList, branchList] = await Promise.all([
@@ -185,6 +252,7 @@ export default function FlowerExpensesPage() {
 
   return (
     <div className="animate-fade-in">
+      <div className="print:hidden">
       <FlowerPageHeader
         label="Expenses"
         title={isAdmin ? 'All Staff Expenses' : 'My Expenses'}
@@ -214,11 +282,33 @@ export default function FlowerExpensesPage() {
               Showing {visibleExpenses.length} expense{visibleExpenses.length === 1 ? '' : 's'}
             </p>
           ) : null}
+          {canPrintExpenses ? (
+            <button
+              type="button"
+              onClick={handlePrintExpenses}
+              className="flower-btn-secondary inline-flex items-center gap-2 px-3 py-2 text-sm"
+            >
+              <Printer className="h-4 w-4" />
+              {branchFilter === 'all' ? 'Print all branches' : 'Print expenses'}
+            </button>
+          ) : null}
         </div>
       ) : staffBranchName ? (
-        <p className="mt-4 inline-flex rounded-xl border border-brand-brown/20 bg-brand-beige/50 px-3 py-2 text-sm font-semibold text-brand-dark">
-          {staffBranchName} branch
-        </p>
+        <div className="mt-4 flex flex-wrap items-center gap-2">
+          <p className="inline-flex rounded-xl border border-brand-brown/20 bg-brand-beige/50 px-3 py-2 text-sm font-semibold text-brand-dark">
+            {staffBranchName} branch
+          </p>
+          {canPrintExpenses ? (
+            <button
+              type="button"
+              onClick={handlePrintExpenses}
+              className="flower-btn-secondary inline-flex items-center gap-2 px-3 py-2 text-sm"
+            >
+              <Printer className="h-4 w-4" />
+              Print expenses
+            </button>
+          ) : null}
+        </div>
       ) : null}
 
       <form onSubmit={handleSubmit} className="mt-5 grid grid-cols-1 gap-3 rounded-2xl border border-brand-muted/40 bg-brand-cream/20 p-4 md:grid-cols-2">
@@ -512,6 +602,14 @@ export default function FlowerExpensesPage() {
           </tbody>
         </table>
       </div>
+      </div>
+
+      {canPrintExpenses ? (
+        <FlowerThermalExpensesDocument
+          sections={printableExpenseSections}
+          generatedAt={expensesPrintTimestamp}
+        />
+      ) : null}
     </div>
   );
 }

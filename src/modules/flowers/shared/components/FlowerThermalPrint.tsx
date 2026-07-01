@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react';
+import type { FlowerStaffExpense } from '../types/flower-expense';
 import type { FlowerOrder } from '../types/flower-order';
 import type { FlowerPrintableInventoryStockReport } from '../types/flower-inventory';
 import type { FlowerPrintableSalesReport } from '../types/flower-report';
@@ -144,6 +145,84 @@ export function FlowerThermalDailyOrdersDocument({
       {orders.map((order) => (
         <FlowerThermalOrderSlip key={order.id} order={order} />
       ))}
+    </FlowerThermalPrintRoot>
+  );
+}
+
+export type FlowerThermalExpenseSection = {
+  branch_id: string;
+  branch_name: string;
+  expenses: FlowerStaffExpense[];
+};
+
+export function FlowerThermalExpensesDocument({
+  sections,
+  generatedAt,
+}: {
+  sections: FlowerThermalExpenseSection[];
+  generatedAt?: string;
+}) {
+  const nonEmptySections = sections.filter((section) => section.expenses.length > 0);
+  if (nonEmptySections.length === 0) {
+    return null;
+  }
+
+  const grandTotal = nonEmptySections.reduce(
+    (sum, section) => sum + section.expenses.reduce((sectionSum, expense) => sectionSum + expense.amount, 0),
+    0,
+  );
+  const entryCount = nonEmptySections.reduce((sum, section) => sum + section.expenses.length, 0);
+
+  return (
+    <FlowerThermalPrintRoot id="flower-printable-expenses">
+      {nonEmptySections.map((section) => {
+        const sectionTotal = section.expenses.reduce((sum, expense) => sum + expense.amount, 0);
+        const sortedExpenses = [...section.expenses].sort(
+          (left, right) =>
+            left.expense_date.localeCompare(right.expense_date) ||
+            left.created_at.localeCompare(right.created_at),
+        );
+
+        return (
+          <section key={section.branch_id} className="flower-thermal-slip">
+            <p className="flower-thermal-brand">{THERMAL_BRAND_NAME.toUpperCase()}</p>
+            <FlowerThermalSectionTitle>STAFF EXPENSES</FlowerThermalSectionTitle>
+            <p className="flower-thermal-line">{section.branch_name.toUpperCase()}</p>
+            <p className="flower-thermal-line">{sortedExpenses.length} ENTRIES</p>
+
+            <FlowerThermalDivider />
+
+            {sortedExpenses.map((expense) => (
+              <div key={expense.id} className="flower-thermal-block">
+                <p className="flower-thermal-line flower-thermal-bold">{expense.expense_date}</p>
+                <p className="flower-thermal-line">{expense.description.toUpperCase()}</p>
+                <p className="flower-thermal-line">{expense.staff_name.toUpperCase()}</p>
+                <p className="flower-thermal-line">{PRICE_FORMATTER.format(expense.amount)}</p>
+              </div>
+            ))}
+
+            <FlowerThermalDivider />
+            <p className="flower-thermal-line flower-thermal-bold">
+              BRANCH TOTAL: {PRICE_FORMATTER.format(sectionTotal)}
+            </p>
+          </section>
+        );
+      })}
+
+      {nonEmptySections.length > 1 ? (
+        <section className="flower-thermal-slip">
+          <FlowerThermalSectionTitle>ALL BRANCHES</FlowerThermalSectionTitle>
+          <p className="flower-thermal-line">{entryCount} ENTRIES</p>
+          <p className="flower-thermal-line flower-thermal-bold">
+            GRAND TOTAL: {PRICE_FORMATTER.format(grandTotal)}
+          </p>
+          {generatedAt ? <p className="flower-thermal-line">PRINTED {generatedAt}</p> : null}
+        </section>
+      ) : generatedAt ? (
+        <section className="flower-thermal-slip">
+          <p className="flower-thermal-line">PRINTED {generatedAt}</p>
+        </section>
+      ) : null}
     </FlowerThermalPrintRoot>
   );
 }
