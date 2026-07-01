@@ -14,14 +14,15 @@ export const FLOWER_ORDER_TERMINAL_STATUSES: FlowerOrderStatus[] = [
   'completed',
 ];
 
-/** Left-to-right status picker order in the orders UI. */
-export const FLOWER_ORDER_STATUS_SEQUENCE: FlowerOrderStatus[] = [
-  'not_started',
-  'ready',
-  'picked_up',
-  'delivered',
-  'cancelled',
-];
+/** Left-to-right status picker order in the orders UI (claim-mode aware). */
+export function getFlowerOrderStatusSequenceForClaimMode(
+  claimMode: FlowerClaimMode,
+): FlowerOrderStatus[] {
+  const terminalStatus: FlowerOrderStatus =
+    claimMode === 'delivery' ? 'delivered' : 'picked_up';
+
+  return ['not_started', 'ready', terminalStatus, 'cancelled'];
+}
 
 export const FLOWER_ORDER_COMPLETE_STATUSES: FlowerOrderStatus[] = ['picked_up', 'delivered'];
 

@@ -5,7 +5,7 @@ import type { FlowerProduct } from '../../shared/types/flower-product';
 import type { FlowerBranchOption } from '../../shared/types/flower-inventory';
 import {
   FLOWER_ORDER_COMPLETE_STATUSES,
-  FLOWER_ORDER_STATUS_SEQUENCE,
+  getFlowerOrderStatusSequenceForClaimMode,
   normalizeOrderStatusForPicker,
   type CreateFlowerOrderInput,
   type FlowerClaimMode,
@@ -172,6 +172,9 @@ export default function FlowerOrderFormModal({
   const displayOrderStatus = existingOrder
     ? normalizeOrderStatusForPicker(existingOrder.status, existingOrder.claim_mode)
     : 'not_started';
+  const orderStatusSequence = existingOrder
+    ? getFlowerOrderStatusSequenceForClaimMode(existingOrder.claim_mode)
+    : getFlowerOrderStatusSequenceForClaimMode('pickup');
   const hasPendingReadyPhoto = Boolean(
     existingOrder && form.ready_photo_data_url !== existingOrder.ready_photo_data_url,
   );
@@ -752,7 +755,7 @@ export default function FlowerOrderFormModal({
                   role="listbox"
                   aria-label="Order status"
                 >
-                  {FLOWER_ORDER_STATUS_SEQUENCE.map((status, index) => {
+                  {orderStatusSequence.map((status, index) => {
                     const isSelected = statusDraft === status;
                     const isCurrentStatus = displayOrderStatus === status;
                     const isCancelled = status === 'cancelled';
