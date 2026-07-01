@@ -19,6 +19,7 @@ import FlowerPageHeader from '../../shared/components/FlowerPageHeader';
 import FlowerMobileCardList from '../../shared/components/FlowerMobileCardList';
 import { FlowerThermalDailyOrdersDocument } from '../../shared/components/FlowerThermalPrint';
 import FlowerOrderFormModal from '../components/FlowerOrderFormModal';
+import FlowerConfirmDialog from '../components/FlowerConfirmDialog';
 import OrderDeadlineAlertsPanel from '../components/OrderDeadlineAlertsPanel';
 import OrderDeadlineBadge from '../components/OrderDeadlineBadge';
 import {
@@ -471,6 +472,11 @@ export default function FlowerOrdersPage() {
   const [mobileSheetPhase, setMobileSheetPhase] = useState<MobileSheetPhase>('closed');
   const [nowMs, setNowMs] = useState(() => Date.now());
   const [ordersForPrint, setOrdersForPrint] = useState<FlowerOrder[]>([]);
+  const [orderPendingDelete, setOrderPendingDelete] = useState<FlowerOrder | null>(null);
+  const [deleteErrorMessage, setDeleteErrorMessage] = useState('');
+  const [isDeletingOrder, setIsDeletingOrder] = useState(false);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const isFirstLoadRef = useRef(true);
 
   useEffect(() => {
     setOrdersForPrint([]);
@@ -489,8 +495,15 @@ export default function FlowerOrdersPage() {
   }, []);
 
   async function loadData() {
-    try {
+    const isFirstLoad = isFirstLoadRef.current;
+
+    if (isFirstLoad) {
       setLoading(true);
+    } else {
+      setIsRefreshing(true);
+    }
+
+    try {
       const [orderList, branchList, productList] = await Promise.all([
         listFlowerOrders({
           branchId: branchFilter === 'all' ? undefined : branchFilter,
@@ -503,6 +516,8 @@ export default function FlowerOrdersPage() {
       setProducts(productList);
     } finally {
       setLoading(false);
+      setIsRefreshing(false);
+      isFirstLoadRef.current = false;
     }
   }
 
@@ -628,26 +643,42 @@ export default function FlowerOrdersPage() {
     setSelectedOrder(updated);
   }
 
-  async function handleDeleteOrder(order: FlowerOrder) {
-    const confirmed = window.confirm(
-      `Delete order for ${order.receiver} (${formatPickupDateTimeLocal(order.scheduled_for)})? This cannot be undone.`,
-    );
+  function requestDeleteOrder(order: FlowerOrder) {
+    setDeleteErrorMessage('');
+    setOrderPendingDelete(order);
+  }
 
-    if (!confirmed) {
+  function cancelDeleteOrder() {
+    if (isDeletingOrder) {
       return;
     }
 
-    try {
-      await deleteFlowerOrder(order.id);
+    setOrderPendingDelete(null);
+    setDeleteErrorMessage('');
+  }
 
-      if (selectedOrder?.id === order.id) {
+  async function confirmDeleteOrder() {
+    if (!orderPendingDelete) {
+      return;
+    }
+
+    setIsDeletingOrder(true);
+    setDeleteErrorMessage('');
+
+    try {
+      await deleteFlowerOrder(orderPendingDelete.id);
+
+      if (selectedOrder?.id === orderPendingDelete.id) {
         setFormOpen(false);
         setSelectedOrder(null);
       }
 
+      setOrderPendingDelete(null);
       await loadData();
     } catch (error) {
-      window.alert(error instanceof Error ? error.message : 'Failed to delete order.');
+      setDeleteErrorMessage(error instanceof Error ? error.message : 'Failed to delete order.');
+    } finally {
+      setIsDeletingOrder(false);
     }
   }
 
@@ -681,6 +712,10 @@ export default function FlowerOrdersPage() {
     }
 
     if (viewMode === 'list') {
+      if (branchFilter === 'all') {
+        return [];
+      }
+
       return [...orders].sort(
         (left, right) =>
           new Date(left.scheduled_for).getTime() - new Date(right.scheduled_for).getTime(),
@@ -688,7 +723,7 @@ export default function FlowerOrdersPage() {
     }
 
     return [];
-  }, [orders, selectedDateKey, selectedDayOrders, viewMode]);
+  }, [branchFilter, orders, selectedDateKey, selectedDayOrders, viewMode]);
 
   const printableOrdersLabel = useMemo(() => {
     if (viewMode === 'calendar' && selectedDateKey) {
@@ -778,6 +813,10 @@ export default function FlowerOrdersPage() {
           ))}
         </select>
 
+        {isRefreshing ? (
+          <span className="text-xs text-brand-brown/55">Updating…</span>
+        ) : null}
+
         <button
           type="button"
           className="flower-btn-primary ml-auto"
@@ -786,7 +825,7 @@ export default function FlowerOrdersPage() {
           New order
         </button>
 
-        {!loading && printableOrders.length > 0 && viewMode === 'list' ? (
+        {!loading && printableOrders.length > 0 && viewMode === 'list' && branchFilter !== 'all' ? (
           <button
             type="button"
             className="flower-btn-secondary inline-flex items-center gap-1.5"
@@ -813,7 +852,7 @@ export default function FlowerOrdersPage() {
         <OrderDeadlineAlertsPanel orders={orders} onSelectOrder={openExistingOrder} />
       ) : null}
 
-      {loading ? (
+      {loading && orders.length === 0 ? (
         <p className="mt-6 text-sm text-brand-brown/60">Loading orders...</p>
       ) : viewMode === 'calendar' ? (
         <div className="mt-5">
@@ -989,7 +1028,7 @@ export default function FlowerOrdersPage() {
                   {isAdmin ? (
                     <button
                       type="button"
-                      onClick={() => void handleDeleteOrder(order)}
+                      onClick={() => requestDeleteOrder(order)}
                       className="shrink-0 rounded-xl border border-red-200 px-2.5 py-1.5 text-xs font-semibold text-red-700 hover:bg-red-50"
                       aria-label={`Delete order for ${order.receiver}`}
                     >
@@ -1053,7 +1092,7 @@ export default function FlowerOrdersPage() {
                         type="button"
                         onClick={(event) => {
                           event.stopPropagation();
-                          void handleDeleteOrder(order);
+                          void requestDeleteOrder(order);
                         }}
                         className="inline-flex whitespace-nowrap rounded-xl border border-red-200 px-3 py-1.5 text-xs font-semibold text-red-700 hover:bg-red-50"
                       >
@@ -1092,6 +1131,24 @@ export default function FlowerOrdersPage() {
           isSubmitting={isSubmitting}
         />
       ) : null}
+
+      <FlowerConfirmDialog
+        open={orderPendingDelete !== null}
+        title="Delete this order?"
+        message={
+          orderPendingDelete
+            ? `Remove the order for ${orderPendingDelete.receiver} (${formatPickupDateTimeLocal(orderPendingDelete.scheduled_for)})? This cannot be undone.${
+                deleteErrorMessage ? ` ${deleteErrorMessage}` : ''
+              }`
+            : ''
+        }
+        confirmLabel={isDeletingOrder ? 'Deleting…' : 'Delete order'}
+        cancelLabel="Keep order"
+        destructive
+        busy={isDeletingOrder}
+        onConfirm={() => void confirmDeleteOrder()}
+        onCancel={cancelDeleteOrder}
+      />
       </div>
 
       {ordersInPrintDocument.length > 0 ? (
