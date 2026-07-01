@@ -27,7 +27,6 @@ import {
   getOrderPrepDeadlineInfo,
   isReadyPhotoRequiredForStatusChange,
   urgencyBadgeClassName,
-  urgencyPanelClassName,
 } from '../../shared/utils/flower-order-deadlines';
 import OrderAttachmentField from './OrderAttachmentField';
 import OrderAttachmentPreview from './OrderAttachmentPreview';
@@ -822,55 +821,56 @@ export default function FlowerOrderFormModal({
           ) : null}
 
           {existingOrder && onReadyPhotoSubmit ? (
-            <div
-              className={`mb-4 rounded-xl border p-3 sm:p-4 ${
-                showReadyPhotoRequirement
-                  ? 'border-amber-300/80 bg-amber-50/40 ring-1 ring-amber-200/60'
-                  : 'border-brand-muted/40 bg-white'
-              }`}
-            >
-              <p className="text-center text-sm font-semibold text-brand-dark">Finished order photo</p>
-              {showReadyPhotoRequirement ? (
-                prepDeadline ? (
-                  <div
-                    className={`mx-auto mt-3 max-w-lg rounded-xl border-2 px-4 py-3 text-center ${urgencyPanelClassName(prepDeadline.urgency)}`}
-                  >
-                    <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-red-800">
-                      Required — staff must upload
-                    </p>
-                    <p className="mt-1.5 text-sm font-semibold leading-snug text-brand-dark">
-                      {formatFinishedPhotoRequirementLabel(form.claim_mode)}
-                    </p>
+            <div className="mb-4 overflow-hidden rounded-2xl border border-brand-muted/40 bg-white">
+              <div
+                className={`border-b border-brand-muted/25 px-4 py-3 ${
+                  showReadyPhotoRequirement && prepDeadline?.minutesUntilDeadline !== undefined &&
+                  prepDeadline.minutesUntilDeadline < 0
+                    ? 'bg-red-50/70'
+                    : showReadyPhotoRequirement
+                      ? 'bg-amber-50/50'
+                      : 'bg-brand-cream/30'
+                }`}
+              >
+                <div className="flex flex-wrap items-start justify-between gap-2">
+                  <div className="min-w-0">
+                    <p className="text-sm font-semibold text-brand-dark">Finished order photo</p>
+                    {showReadyPhotoRequirement ? (
+                      <p className="mt-0.5 text-xs leading-relaxed text-brand-brown/75">
+                        {formatFinishedPhotoRequirementLabel(form.claim_mode)}
+                      </p>
+                    ) : (
+                      <p className="mt-0.5 text-xs font-medium text-emerald-800">Photo submitted</p>
+                    )}
+                  </div>
+                  {showReadyPhotoRequirement && prepDeadline ? (
+                    <span
+                      className={`shrink-0 rounded-full border px-2.5 py-1 text-[11px] font-semibold ${urgencyBadgeClassName(prepDeadline.urgency)}`}
+                    >
+                      {prepDeadline.minutesUntilDeadline < 0
+                        ? 'Overdue'
+                        : prepDeadline.message}
+                    </span>
+                  ) : null}
+                </div>
+
+                {showReadyPhotoRequirement && prepDeadline ? (
+                  <div className="mt-2 flex flex-wrap items-baseline gap-x-3 gap-y-1 text-sm">
                     <p
-                      className={`mt-3 font-serif text-2xl font-bold tabular-nums ${
+                      className={`font-semibold tabular-nums ${
                         prepDeadline.minutesUntilDeadline < 0 ? 'text-red-800' : 'text-brand-dark'
                       }`}
                     >
                       {formatRemainingTimeLabel(prepDeadline.minutesUntilDeadline)}
                     </p>
-                    <p className="mt-1.5 text-xs text-brand-brown/85">
-                      Upload deadline (PH time):{' '}
-                      {formatPrepDeadlineTimePh(prepDeadline.prepDeadlineIso)}
-                    </p>
-                    <span
-                      className={`mt-2 inline-flex rounded-full border px-2.5 py-0.5 text-xs font-semibold ${urgencyBadgeClassName(prepDeadline.urgency)}`}
-                    >
-                      {prepDeadline.minutesUntilDeadline < 0
-                        ? 'Overdue — upload now'
-                        : prepDeadline.message}
-                    </span>
-                  </div>
-                ) : (
-                  <div className="mx-auto mt-3 max-w-lg rounded-xl border-2 border-amber-300 bg-amber-50 px-4 py-3 text-center">
-                    <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-red-800">
-                      Required — staff must upload
-                    </p>
-                    <p className="mt-1.5 text-sm font-semibold text-brand-dark">
-                      {formatFinishedPhotoRequirementLabel(form.claim_mode)}
+                    <p className="text-xs text-brand-brown/70">
+                      Due {formatPrepDeadlineTimePh(prepDeadline.prepDeadlineIso)} (PH)
                     </p>
                   </div>
-                )
-              ) : null}
+                ) : null}
+              </div>
+
+              <div className="px-4 py-4">
               <input
                 ref={readyPhotoInputRef}
                 type="file"
@@ -886,17 +886,17 @@ export default function FlowerOrderFormModal({
                 <button
                   type="button"
                   onClick={handleChooseReadyPhotoClick}
-                  className="mx-auto mt-4 block w-full max-w-md rounded-xl border-2 border-dashed border-brand-accent bg-brand-cream/35 px-4 py-5 text-center transition hover:border-brand-brown hover:bg-brand-beige/50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-accent"
+                  className="flex w-full flex-col items-center justify-center rounded-xl border border-dashed border-brand-muted/70 bg-brand-cream/20 px-4 py-8 text-center transition hover:border-brand-brown/40 hover:bg-brand-beige/40 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-accent"
                 >
-                  <span className="block text-sm font-semibold text-brand-dark">
-                    Choose finished order photo
+                  <span className="text-sm font-semibold text-brand-dark">
+                    {showReadyPhotoRequirement ? 'Upload finished photo' : 'Choose finished order photo'}
                   </span>
-                  <span className="mt-1 block text-xs text-brand-brown/65">
+                  <span className="mt-1 text-xs text-brand-brown/65">
                     Tap to select from your device
                   </span>
                 </button>
               ) : (
-                <div className="mt-4 flex flex-col items-center">
+                <div className="flex flex-col items-center">
                   <OrderAttachmentPreview
                     label="Current finished order photo"
                     value={form.ready_photo_data_url}
@@ -905,7 +905,7 @@ export default function FlowerOrderFormModal({
                     hint="Tap image to open full size."
                   />
                   {hasPendingReadyPhoto ? (
-                    <div className="mt-4 flex w-full max-w-md flex-col items-stretch gap-2 sm:flex-row sm:justify-center">
+                    <div className="mt-4 flex w-full flex-col items-stretch gap-2 sm:flex-row sm:justify-center">
                       <button
                         type="button"
                         className="flower-btn-primary w-full py-2 text-sm sm:w-auto"
@@ -932,7 +932,7 @@ export default function FlowerOrderFormModal({
                       </button>
                     </div>
                   ) : (
-                    <div className="mt-4 flex w-full max-w-md flex-col items-center gap-2 sm:flex-row sm:justify-center">
+                    <div className="mt-4 flex w-full flex-col items-center gap-2 sm:flex-row sm:justify-center">
                       <button
                         type="button"
                         className="flower-btn-secondary w-full py-2 text-sm sm:w-auto"
@@ -940,7 +940,6 @@ export default function FlowerOrderFormModal({
                       >
                         Change photo
                       </button>
-                      <p className="text-xs font-medium text-emerald-800">Photo submitted.</p>
                     </div>
                   )}
                 </div>
@@ -948,6 +947,7 @@ export default function FlowerOrderFormModal({
               {readyPhotoMessage ? (
                 <p className="mt-3 text-center text-xs text-brand-brown/80">{readyPhotoMessage}</p>
               ) : null}
+              </div>
             </div>
           ) : null}
 
