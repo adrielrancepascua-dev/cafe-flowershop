@@ -66,15 +66,6 @@ export interface FlowerPrintableInventoryStockReport {
   total_units: number;
 }
 
-export interface FlowerPrintableInventoryMovementsReport {
-  generated_at: string;
-  period_label: string;
-  from_date: string;
-  to_date: string;
-  branch_label: string;
-  movements: FlowerInventoryMovementRow[];
-}
-
 export interface AdjustFlowerInventoryInput {
   branchId: string;
   productId: string;

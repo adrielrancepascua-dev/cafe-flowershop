@@ -7,6 +7,5 @@ export {
 } from './flowers-inventory.service';
 
 export {
-  getFlowerPrintableInventoryMovementsReport,
   getFlowerPrintableInventoryStockReport,
 } from './flowers-inventory-print.service';

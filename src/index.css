@@ -91,14 +91,8 @@
     break-inside: avoid;
   }
 
-  #flower-printable-inventory-stock,
-  #flower-printable-inventory-movements {
+  #flower-printable-inventory-stock {
     break-inside: avoid;
-  }
-
-  body[data-flower-print='inventory-stock'] #flower-printable-inventory-movements,
-  body[data-flower-print='inventory-movements'] #flower-printable-inventory-stock {
-    display: none !important;
   }
 
   .break-inside-avoid {

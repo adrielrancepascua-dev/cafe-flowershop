@@ -1,13 +1,10 @@
 import type {
   FlowerInventoryStockPrintLayout,
   FlowerInventoryStockRow,
-  FlowerPrintableInventoryMovementsReport,
   FlowerPrintableInventoryStockReport,
   FlowerPrintableInventoryStockSection,
 } from '../../../modules/flowers/shared/types/flower-inventory';
-import type { FlowerSalesReportPeriod } from '../../../modules/flowers/shared/types/flower-report';
-import { getSalesReportPeriodRange } from '../../../modules/flowers/shared/utils/flower-report-period';
-import { listFlowerInventoryMovements, listFlowerInventoryStock } from './flowers-inventory.service';
+import { listFlowerInventoryStock } from './flowers-inventory.service';
 
 function buildStockSection(
   branchId: string,
@@ -94,30 +91,5 @@ export async function getFlowerPrintableInventoryStockReport(options: {
     branch_label: 'All branches (by branch)',
     sections,
     total_units: sections.reduce((sum, section) => sum + section.total_units, 0),
-  };
-}
-
-export async function getFlowerPrintableInventoryMovementsReport(options: {
-  anchorDate: string;
-  period: FlowerSalesReportPeriod;
-  branchId?: string;
-  branchLabel: string;
-}): Promise<FlowerPrintableInventoryMovementsReport> {
-  const { fromDate, toDate, periodLabel } = getSalesReportPeriodRange(options.anchorDate, options.period);
-
-  const movements = await listFlowerInventoryMovements({
-    branchId: options.branchId,
-    fromDate,
-    toDate,
-    limit: 2000,
-  });
-
-  return {
-    generated_at: new Date().toISOString(),
-    period_label: periodLabel,
-    from_date: fromDate,
-    to_date: toDate,
-    branch_label: options.branchLabel,
-    movements,
   };
 }
