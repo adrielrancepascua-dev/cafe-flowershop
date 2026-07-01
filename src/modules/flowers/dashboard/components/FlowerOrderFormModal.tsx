@@ -64,6 +64,16 @@ function quantitiesFromOrderItems(items: FlowerOrder['items']): ProductQuantitie
   return quantities;
 }
 
+function parseDownpaymentDraft(draft: string): number {
+  const trimmed = draft.trim();
+  if (!trimmed) {
+    return 0;
+  }
+
+  const parsed = Number(trimmed);
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
 function isCompleteOrderStatus(status: FlowerOrderStatus): boolean {
   return FLOWER_ORDER_COMPLETE_STATUSES.includes(status);
 }
@@ -219,7 +229,7 @@ export default function FlowerOrderFormModal({
     });
     setProductQuantities(quantitiesFromOrderItems(order.items));
     setFlowerSearch('');
-    setDownpaymentDraft(String(order.downpayment));
+    setDownpaymentDraft(order.downpayment > 0 ? String(order.downpayment) : '');
     setTotalAmountDraft(String(order.total_amount));
     setStatusDraft(normalizeOrderStatusForPicker(order.status, order.claim_mode));
     setStatusMessage('');
@@ -397,13 +407,18 @@ export default function FlowerOrderFormModal({
 
   const balance = useMemo(() => {
     const total = totalAmountDraft === '' ? 0 : Number(totalAmountDraft);
-    const downpayment = downpaymentDraft === '' ? 0 : Number(downpaymentDraft);
+    const downpayment = parseDownpaymentDraft(downpaymentDraft);
     if (!Number.isFinite(total) || !Number.isFinite(downpayment)) {
       return 0;
     }
 
     return Math.max(0, total - downpayment);
   }, [totalAmountDraft, downpaymentDraft]);
+
+  const hasDownpayment = useMemo(
+    () => parseDownpaymentDraft(downpaymentDraft) > 0,
+    [downpaymentDraft],
+  );
 
   const activeProducts = useMemo(
     () =>
@@ -452,14 +467,7 @@ export default function FlowerOrderFormModal({
     return { types, stems };
   }, [productQuantities]);
 
-  const requiresDownpaymentProof = useMemo(() => {
-    if (downpaymentDraft.trim() === '') {
-      return false;
-    }
-
-    const downpayment = Number(downpaymentDraft);
-    return Number.isFinite(downpayment) && downpayment > 0;
-  }, [downpaymentDraft]);
+  const requiresDownpaymentProof = useMemo(() => hasDownpayment, [hasDownpayment]);
 
   if (!open) {
     return null;
@@ -610,13 +618,15 @@ export default function FlowerOrderFormModal({
       return null;
     }
 
-    if (downpaymentDraft.trim() === '') {
-      setErrorMessage('Downpayment is required (use 0 if none).');
+    const trimmedDownpayment = downpaymentDraft.trim();
+    const downpayment =
+      trimmedDownpayment === '' ? 0 : Number(trimmedDownpayment);
+    const total_amount = Number(totalAmountDraft);
+
+    if (trimmedDownpayment !== '' && !Number.isFinite(downpayment)) {
+      setErrorMessage('Downpayment must be a valid amount.');
       return null;
     }
-
-    const downpayment = Number(downpaymentDraft);
-    const total_amount = Number(totalAmountDraft);
 
     if (!Number.isFinite(total_amount) || total_amount <= 0) {
       setErrorMessage('Total amount must be greater than 0.');
@@ -1257,10 +1267,9 @@ export default function FlowerOrderFormModal({
                     }
                     placeholder="0"
                     className="flower-input mt-1.5"
-                    required
                   />
                   <span className="mt-1 block text-xs text-brand-brown/60">
-                    Use 0 if no downpayment yet.
+                    Leave blank if no downpayment yet.
                   </span>
                 </>
               )}
@@ -1300,7 +1309,7 @@ export default function FlowerOrderFormModal({
             Mode of payment (downpayment)
             {isViewMode ? (
               <p className={`flower-input mt-1.5 ${readOnlyFieldClass}`}>
-                {formatFlowerPaymentModeLabel(form.payment_mode)}
+                {hasDownpayment ? formatFlowerPaymentModeLabel(form.payment_mode) : '—'}
               </p>
             ) : (
               <select
@@ -1308,8 +1317,8 @@ export default function FlowerOrderFormModal({
                 onChange={(event) =>
                   updateField('payment_mode', event.target.value as FlowerPaymentMode)
                 }
-                className="flower-input mt-1.5"
-                required
+                className={`flower-input mt-1.5 ${hasDownpayment ? '' : 'cursor-not-allowed bg-brand-beige/40 text-brand-brown/50'}`}
+                disabled={!hasDownpayment}
               >
                 {FLOWER_PAYMENT_MODES.map((mode) => (
                   <option key={mode} value={mode}>
@@ -1318,6 +1327,11 @@ export default function FlowerOrderFormModal({
                 ))}
               </select>
             )}
+            {!isViewMode && !hasDownpayment ? (
+              <span className="mt-1 block text-xs text-brand-brown/60">
+                Choose a downpayment amount first.
+              </span>
+            ) : null}
           </label>
 
           {existingOrder && existingOrder.balance > 0 && !existingOrder.balance_paid ? (
