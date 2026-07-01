@@ -14,10 +14,11 @@ import {
   type FlowerPaymentMode,
 } from '../../shared/types/flower-order';
 import {
-  FLOWER_PAYMENT_MODES,
   FLOWER_PAYMENT_MODE_LABELS,
   formatFlowerPaymentModeLabel,
+  getFlowerPaymentModesForBranch,
   normalizeFlowerPaymentMode,
+  requiresFlowerPaymentReference,
 } from '../../shared/utils/flower-payment';
 import {
   ORDER_STATUS_LABELS,
@@ -220,7 +221,11 @@ export default function FlowerOrderFormModal({
       greeting_card: order.greeting_card,
       special_instructions: order.special_instructions,
       downpayment: order.downpayment,
-      payment_mode: normalizeFlowerPaymentMode(order.payment_mode),
+      payment_mode: normalizeFlowerPaymentMode(
+        order.payment_mode,
+        order.branch_id,
+        order.branch_name,
+      ),
       payment_reference: order.payment_reference,
       total_amount: order.total_amount,
       notes: order.notes,
@@ -315,6 +320,19 @@ export default function FlowerOrderFormModal({
         setStockLoading(false);
       });
   }, [open, form.branch_id, isViewMode]);
+
+  useEffect(() => {
+    if (!open || !form.branch_id || isViewMode) {
+      return;
+    }
+
+    const branchName =
+      branches.find((branch) => branch.id === form.branch_id)?.name ?? form.branch_id;
+    const modes = getFlowerPaymentModesForBranch(form.branch_id, branchName);
+    if (!modes.includes(form.payment_mode)) {
+      setForm((previous) => ({ ...previous, payment_mode: modes[0] }));
+    }
+  }, [open, form.branch_id, form.payment_mode, isViewMode, branches]);
 
   const creditByProductId = useMemo(() => {
     if (!existingOrder || existingOrder.branch_id !== form.branch_id) {
@@ -479,7 +497,14 @@ export default function FlowerOrderFormModal({
   }, [productQuantities]);
 
   const requiresDownpaymentProof = useMemo(() => hasDownpayment, [hasDownpayment]);
-  const requiresBalanceReference = balancePaymentMode !== 'cash';
+  const activeBranchId = existingOrder?.branch_id ?? form.branch_id;
+  const activeBranchName =
+    branches.find((branch) => branch.id === activeBranchId)?.name ?? activeBranchId;
+  const branchPaymentModes = useMemo(
+    () => getFlowerPaymentModesForBranch(activeBranchId, activeBranchName),
+    [activeBranchId, activeBranchName],
+  );
+  const requiresBalanceReference = requiresFlowerPaymentReference(balancePaymentMode);
   const showBalanceDue = Boolean(
     existingOrder && existingOrder.balance > 0 && !existingOrder.balance_paid,
   );
@@ -723,7 +748,7 @@ export default function FlowerOrderFormModal({
     }
 
     if (requiresBalanceReference && !balancePaymentReference.trim()) {
-      setBalancePaidMessage('Reference # is required for GCash and Bank payments.');
+      setBalancePaidMessage('Reference # is required for non-cash payments.');
       return;
     }
 
@@ -932,7 +957,7 @@ export default function FlowerOrderFormModal({
                             }}
                             className="flower-input mt-1.5 bg-white"
                           >
-                            {FLOWER_PAYMENT_MODES.map((mode) => (
+                            {branchPaymentModes.map((mode) => (
                               <option key={mode} value={mode}>
                                 {FLOWER_PAYMENT_MODE_LABELS[mode]}
                               </option>
@@ -1431,7 +1456,7 @@ export default function FlowerOrderFormModal({
                 className={`flower-input mt-1.5 ${hasDownpayment ? '' : 'cursor-not-allowed bg-brand-beige/40 text-brand-brown/50'}`}
                 disabled={!hasDownpayment}
               >
-                {FLOWER_PAYMENT_MODES.map((mode) => (
+                {branchPaymentModes.map((mode) => (
                   <option key={mode} value={mode}>
                     {FLOWER_PAYMENT_MODE_LABELS[mode]}
                   </option>

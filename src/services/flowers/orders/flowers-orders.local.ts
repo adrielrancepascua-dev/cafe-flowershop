@@ -55,10 +55,18 @@ function readOrdersFromStorage(): FlowerOrder[] {
     return Array.isArray(parsed)
       ? parsed.map((order) => ({
           ...order,
-          payment_mode: normalizeFlowerPaymentMode(order.payment_mode),
+          payment_mode: normalizeFlowerPaymentMode(
+            order.payment_mode,
+            order.branch_id,
+            order.branch_name,
+          ),
           balance_paid: Boolean(order.balance_paid),
           balance_payment_mode: order.balance_payment_mode
-            ? normalizeFlowerPaymentMode(order.balance_payment_mode)
+            ? normalizeFlowerPaymentMode(
+                order.balance_payment_mode,
+                order.branch_id,
+                order.branch_name,
+              )
             : '',
           balance_payment_reference: order.balance_payment_reference ?? '',
         }))
@@ -187,7 +195,7 @@ function buildOrderFromInput(
     greeting_card: input.greeting_card.trim(),
     special_instructions: input.special_instructions.trim(),
     downpayment,
-    payment_mode: normalizeFlowerPaymentMode(input.payment_mode),
+    payment_mode: normalizeFlowerPaymentMode(input.payment_mode, input.branch_id, branchName),
     payment_reference: input.payment_reference.trim(),
     total_amount: input.total_amount,
     balance,

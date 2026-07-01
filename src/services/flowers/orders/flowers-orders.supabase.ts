@@ -136,13 +136,21 @@ function mapOrderRow(row: OrderDbRow): FlowerOrder {
     greeting_card: row.greeting_card ?? '',
     special_instructions: row.special_instructions ?? '',
     downpayment: Number(row.downpayment),
-    payment_mode: normalizeFlowerPaymentMode(row.payment_mode),
+    payment_mode: normalizeFlowerPaymentMode(
+      row.payment_mode,
+      row.branch_id,
+      getBranchNameFromRow(row),
+    ),
     payment_reference: row.payment_reference ?? '',
     total_amount: Number(row.total_amount),
     balance: Number(row.balance),
     balance_paid: Boolean(row.balance_paid),
     balance_payment_mode: row.balance_payment_mode
-      ? normalizeFlowerPaymentMode(row.balance_payment_mode)
+      ? normalizeFlowerPaymentMode(
+          row.balance_payment_mode,
+          row.branch_id,
+          getBranchNameFromRow(row),
+        )
       : '',
     balance_payment_reference: row.balance_payment_reference ?? '',
     notes: row.notes ?? '',
@@ -315,7 +323,11 @@ export async function createFlowerOrderSupabase(
     greeting_card: input.greeting_card.trim(),
     special_instructions: input.special_instructions.trim(),
     downpayment: input.downpayment,
-    payment_mode: normalizeFlowerPaymentMode(input.payment_mode),
+    payment_mode: normalizeFlowerPaymentMode(
+      input.payment_mode,
+      input.branch_id,
+      branch.name,
+    ),
     payment_reference: input.payment_reference.trim(),
     total_amount: input.total_amount,
     balance,
@@ -409,7 +421,11 @@ export async function updateFlowerOrderSupabase(
       greeting_card: input.greeting_card.trim(),
       special_instructions: input.special_instructions.trim(),
       downpayment: nextDownpayment,
-      payment_mode: normalizeFlowerPaymentMode(input.payment_mode),
+      payment_mode: normalizeFlowerPaymentMode(
+      input.payment_mode,
+      input.branch_id,
+      branch.name,
+    ),
       payment_reference: input.payment_reference.trim(),
       total_amount: input.total_amount,
       balance: nextBalance,

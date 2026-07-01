@@ -8,7 +8,9 @@ export type FlowerOrderStatus =
 
 export type FlowerClaimMode = 'pickup' | 'delivery';
 
-export type FlowerPaymentMode = 'cash' | 'gcash' | 'bank';
+import type { FlowerPaymentMode } from '../utils/flower-payment';
+
+export type { FlowerPaymentMode };
 
 export const FLOWER_ORDER_TERMINAL_STATUSES: FlowerOrderStatus[] = [
   'picked_up',

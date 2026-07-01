@@ -17,11 +17,11 @@ alter table public.flower_orders
 
 alter table public.flower_orders
   add constraint flower_orders_payment_mode_check
-  check (payment_mode in ('cash', 'gcash', 'bank'));
+  check (payment_mode in ('cash', 'gcash', 'metrobank', 'bpi', 'eastwest', 'bank'));
 
 alter table public.flower_orders
   drop constraint if exists flower_orders_balance_payment_mode_check;
 
 alter table public.flower_orders
   add constraint flower_orders_balance_payment_mode_check
-  check (balance_payment_mode in ('', 'cash', 'gcash', 'bank'));
+  check (balance_payment_mode in ('', 'cash', 'gcash', 'metrobank', 'bpi', 'eastwest', 'bank'));
