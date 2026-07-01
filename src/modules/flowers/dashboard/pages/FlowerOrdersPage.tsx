@@ -470,6 +470,11 @@ export default function FlowerOrdersPage() {
   const [selectedDateKey, setSelectedDateKey] = useState<string | null>(null);
   const [mobileSheetPhase, setMobileSheetPhase] = useState<MobileSheetPhase>('closed');
   const [nowMs, setNowMs] = useState(() => Date.now());
+  const [ordersForPrint, setOrdersForPrint] = useState<FlowerOrder[]>([]);
+
+  useEffect(() => {
+    setOrdersForPrint([]);
+  }, [selectedDateKey, branchFilter, viewMode]);
 
   useEffect(() => {
     window.localStorage.setItem('pp_orders_view', viewMode);
@@ -702,8 +707,34 @@ export default function FlowerOrdersPage() {
   }, [branchFilter, branches, selectedDateKey, selectedDayLabel, viewMode]);
 
   function handlePrintOrders() {
-    window.print();
+    const branchId = branchFilter === 'all' ? undefined : branchFilter;
+
+    void (async () => {
+      let ordersToPrint = printableOrders;
+
+      if (viewMode === 'calendar' && selectedDateKey) {
+        const fresh = await listFlowerOrders({
+          branchId,
+          scheduledFrom: selectedDateKey,
+          scheduledTo: selectedDateKey,
+        });
+        ordersToPrint = [...fresh].sort(
+          (left, right) =>
+            new Date(left.scheduled_for).getTime() - new Date(right.scheduled_for).getTime(),
+        );
+      }
+
+      setOrdersForPrint(ordersToPrint);
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+          window.print();
+        });
+      });
+    })();
   }
+
+  const ordersInPrintDocument =
+    ordersForPrint.length > 0 ? ordersForPrint : printableOrders;
 
   return (
     <div className="animate-fade-in">
@@ -755,14 +786,25 @@ export default function FlowerOrdersPage() {
           New order
         </button>
 
-        {!loading && printableOrders.length > 0 ? (
+        {!loading && printableOrders.length > 0 && viewMode === 'list' ? (
           <button
             type="button"
             className="flower-btn-secondary inline-flex items-center gap-1.5"
             onClick={handlePrintOrders}
           >
             <Printer className="h-4 w-4" />
-            {viewMode === 'calendar' ? 'Print day' : 'Print orders'}
+            Print orders
+          </button>
+        ) : null}
+
+        {!loading && printableOrders.length > 0 && viewMode === 'calendar' && selectedDateKey ? (
+          <button
+            type="button"
+            className="flower-btn-secondary hidden items-center gap-1.5 lg:inline-flex"
+            onClick={handlePrintOrders}
+          >
+            <Printer className="h-4 w-4" />
+            Print day
           </button>
         ) : null}
       </div>
@@ -1052,10 +1094,10 @@ export default function FlowerOrdersPage() {
       ) : null}
       </div>
 
-      {printableOrders.length > 0 ? (
+      {ordersInPrintDocument.length > 0 ? (
         <FlowerThermalDailyOrdersDocument
           dayLabel={printableOrdersLabel}
-          orders={printableOrders}
+          orders={ordersInPrintDocument}
         />
       ) : null}
     </div>

@@ -61,6 +61,17 @@
   }
 }
 
+.flower-thermal-print-root {
+  position: fixed;
+  left: 0;
+  top: 0;
+  width: 0;
+  height: 0;
+  overflow: hidden;
+  opacity: 0;
+  pointer-events: none;
+}
+
 @media print {
   @page {
     size: 80mm auto;
@@ -90,8 +101,15 @@
 
   .flower-thermal-print-root {
     display: block !important;
-    width: 80mm;
-    max-width: 80mm;
+    position: static !important;
+    left: auto !important;
+    top: auto !important;
+    width: 80mm !important;
+    max-width: 80mm !important;
+    height: auto !important;
+    overflow: visible !important;
+    opacity: 1 !important;
+    pointer-events: auto !important;
     margin: 0 auto;
     padding: 0;
     background: white !important;
@@ -116,14 +134,16 @@
   }
 
   .flower-thermal-slip {
-    padding: 3mm 0 8mm;
-    page-break-after: always;
-    break-after: page;
+    padding: 3mm 0 5mm;
+    margin-bottom: 4mm;
+    border-bottom: 1px dashed #000;
+    break-inside: avoid;
+    page-break-inside: avoid;
   }
 
   .flower-thermal-slip:last-child {
-    page-break-after: auto;
-    break-after: auto;
+    margin-bottom: 0;
+    border-bottom: 0;
   }
 
   .flower-thermal-brand,

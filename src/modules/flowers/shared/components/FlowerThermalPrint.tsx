@@ -21,7 +21,7 @@ type FlowerThermalPrintRootProps = {
 
 export function FlowerThermalPrintRoot({ id, children }: FlowerThermalPrintRootProps) {
   return (
-    <article id={id} className="flower-thermal-print-root hidden print:block">
+    <article id={id} className="flower-thermal-print-root">
       <div className="flower-thermal-print">{children}</div>
     </article>
   );
@@ -36,13 +36,16 @@ export function FlowerThermalSectionTitle({ children }: { children: ReactNode })
 }
 
 export function FlowerThermalOrderSlip({ order }: { order: FlowerOrder }) {
-  const wrapLines = order.wrapper_color
+  const wrapLines = (order.wrapper_color ?? '')
     .split(/[,;]+/)
     .map((part) => formatThermalBulletLine(part))
     .filter(Boolean);
 
+  const items = order.items ?? [];
+
   return (
     <section className="flower-thermal-slip">
+      <p className="flower-thermal-brand">{THERMAL_BRAND_NAME.toUpperCase()}</p>
       <p className="flower-thermal-order-ref">{formatThermalOrderRef(order.id)}</p>
       <p className="flower-thermal-fulfillment">{formatThermalClaimMode(order.claim_mode)}</p>
       <p className="flower-thermal-date">{formatThermalDateLine(order.scheduled_for)}</p>
@@ -51,12 +54,39 @@ export function FlowerThermalOrderSlip({ order }: { order: FlowerOrder }) {
 
       <FlowerThermalDivider />
 
+      <FlowerThermalSectionTitle>RECEIVER</FlowerThermalSectionTitle>
+      <p className="flower-thermal-line">{order.receiver.toUpperCase()}</p>
+
+      {order.customer_social.trim() ? (
+        <>
+          <FlowerThermalSectionTitle>CUSTOMER</FlowerThermalSectionTitle>
+          <p className="flower-thermal-line">{order.customer_social.trim().toUpperCase()}</p>
+        </>
+      ) : null}
+
+      <FlowerThermalSectionTitle>STATUS</FlowerThermalSectionTitle>
+      <p className="flower-thermal-line">
+        {(ORDER_STATUS_LABELS[order.status] ?? order.status).toUpperCase()}
+      </p>
+
+      <FlowerThermalSectionTitle>PAYMENT</FlowerThermalSectionTitle>
+      <p className="flower-thermal-line">TOTAL: {PRICE_FORMATTER.format(order.total_amount)}</p>
+      <p className="flower-thermal-line">DOWN: {PRICE_FORMATTER.format(order.downpayment)}</p>
+      <p className="flower-thermal-line">BALANCE: {PRICE_FORMATTER.format(order.balance)}</p>
+      {order.payment_reference.trim() ? (
+        <p className="flower-thermal-line">REF: {order.payment_reference.trim().toUpperCase()}</p>
+      ) : null}
+
       <FlowerThermalSectionTitle>ORDER</FlowerThermalSectionTitle>
-      {order.items.map((item) => (
-        <p key={`${order.id}-${item.product_id}-${item.item_name}`} className="flower-thermal-line">
-          {formatThermalItemLine(item.quantity, item.item_name)}
-        </p>
-      ))}
+      {items.length > 0 ? (
+        items.map((item) => (
+          <p key={`${order.id}-${item.product_id}-${item.item_name}`} className="flower-thermal-line">
+            {formatThermalItemLine(item.quantity, item.item_name)}
+          </p>
+        ))
+      ) : (
+        <p className="flower-thermal-line">NO FLOWERS LISTED</p>
+      )}
 
       {wrapLines.length > 0 ? (
         <>
@@ -72,7 +102,9 @@ export function FlowerThermalOrderSlip({ order }: { order: FlowerOrder }) {
       {order.greeting_card.trim() ? (
         <>
           <FlowerThermalSectionTitle>GREETING CARD</FlowerThermalSectionTitle>
-          <p className="flower-thermal-line">{formatThermalBulletLine(order.greeting_card)}</p>
+          <p className="flower-thermal-line flower-thermal-wrap">
+            {order.greeting_card.trim().toUpperCase()}
+          </p>
         </>
       ) : null}
 
@@ -97,7 +129,6 @@ export function FlowerThermalOrderSlip({ order }: { order: FlowerOrder }) {
 
 export function FlowerThermalDailyOrdersDocument({
   id = 'flower-printable-daily-orders',
-  dayLabel,
   orders,
 }: {
   id?: string;
@@ -110,15 +141,6 @@ export function FlowerThermalDailyOrdersDocument({
 
   return (
     <FlowerThermalPrintRoot id={id}>
-      <section className="flower-thermal-slip flower-thermal-slip-intro">
-        <p className="flower-thermal-brand">{THERMAL_BRAND_NAME.toUpperCase()}</p>
-        <FlowerThermalSectionTitle>DAILY ORDERS</FlowerThermalSectionTitle>
-        <p className="flower-thermal-line">{dayLabel.toUpperCase()}</p>
-        <p className="flower-thermal-line">
-          {orders.length} ORDER{orders.length === 1 ? '' : 'S'}
-        </p>
-      </section>
-
       {orders.map((order) => (
         <FlowerThermalOrderSlip key={order.id} order={order} />
       ))}
