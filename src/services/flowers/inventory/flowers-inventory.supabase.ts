@@ -6,9 +6,11 @@ import type {
   FlowerBranchOption,
   FlowerInventoryMovementRow,
   FlowerInventoryStockRow,
+  ListFlowerInventoryMovementsOptions,
   ListFlowerInventoryOptions,
   TransferFlowerInventoryInput,
 } from '../../../modules/flowers/shared/types/flower-inventory';
+import { getLocalDayBoundsIso } from '../../../modules/flowers/shared/utils/flower-format';
 
 type BranchRow = {
   id: string;
@@ -194,10 +196,11 @@ export async function listFlowerInventoryStockSupabase(
 }
 
 export async function listFlowerInventoryMovementsSupabase(
-  options: ListFlowerInventoryOptions & { limit?: number } = {},
+  options: ListFlowerInventoryMovementsOptions = {},
 ): Promise<FlowerInventoryMovementRow[]> {
   const supabase = await requireAuthenticatedSupabaseClient();
-  const limit = options.limit ?? 40;
+  const hasDateRange = Boolean(options.fromDate || options.toDate);
+  const limit = options.limit ?? (hasDateRange ? 2000 : 40);
 
   let query = supabase
     .from('flower_inventory_movements')
@@ -207,6 +210,16 @@ export async function listFlowerInventoryMovementsSupabase(
 
   if (options.branchId) {
     query = query.eq('branch_id', options.branchId);
+  }
+
+  if (options.fromDate) {
+    const { startIso } = getLocalDayBoundsIso(options.fromDate);
+    query = query.gte('created_at', startIso);
+  }
+
+  if (options.toDate) {
+    const { endIso } = getLocalDayBoundsIso(options.toDate);
+    query = query.lte('created_at', endIso);
   }
 
   const { data, error } = await query;

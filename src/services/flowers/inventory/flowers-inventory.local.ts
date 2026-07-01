@@ -8,6 +8,7 @@ import type {
   FlowerBranchOption,
   FlowerInventoryMovementRow,
   FlowerInventoryStockRow,
+  ListFlowerInventoryMovementsOptions,
   ListFlowerInventoryOptions,
   TransferFlowerInventoryInput,
 } from '../../../modules/flowers/shared/types/flower-inventory';
@@ -145,7 +146,7 @@ export async function listFlowerInventoryStockLocal(
 }
 
 export async function listFlowerInventoryMovementsLocal(
-  options: ListFlowerInventoryOptions & { limit?: number } = {},
+  options: ListFlowerInventoryMovementsOptions = {},
 ): Promise<FlowerInventoryMovementRow[]> {
   const limit = options.limit ?? 50;
   const movements = readMovementsFromStorage();
@@ -153,6 +154,20 @@ export async function listFlowerInventoryMovementsLocal(
   const filtered = movements.filter((movement) => {
     if (options.branchId && movement.branch_id !== options.branchId) {
       return false;
+    }
+
+    if (options.fromDate) {
+      const fromMs = new Date(`${options.fromDate}T00:00:00`).getTime();
+      if (new Date(movement.created_at).getTime() < fromMs) {
+        return false;
+      }
+    }
+
+    if (options.toDate) {
+      const toMs = new Date(`${options.toDate}T23:59:59.999`).getTime();
+      if (new Date(movement.created_at).getTime() > toMs) {
+        return false;
+      }
     }
 
     return true;

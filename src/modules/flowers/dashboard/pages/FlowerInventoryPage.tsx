@@ -10,7 +10,10 @@ import { useFlowerAuth } from '../../../../lib/auth/FlowerAuthContext';
 import type { FlowerBranchOption, FlowerInventoryMovementRow, FlowerInventoryStockRow } from '../../shared/types/flower-inventory';
 import FlowerPageHeader from '../../shared/components/FlowerPageHeader';
 import { RequireFlowerAdmin } from '../components/RequireFlowerAuth';
+import FlowerPrintableInventoryMovementsPanel from '../components/FlowerPrintableInventoryMovementsPanel';
+import FlowerPrintableInventoryStockPanel from '../components/FlowerPrintableInventoryStockPanel';
 import { Minus, Plus, ArrowLeftRight, Package } from 'lucide-react';
+import { INVENTORY_MOVEMENT_TYPE_LABELS } from '../../shared/utils/flower-format';
 
 function aggregateStockByProduct(rows: FlowerInventoryStockRow[]): FlowerInventoryStockRow[] {
   const totals = new Map<string, FlowerInventoryStockRow>();
@@ -182,6 +185,7 @@ export default function FlowerInventoryPage() {
   const [activeTab, setActiveTab] = useState<InventoryTab>('stock');
   const [fromBranchStock, setFromBranchStock] = useState<FlowerInventoryStockRow[]>([]);
   const [fromBranchStockLoading, setFromBranchStockLoading] = useState(false);
+  const [showMovementsReport, setShowMovementsReport] = useState(false);
 
   async function loadData() {
     setLoading(true);
@@ -337,8 +341,11 @@ export default function FlowerInventoryPage() {
     setTransferMessage('');
   }
 
+  const isStockView = activeTab === 'stock' || !isAdmin;
+
   return (
     <div className="animate-fade-in">
+      <div className="print:hidden">
       <FlowerPageHeader
         label="Inventory"
         title="Branch Stock"
@@ -631,18 +638,50 @@ export default function FlowerInventoryPage() {
           ) : null}
 
           <div className="mt-6">
-            <h3 className="text-sm font-semibold text-brand-dark">Recent movements</h3>
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <h3 className="text-sm font-semibold text-brand-dark">Recent movements</h3>
+              <button
+                type="button"
+                onClick={() => setShowMovementsReport((current) => !current)}
+                className="flower-btn-secondary text-xs"
+              >
+                {showMovementsReport ? 'Hide full report' : 'View & print all movements'}
+              </button>
+            </div>
             <ul className="mt-2 space-y-2 text-sm text-brand-brown/80">
-              {movementRows.map((movement) => (
-                <li key={movement.id} className="rounded-lg border border-brand-muted/30 px-3 py-2">
-                  {movement.branch_name} · {movement.product_name} · {movement.movement_type} ·{' '}
-                  {movement.quantity} · {movement.note}
+              {movementRows.length > 0 ? (
+                movementRows.map((movement) => (
+                  <li key={movement.id} className="rounded-lg border border-brand-muted/30 px-3 py-2">
+                    {movement.branch_name} · {movement.product_name} ·{' '}
+                    {INVENTORY_MOVEMENT_TYPE_LABELS[movement.movement_type] ?? movement.movement_type} ·{' '}
+                    {movement.quantity} · {movement.note}
+                  </li>
+                ))
+              ) : (
+                <li className="rounded-lg border border-brand-muted/30 px-3 py-2 text-brand-brown/60">
+                  No movements recorded yet.
                 </li>
-              ))}
+              )}
             </ul>
           </div>
         </>
       )}
+      </div>
+
+      {!loading && isStockView ? (
+        <>
+          <FlowerPrintableInventoryStockPanel
+            branchId={isAllBranchesView ? undefined : selectedBranchId}
+            branchLabel={selectedBranchName}
+          />
+
+          <FlowerPrintableInventoryMovementsPanel
+            branchId={isAllBranchesView ? undefined : selectedBranchId}
+            branchLabel={selectedBranchName}
+            expanded={showMovementsReport}
+          />
+        </>
+      ) : null}
     </div>
   );
 }

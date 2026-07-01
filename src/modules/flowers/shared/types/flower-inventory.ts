@@ -40,6 +40,41 @@ export interface ListFlowerInventoryOptions {
   branchId?: string;
 }
 
+export interface ListFlowerInventoryMovementsOptions extends ListFlowerInventoryOptions {
+  limit?: number;
+  fromDate?: string;
+  toDate?: string;
+}
+
+export type FlowerInventoryStockPrintLayout = 'combined' | 'by_branch';
+
+export interface FlowerPrintableInventoryStockSection {
+  branch_id: string;
+  branch_name: string;
+  total_units: number;
+  rows: Array<{
+    product_name: string;
+    on_hand: number;
+  }>;
+}
+
+export interface FlowerPrintableInventoryStockReport {
+  generated_at: string;
+  layout: FlowerInventoryStockPrintLayout;
+  branch_label: string;
+  sections: FlowerPrintableInventoryStockSection[];
+  total_units: number;
+}
+
+export interface FlowerPrintableInventoryMovementsReport {
+  generated_at: string;
+  period_label: string;
+  from_date: string;
+  to_date: string;
+  branch_label: string;
+  movements: FlowerInventoryMovementRow[];
+}
+
 export interface AdjustFlowerInventoryInput {
   branchId: string;
   productId: string;

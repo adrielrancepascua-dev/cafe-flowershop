@@ -160,6 +160,14 @@ export function toDateKey(date: Date): string {
   return `${year}-${month}-${day}`;
 }
 
+export const INVENTORY_MOVEMENT_TYPE_LABELS: Record<string, string> = {
+  stock_in: 'Stock in',
+  stock_out: 'Stock out',
+  transfer_in: 'Transfer in',
+  transfer_out: 'Transfer out',
+  order_deduct: 'Order deduct',
+};
+
 export const ORDER_STATUS_LABELS: Record<string, string> = {
   not_started: 'Not started',
   ready: 'Ready',
