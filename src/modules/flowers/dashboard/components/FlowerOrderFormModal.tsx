@@ -1013,56 +1013,63 @@ export default function FlowerOrderFormModal({
               ) : null}
 
           {showReadyPhotoSection ? (
-            <div className="overflow-hidden rounded-2xl border border-brand-muted/40 bg-white">
-              <div
-                className={`border-b border-brand-muted/25 px-4 py-3 ${
-                  showReadyPhotoRequirement && prepDeadline?.minutesUntilDeadline !== undefined &&
-                  prepDeadline.minutesUntilDeadline < 0
-                    ? 'bg-red-50/70'
-                    : showReadyPhotoRequirement
-                      ? 'bg-amber-50/50'
-                      : 'bg-brand-cream/30'
-                }`}
-              >
-                <div className="flex flex-wrap items-start justify-between gap-2">
-                  <div className="min-w-0">
-                    <p className="text-sm font-semibold text-brand-dark">Finished order photo</p>
-                    {showReadyPhotoRequirement ? (
-                      <p className="mt-0.5 text-xs leading-relaxed text-brand-brown/75">
-                        {formatFinishedPhotoRequirementLabel(form.claim_mode)}
-                      </p>
-                    ) : (
-                      <p className="mt-0.5 text-xs font-medium text-emerald-800">Photo submitted</p>
-                    )}
-                  </div>
-                  {showReadyPhotoRequirement && prepDeadline ? (
-                    <span
-                      className={`shrink-0 rounded-full border px-2.5 py-1 text-[11px] font-semibold ${urgencyBadgeClassName(prepDeadline.urgency)}`}
-                    >
-                      {prepDeadline.minutesUntilDeadline < 0
-                        ? 'Overdue'
-                        : prepDeadline.message}
-                    </span>
-                  ) : null}
+            <div
+              className={`rounded-xl border p-4 ${
+                showReadyPhotoRequirement &&
+                prepDeadline?.minutesUntilDeadline !== undefined &&
+                prepDeadline.minutesUntilDeadline < 0
+                  ? 'border-red-200 bg-red-50'
+                  : 'border-amber-200 bg-amber-50'
+              }`}
+            >
+              <div className="flex flex-wrap items-start justify-between gap-2">
+                <div className="min-w-0">
+                  <p
+                    className={`text-sm font-semibold ${
+                      showReadyPhotoRequirement &&
+                      prepDeadline?.minutesUntilDeadline !== undefined &&
+                      prepDeadline.minutesUntilDeadline < 0
+                        ? 'text-red-950'
+                        : 'text-amber-950'
+                    }`}
+                  >
+                    Finished order photo
+                  </p>
+                  {showReadyPhotoRequirement ? (
+                    <p className="mt-1 text-sm text-amber-900">
+                      {formatFinishedPhotoRequirementLabel(form.claim_mode)}
+                    </p>
+                  ) : (
+                    <p className="mt-1 text-sm font-medium text-emerald-800">Photo submitted</p>
+                  )}
                 </div>
-
                 {showReadyPhotoRequirement && prepDeadline ? (
-                  <div className="mt-2 flex flex-wrap items-baseline gap-x-3 gap-y-1 text-sm">
-                    <p
-                      className={`font-semibold tabular-nums ${
-                        prepDeadline.minutesUntilDeadline < 0 ? 'text-red-800' : 'text-brand-dark'
-                      }`}
-                    >
-                      {formatRemainingTimeLabel(prepDeadline.minutesUntilDeadline)}
-                    </p>
-                    <p className="text-xs text-brand-brown/70">
-                      Due {formatPrepDeadlineTimePh(prepDeadline.prepDeadlineIso)} (PH)
-                    </p>
-                  </div>
+                  <span
+                    className={`shrink-0 rounded-full border px-2.5 py-1 text-[11px] font-semibold ${urgencyBadgeClassName(prepDeadline.urgency)}`}
+                  >
+                    {prepDeadline.minutesUntilDeadline < 0
+                      ? 'Overdue'
+                      : prepDeadline.message}
+                  </span>
                 ) : null}
               </div>
 
-              <div className="px-4 py-4">
+              {showReadyPhotoRequirement && prepDeadline ? (
+                <div className="mt-2 flex flex-wrap items-baseline gap-x-3 gap-y-1 text-sm">
+                  <p
+                    className={`font-semibold tabular-nums ${
+                      prepDeadline.minutesUntilDeadline < 0 ? 'text-red-800' : 'text-amber-950'
+                    }`}
+                  >
+                    {formatRemainingTimeLabel(prepDeadline.minutesUntilDeadline)}
+                  </p>
+                  <p className="text-xs text-amber-900/80">
+                    Due {formatPrepDeadlineTimePh(prepDeadline.prepDeadlineIso)} (PH)
+                  </p>
+                </div>
+              ) : null}
+
+              <div className="mt-3">
               <input
                 ref={readyPhotoInputRef}
                 type="file"
@@ -1078,12 +1085,12 @@ export default function FlowerOrderFormModal({
                 <button
                   type="button"
                   onClick={handleChooseReadyPhotoClick}
-                  className="flex w-full flex-col items-center justify-center rounded-xl border border-dashed border-brand-muted/70 bg-brand-cream/20 px-4 py-8 text-center transition hover:border-brand-brown/40 hover:bg-brand-beige/40 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-accent"
+                  className="flex w-full flex-col items-center justify-center rounded-xl border border-dashed border-amber-300 bg-white/70 px-4 py-8 text-center transition hover:border-amber-400 hover:bg-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-accent"
                 >
-                  <span className="text-sm font-semibold text-brand-dark">
+                  <span className="text-sm font-semibold text-amber-950">
                     {showReadyPhotoRequirement ? 'Upload finished photo' : 'Choose finished order photo'}
                   </span>
-                  <span className="mt-1 text-xs text-brand-brown/65">
+                  <span className="mt-1 text-xs text-amber-900/75">
                     Tap to select from your device
                   </span>
                 </button>
@@ -1137,7 +1144,7 @@ export default function FlowerOrderFormModal({
                 </div>
               )}
               {readyPhotoMessage ? (
-                <p className="mt-3 text-center text-xs text-brand-brown/80">{readyPhotoMessage}</p>
+                <p className="mt-3 text-center text-xs text-amber-900/80">{readyPhotoMessage}</p>
               ) : null}
               </div>
             </div>
