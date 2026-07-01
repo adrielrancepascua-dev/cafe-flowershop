@@ -47,6 +47,7 @@ type OrderDbRow = {
   balance: number;
   balance_paid?: boolean;
   balance_payment_mode?: string;
+  balance_payment_reference?: string;
   notes: string;
   photo_inspo_data_url: string;
   proof_dp_data_url: string;
@@ -78,6 +79,7 @@ const ORDER_SELECT = `
   balance,
   balance_paid,
   balance_payment_mode,
+  balance_payment_reference,
   notes,
   photo_inspo_data_url,
   proof_dp_data_url,
@@ -142,6 +144,7 @@ function mapOrderRow(row: OrderDbRow): FlowerOrder {
     balance_payment_mode: row.balance_payment_mode
       ? normalizeFlowerPaymentMode(row.balance_payment_mode)
       : '',
+    balance_payment_reference: row.balance_payment_reference ?? '',
     notes: row.notes ?? '',
     photo_inspo_data_url: row.photo_inspo_data_url ?? '',
     proof_dp_data_url: row.proof_dp_data_url ?? '',
@@ -318,6 +321,7 @@ export async function createFlowerOrderSupabase(
     balance,
     balance_paid: balance === 0,
     balance_payment_mode: '',
+    balance_payment_reference: '',
     notes: input.notes.trim(),
     photo_inspo_data_url: attachments.photo_inspo_data_url,
     proof_dp_data_url: attachments.proof_dp_data_url,
@@ -547,6 +551,7 @@ export async function updateFlowerOrderStatusSupabase(
 export async function markFlowerOrderBalancePaidSupabase(
   orderId: string,
   balancePaymentMode: FlowerPaymentMode,
+  balancePaymentReference = '',
 ): Promise<FlowerOrder> {
   const supabase = await requireAuthenticatedSupabaseClient();
   const existing = await fetchOrderById(orderId);
@@ -566,6 +571,7 @@ export async function markFlowerOrderBalancePaidSupabase(
       balance: 0,
       balance_paid: true,
       balance_payment_mode: balancePaymentMode,
+      balance_payment_reference: balancePaymentReference.trim(),
     })
     .eq('id', orderId);
 

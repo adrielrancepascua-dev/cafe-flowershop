@@ -83,6 +83,11 @@ export function FlowerThermalOrderSlip({ order }: { order: FlowerOrder }) {
           BAL VIA: {formatFlowerPaymentModeLabel(order.balance_payment_mode).toUpperCase()}
         </p>
       ) : null}
+      {order.balance_payment_reference?.trim() ? (
+        <p className="flower-thermal-line">
+          BAL REF: {order.balance_payment_reference.trim().toUpperCase()}
+        </p>
+      ) : null}
       {order.payment_reference.trim() ? (
         <p className="flower-thermal-line">REF: {order.payment_reference.trim().toUpperCase()}</p>
       ) : null}

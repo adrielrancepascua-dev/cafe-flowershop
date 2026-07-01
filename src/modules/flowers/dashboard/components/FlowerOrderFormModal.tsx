@@ -46,7 +46,11 @@ type OrderFormProps = {
   onSubmit: (input: CreateFlowerOrderInput) => Promise<void>;
   onStatusChange?: (orderId: string, status: FlowerOrderStatus) => Promise<void>;
   onReadyPhotoSubmit?: (orderId: string, readyPhotoDataUrl: string) => Promise<void>;
-  onBalancePaid?: (orderId: string, balancePaymentMode: FlowerPaymentMode) => Promise<void>;
+  onBalancePaid?: (
+    orderId: string,
+    balancePaymentMode: FlowerPaymentMode,
+    balancePaymentReference: string,
+  ) => Promise<void>;
   branches: FlowerBranchOption[];
   products: FlowerProduct[];
   initialPickupIso?: string;
@@ -181,6 +185,7 @@ export default function FlowerOrderFormModal({
   const [statusDraft, setStatusDraft] = useState<FlowerOrderStatus>('not_started');
   const [statusMessage, setStatusMessage] = useState('');
   const [balancePaymentMode, setBalancePaymentMode] = useState<FlowerPaymentMode>('cash');
+  const [balancePaymentReference, setBalancePaymentReference] = useState('');
   const [balancePaidMessage, setBalancePaidMessage] = useState('');
   const [isMarkingBalancePaid, setIsMarkingBalancePaid] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
@@ -235,6 +240,9 @@ export default function FlowerOrderFormModal({
     setStatusMessage('');
     setErrorMessage('');
     setReadyPhotoMessage('');
+    setBalancePaymentMode('cash');
+    setBalancePaymentReference('');
+    setBalancePaidMessage('');
   }
 
   useEffect(() => {
@@ -258,6 +266,9 @@ export default function FlowerOrderFormModal({
     setStatusDraft('not_started');
     setStatusMessage('');
     setErrorMessage('');
+    setBalancePaymentMode('cash');
+    setBalancePaymentReference('');
+    setBalancePaidMessage('');
   }, [open, existingOrder, initialPickupIso, staffId, staffName]);
 
   useEffect(() => {
@@ -468,6 +479,13 @@ export default function FlowerOrderFormModal({
   }, [productQuantities]);
 
   const requiresDownpaymentProof = useMemo(() => hasDownpayment, [hasDownpayment]);
+  const requiresBalanceReference = balancePaymentMode !== 'cash';
+  const showBalanceDue = Boolean(
+    existingOrder && existingOrder.balance > 0 && !existingOrder.balance_paid,
+  );
+  const showBalancePaidBanner = Boolean(existingOrder?.balance_paid);
+  const showReadyPhotoSection = Boolean(existingOrder && onReadyPhotoSubmit);
+  const showTopPrepSection = showBalanceDue || showBalancePaidBanner || showReadyPhotoSection;
 
   if (!open) {
     return null;
@@ -704,11 +722,20 @@ export default function FlowerOrderFormModal({
       return;
     }
 
+    if (requiresBalanceReference && !balancePaymentReference.trim()) {
+      setBalancePaidMessage('Reference # is required for GCash and Bank payments.');
+      return;
+    }
+
     setIsMarkingBalancePaid(true);
     setBalancePaidMessage('');
 
     try {
-      await onBalancePaid(existingOrder.id, balancePaymentMode);
+      await onBalancePaid(
+        existingOrder.id,
+        balancePaymentMode,
+        balancePaymentReference.trim(),
+      );
       setBalancePaidMessage('Balance marked as paid.');
       setStatusMessage('');
     } catch (error) {
@@ -878,8 +905,90 @@ export default function FlowerOrderFormModal({
             </div>
           ) : null}
 
-          {existingOrder && onReadyPhotoSubmit ? (
-            <div className="mb-4 overflow-hidden rounded-2xl border border-brand-muted/40 bg-white">
+          {showTopPrepSection ? (
+            <div className="mb-4 space-y-4">
+              {showBalanceDue ? (
+                <div className="rounded-xl border border-amber-200 bg-amber-50 p-4">
+                  <p className="text-sm font-semibold text-amber-950">
+                    Balance due at pick up / delivery
+                  </p>
+                  <p className="mt-1 text-sm text-amber-900">
+                    {PRICE_FORMATTER.format(existingOrder!.balance)} remaining — collect before
+                    marking picked up or delivered.
+                  </p>
+                  {onBalancePaid ? (
+                    <div className="mt-3 flex flex-col gap-3">
+                      <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
+                        <label className="block flex-1 text-sm font-medium text-amber-950">
+                          Balance payment mode
+                          <select
+                            value={balancePaymentMode}
+                            onChange={(event) => {
+                              const nextMode = event.target.value as FlowerPaymentMode;
+                              setBalancePaymentMode(nextMode);
+                              if (nextMode === 'cash') {
+                                setBalancePaymentReference('');
+                              }
+                            }}
+                            className="flower-input mt-1.5 bg-white"
+                          >
+                            {FLOWER_PAYMENT_MODES.map((mode) => (
+                              <option key={mode} value={mode}>
+                                {FLOWER_PAYMENT_MODE_LABELS[mode]}
+                              </option>
+                            ))}
+                          </select>
+                        </label>
+                        {requiresBalanceReference ? (
+                          <label className="block flex-1 text-sm font-medium text-amber-950">
+                            Reference #
+                            <input
+                              type="text"
+                              value={balancePaymentReference}
+                              onChange={(event) =>
+                                setBalancePaymentReference(event.target.value)
+                              }
+                              className="flower-input mt-1.5 bg-white"
+                              placeholder="GCash / bank reference"
+                            />
+                          </label>
+                        ) : null}
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => void handleMarkBalancePaid()}
+                        disabled={isMarkingBalancePaid}
+                        className="flower-btn-primary w-full sm:w-auto sm:self-start"
+                      >
+                        {isMarkingBalancePaid ? 'Saving...' : 'Mark balance paid'}
+                      </button>
+                    </div>
+                  ) : null}
+                  {balancePaidMessage ? (
+                    <p
+                      className={`mt-2 text-sm ${balancePaidMessage.includes('paid') ? 'text-emerald-800' : 'text-red-700'}`}
+                    >
+                      {balancePaidMessage}
+                    </p>
+                  ) : null}
+                </div>
+              ) : null}
+
+              {showBalancePaidBanner ? (
+                <p className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-900">
+                  Balance paid
+                  {existingOrder!.balance_payment_mode
+                    ? ` via ${formatFlowerPaymentModeLabel(existingOrder!.balance_payment_mode)}`
+                    : ''}
+                  {existingOrder!.balance_payment_reference?.trim()
+                    ? ` — ref ${existingOrder!.balance_payment_reference.trim()}`
+                    : ''}
+                  .
+                </p>
+              ) : null}
+
+          {showReadyPhotoSection ? (
+            <div className="overflow-hidden rounded-2xl border border-brand-muted/40 bg-white">
               <div
                 className={`border-b border-brand-muted/25 px-4 py-3 ${
                   showReadyPhotoRequirement && prepDeadline?.minutesUntilDeadline !== undefined &&
@@ -1006,6 +1115,8 @@ export default function FlowerOrderFormModal({
                 <p className="mt-3 text-center text-xs text-brand-brown/80">{readyPhotoMessage}</p>
               ) : null}
               </div>
+            </div>
+          ) : null}
             </div>
           ) : null}
 
@@ -1334,61 +1445,8 @@ export default function FlowerOrderFormModal({
             ) : null}
           </label>
 
-          {existingOrder && existingOrder.balance > 0 && !existingOrder.balance_paid ? (
-            <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50 p-4">
-              <p className="text-sm font-semibold text-amber-950">Balance due at pick up / delivery</p>
-              <p className="mt-1 text-sm text-amber-900">
-                {PRICE_FORMATTER.format(existingOrder.balance)} remaining — collect before marking picked up or
-                delivered.
-              </p>
-              {onBalancePaid ? (
-                <div className="mt-3 flex flex-col gap-3 sm:flex-row sm:items-end">
-                  <label className="block flex-1 text-sm font-medium text-amber-950">
-                    Balance payment mode
-                    <select
-                      value={balancePaymentMode}
-                      onChange={(event) =>
-                        setBalancePaymentMode(event.target.value as FlowerPaymentMode)
-                      }
-                      className="flower-input mt-1.5 bg-white"
-                    >
-                      {FLOWER_PAYMENT_MODES.map((mode) => (
-                        <option key={mode} value={mode}>
-                          {FLOWER_PAYMENT_MODE_LABELS[mode]}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-                  <button
-                    type="button"
-                    onClick={() => void handleMarkBalancePaid()}
-                    disabled={isMarkingBalancePaid}
-                    className="flower-btn-primary shrink-0"
-                  >
-                    {isMarkingBalancePaid ? 'Saving...' : 'Mark balance paid'}
-                  </button>
-                </div>
-              ) : null}
-              {balancePaidMessage ? (
-                <p
-                  className={`mt-2 text-sm ${balancePaidMessage.includes('paid') ? 'text-emerald-800' : 'text-red-700'}`}
-                >
-                  {balancePaidMessage}
-                </p>
-              ) : null}
-            </div>
-          ) : existingOrder?.balance_paid ? (
-            <p className="mt-4 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-900">
-              Balance paid
-              {existingOrder.balance_payment_mode
-                ? ` via ${formatFlowerPaymentModeLabel(existingOrder.balance_payment_mode)}`
-                : ''}
-              .
-            </p>
-          ) : null}
-
           <label className="mt-3 block text-sm font-medium text-brand-brown">
-            Reference #
+            Reference # (downpayment)
             {requiresDownpaymentProof ? null : (
               <span className="ml-1 text-xs font-normal text-brand-brown/60">(optional when DP is 0)</span>
             )}

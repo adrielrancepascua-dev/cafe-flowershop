@@ -65,6 +65,7 @@ export interface FlowerOrder {
   balance: number;
   balance_paid: boolean;
   balance_payment_mode: FlowerPaymentMode | '';
+  balance_payment_reference: string;
   notes: string;
   photo_inspo_data_url: string;
   proof_dp_data_url: string;

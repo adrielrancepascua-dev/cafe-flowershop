@@ -60,6 +60,7 @@ function readOrdersFromStorage(): FlowerOrder[] {
           balance_payment_mode: order.balance_payment_mode
             ? normalizeFlowerPaymentMode(order.balance_payment_mode)
             : '',
+          balance_payment_reference: order.balance_payment_reference ?? '',
         }))
       : [];
   } catch {
@@ -192,6 +193,7 @@ function buildOrderFromInput(
     balance,
     balance_paid: existing?.balance_paid ?? balance === 0,
     balance_payment_mode: existing?.balance_payment_mode ?? '',
+    balance_payment_reference: existing?.balance_payment_reference ?? '',
     notes: input.notes.trim(),
     photo_inspo_data_url: input.photo_inspo_data_url,
     proof_dp_data_url: input.proof_dp_data_url,
@@ -343,6 +345,7 @@ export async function updateFlowerOrderStatusLocal(
 export async function markFlowerOrderBalancePaidLocal(
   orderId: string,
   balancePaymentMode: FlowerPaymentMode,
+  balancePaymentReference = '',
 ): Promise<FlowerOrder> {
   const orders = readOrdersFromStorage();
   const index = orders.findIndex((order) => order.id === orderId);
@@ -362,6 +365,7 @@ export async function markFlowerOrderBalancePaidLocal(
     balance: 0,
     balance_paid: true,
     balance_payment_mode: balancePaymentMode,
+    balance_payment_reference: balancePaymentReference.trim(),
     items: current.items.map((item) => ({ ...item })),
   };
 

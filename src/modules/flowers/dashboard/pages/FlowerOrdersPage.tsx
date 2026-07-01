@@ -644,8 +644,16 @@ export default function FlowerOrdersPage() {
     setSelectedOrder(updated);
   }
 
-  async function handleBalancePaid(orderId: string, balancePaymentMode: FlowerPaymentMode) {
-    const updated = await markFlowerOrderBalancePaid(orderId, balancePaymentMode);
+  async function handleBalancePaid(
+    orderId: string,
+    balancePaymentMode: FlowerPaymentMode,
+    balancePaymentReference: string,
+  ) {
+    const updated = await markFlowerOrderBalancePaid(
+      orderId,
+      balancePaymentMode,
+      balancePaymentReference,
+    );
     await loadData();
     setSelectedOrder(updated);
   }

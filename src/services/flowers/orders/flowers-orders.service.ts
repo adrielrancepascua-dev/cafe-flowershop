@@ -108,13 +108,19 @@ export async function updateFlowerOrderStatus(
 export async function markFlowerOrderBalancePaid(
   orderId: string,
   balancePaymentMode: FlowerPaymentMode,
+  balancePaymentReference = '',
 ): Promise<FlowerOrder> {
   return withSupabaseOrders(
     async () => {
       const { markFlowerOrderBalancePaidSupabase } = await import('./flowers-orders.supabase');
-      return markFlowerOrderBalancePaidSupabase(orderId, balancePaymentMode);
+      return markFlowerOrderBalancePaidSupabase(
+        orderId,
+        balancePaymentMode,
+        balancePaymentReference,
+      );
     },
-    () => markFlowerOrderBalancePaidLocal(orderId, balancePaymentMode),
+    () =>
+      markFlowerOrderBalancePaidLocal(orderId, balancePaymentMode, balancePaymentReference),
   );
 }
 
