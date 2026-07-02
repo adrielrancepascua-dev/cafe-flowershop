@@ -184,13 +184,14 @@ async function applyStockChange(input: {
   delta: number;
   movementType: FlowerInventoryMovementRow['movement_type'];
   note: string;
+  allowNegative?: boolean;
 }): Promise<{ previousOnHand: number; newOnHand: number }> {
   const stock = readStockFromStorage();
   const branchStock = stock[input.branchId] ?? {};
   const previousOnHand = branchStock[input.productId] ?? 0;
   const newOnHand = previousOnHand + input.delta;
 
-  if (newOnHand < 0) {
+  if (!input.allowNegative && newOnHand < 0) {
     throw new Error(
       `Insufficient stock for ${getProductName(input.productId)}. Available: ${previousOnHand}.`,
     );
@@ -240,9 +241,20 @@ export async function deductFlowerInventoryForOrderLocal(input: {
     delta: -input.quantity,
     movementType: 'order_deduct',
     note: `Order ${input.orderId} day-close deduct`,
+    allowNegative: true,
   });
 }
 
+/** Orders may use flowers before stock-in; day-close deduction can drive counts negative. */
+export async function validateFlowerOrderStockLocal(
+  _branchId: string,
+  _items: Array<{ product_id: string; item_name: string; quantity: number }>,
+  _creditByProductId: Record<string, number> = {},
+): Promise<void> {
+  return;
+}
+
+/** @deprecated use deductFlowerInventoryForOrderLocal */
 export async function transferFlowerInventoryLocal(
   input: TransferFlowerInventoryInput,
 ): Promise<void> {
@@ -282,41 +294,6 @@ export async function transferFlowerInventoryLocal(
 export async function getFlowerStockLevelLocal(branchId: string, productId: string): Promise<number> {
   const stock = readStockFromStorage();
   return stock[branchId]?.[productId] ?? 0;
-}
-
-export async function validateFlowerOrderStockLocal(
-  branchId: string,
-  items: Array<{ product_id: string; item_name: string; quantity: number }>,
-  creditByProductId: Record<string, number> = {},
-): Promise<void> {
-  const stock = readStockFromStorage();
-  const branchStock = stock[branchId] ?? {};
-  const neededByProduct = new Map<string, { name: string; qty: number }>();
-
-  for (const item of items) {
-    const existing = neededByProduct.get(item.product_id);
-    if (existing) {
-      existing.qty += item.quantity;
-      continue;
-    }
-
-    neededByProduct.set(item.product_id, {
-      name: item.item_name,
-      qty: item.quantity,
-    });
-  }
-
-  for (const [productId, { name, qty }] of neededByProduct) {
-    const onHand = branchStock[productId] ?? 0;
-    const credit = creditByProductId[productId] ?? 0;
-    const available = onHand + credit;
-
-    if (qty > available) {
-      throw new Error(
-        `Insufficient stock for ${name}. Available: ${available}, requested: ${qty}.`,
-      );
-    }
-  }
 }
 
 /** @deprecated use deductFlowerInventoryForOrderLocal */

@@ -347,21 +347,6 @@ export default function FlowerOrderFormModal({
     return credit;
   }, [existingOrder, form.branch_id]);
 
-  function getMaxQuantityForProduct(productId: string): number {
-    if (!productId) {
-      return 0;
-    }
-
-    if (!form.branch_id || stockLoading) {
-      return 9999;
-    }
-
-    const onHand = stockByProductId[productId] ?? 0;
-    const credit = creditByProductId[productId] ?? 0;
-
-    return Math.max(0, onHand + credit);
-  }
-
   function setProductQuantity(productId: string, rawValue: string) {
     setProductQuantities((current) => {
       const digits = rawValue.replace(/[^\d]/g, '');
@@ -371,8 +356,7 @@ export default function FlowerOrderFormModal({
         return next;
       }
 
-      const max = getMaxQuantityForProduct(productId);
-      const qty = Math.min(max, Math.max(0, Number(digits)));
+      const qty = Math.max(0, Number(digits));
       if (qty <= 0) {
         const next = { ...current };
         delete next[productId];
@@ -386,8 +370,7 @@ export default function FlowerOrderFormModal({
   function adjustProductQuantity(productId: string, delta: number) {
     setProductQuantities((current) => {
       const currentQty = Number(current[productId]) || 0;
-      const max = getMaxQuantityForProduct(productId);
-      const nextQty = Math.min(max, Math.max(0, currentQty + delta));
+      const nextQty = Math.max(0, currentQty + delta);
 
       if (nextQty <= 0) {
         const next = { ...current };
@@ -398,41 +381,6 @@ export default function FlowerOrderFormModal({
       return { ...current, [productId]: String(nextQty) };
     });
   }
-
-  useEffect(() => {
-    if (!open || !form.branch_id || stockLoading) {
-      return;
-    }
-
-    setProductQuantities((current) => {
-      let changed = false;
-      const next = { ...current };
-
-      for (const [productId, qtyStr] of Object.entries(current)) {
-        const onHand = stockByProductId[productId] ?? 0;
-        const credit = creditByProductId[productId] ?? 0;
-        const max = Math.max(0, onHand + credit);
-        const qty = Number(qtyStr) || 0;
-
-        if (max <= 0) {
-          if (existingOrder && qty > 0) {
-            continue;
-          }
-
-          delete next[productId];
-          changed = true;
-          continue;
-        }
-
-        if (qty > max) {
-          next[productId] = String(max);
-          changed = true;
-        }
-      }
-
-      return changed ? next : current;
-    });
-  }, [stockByProductId, creditByProductId, form.branch_id, open, stockLoading, existingOrder]);
 
   const balance = useMemo(() => {
     const total = totalAmountDraft === '' ? 0 : Number(totalAmountDraft);
@@ -633,31 +581,6 @@ export default function FlowerOrderFormModal({
 
     if (items.length === 0) {
       setErrorMessage('Add at least one flower type with quantity.');
-      return null;
-    }
-
-    const neededByProduct = new Map<string, { name: string; qty: number }>();
-    for (const item of items) {
-      const existingQty = neededByProduct.get(item.product_id);
-      if (existingQty) {
-        existingQty.qty += item.quantity;
-      } else {
-        neededByProduct.set(item.product_id, { name: item.item_name, qty: item.quantity });
-      }
-    }
-
-    for (const [productId, { name, qty }] of neededByProduct) {
-      const available = (stockByProductId[productId] ?? 0) + (creditByProductId[productId] ?? 0);
-      if (qty > available) {
-        setErrorMessage(
-          `Insufficient stock for ${name}. Available: ${available}, requested: ${qty}.`,
-        );
-        return null;
-      }
-    }
-
-    if (items.some((item) => item.quantity <= 0)) {
-      setErrorMessage('Each flower line must have at least 1 in stock.');
       return null;
     }
 
@@ -1304,11 +1227,15 @@ export default function FlowerOrderFormModal({
               <>
                 {!form.branch_id ? (
                   <p className="mb-2 text-xs text-amber-800">
-                    Select a branch above to load stock limits for each flower type.
+                    Select a branch above to see on-hand counts for each flower type.
                   </p>
                 ) : stockLoading ? (
                   <p className="mb-2 text-xs text-brand-brown/60">Loading branch stock...</p>
-                ) : null}
+                ) : (
+                  <p className="mb-2 text-xs text-brand-brown/65">
+                    Walk-in orders are allowed even at 0 stock — inventory may go negative until you stock in.
+                  </p>
+                )}
 
                 <input
                   type="search"
@@ -1327,13 +1254,12 @@ export default function FlowerOrderFormModal({
                     ) : (
                       pickerProducts.map((product) => {
                         const qty = Number(productQuantities[product.id]) || 0;
-                        const maxQty = getMaxQuantityForProduct(product.id);
-                        const available =
+                        const onHand =
                           form.branch_id && !stockLoading
                             ? (stockByProductId[product.id] ?? 0) + (creditByProductId[product.id] ?? 0)
                             : null;
                         const isSelected = qty > 0;
-                        const isOutOfStock = available !== null && maxQty <= 0;
+                        const willGoNegative = onHand !== null && qty > onHand;
 
                         return (
                           <div
@@ -1344,10 +1270,14 @@ export default function FlowerOrderFormModal({
                           >
                             <div className="min-w-0 flex-1">
                               <p className="text-sm font-medium text-brand-dark">{product.name}</p>
-                              {available !== null ? (
-                                <p className="text-xs text-brand-brown/65">
-                                  {available} available
-                                  {isOutOfStock ? ' — out of stock' : ''}
+                              {onHand !== null ? (
+                                <p
+                                  className={`text-xs ${
+                                    willGoNegative ? 'text-amber-800' : 'text-brand-brown/65'
+                                  }`}
+                                >
+                                  {onHand} on hand
+                                  {willGoNegative ? ' — will go negative on day close' : ''}
                                 </p>
                               ) : null}
                             </div>
@@ -1368,16 +1298,14 @@ export default function FlowerOrderFormModal({
                                 value={qty > 0 ? String(qty) : ''}
                                 placeholder="0"
                                 onChange={(event) => setProductQuantity(product.id, event.target.value)}
-                                disabled={isOutOfStock}
                                 className="flower-input h-9 w-12 px-1 text-center text-sm"
                                 aria-label={`Quantity for ${product.name}`}
                               />
                               <button
                                 type="button"
                                 aria-label={`Add one ${product.name}`}
-                                disabled={isOutOfStock || qty >= maxQty}
                                 onClick={() => adjustProductQuantity(product.id, 1)}
-                                className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-brand-dark/20 bg-brand-dark text-white transition hover:bg-brand-brown disabled:cursor-not-allowed disabled:opacity-40"
+                                className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-brand-dark/20 bg-brand-dark text-white transition hover:bg-brand-brown"
                               >
                                 <Plus className="h-4 w-4" />
                               </button>

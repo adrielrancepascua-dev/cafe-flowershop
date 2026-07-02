@@ -364,6 +364,7 @@ async function applyFlowerStockChangeSupabase(input: {
   delta: number;
   movementType: string;
   note: string;
+  allowNegative?: boolean;
 }): Promise<void> {
   const supabase = await requireAuthenticatedSupabaseClient();
   const quantity = Math.abs(input.delta);
@@ -386,7 +387,7 @@ async function applyFlowerStockChangeSupabase(input: {
   const previousOnHand = Number(existingStock?.on_hand ?? 0);
   const nextOnHand = previousOnHand + input.delta;
 
-  if (nextOnHand < 0) {
+  if (!input.allowNegative && nextOnHand < 0) {
     throw new Error('Insufficient stock. Stock out would result in negative balance.');
   }
 
@@ -450,62 +451,17 @@ export async function deductFlowerInventoryForOrderSupabase(input: {
     delta: -input.quantity,
     movementType: 'order_deduct',
     note: `Order ${input.orderId} day-close deduct`,
+    allowNegative: true,
   });
 }
 
+/** Orders may use flowers before stock-in; day-close deduction can drive counts negative. */
 export async function validateFlowerOrderStockSupabase(
-  branchId: string,
-  items: Array<{ product_id: string; item_name: string; quantity: number }>,
-  creditByProductId: Record<string, number> = {},
+  _branchId: string,
+  _items: Array<{ product_id: string; item_name: string; quantity: number }>,
+  _creditByProductId: Record<string, number> = {},
 ): Promise<void> {
-  const supabase = await requireAuthenticatedSupabaseClient();
-  const productIds = [...new Set(items.map((item) => item.product_id))];
-
-  if (productIds.length === 0) {
-    return;
-  }
-
-  const { data, error } = await supabase
-    .from('flower_inventory_stock')
-    .select('product_id, on_hand')
-    .eq('branch_id', branchId)
-    .in('product_id', productIds);
-
-  if (error) {
-    throw error;
-  }
-
-  const stockByProduct = new Map<string, number>();
-  for (const row of (data as Array<{ product_id: string; on_hand: number }> | null) ?? []) {
-    stockByProduct.set(row.product_id, Number(row.on_hand));
-  }
-
-  const neededByProduct = new Map<string, { name: string; qty: number }>();
-
-  for (const item of items) {
-    const existing = neededByProduct.get(item.product_id);
-    if (existing) {
-      existing.qty += item.quantity;
-      continue;
-    }
-
-    neededByProduct.set(item.product_id, {
-      name: item.item_name,
-      qty: item.quantity,
-    });
-  }
-
-  for (const [productId, { name, qty }] of neededByProduct) {
-    const onHand = stockByProduct.get(productId) ?? 0;
-    const credit = creditByProductId[productId] ?? 0;
-    const available = onHand + credit;
-
-    if (qty > available) {
-      throw new Error(
-        `Insufficient stock for ${name}. Available: ${available}, requested: ${qty}.`,
-      );
-    }
-  }
+  return;
 }
 
 export async function transferFlowerInventorySupabase(

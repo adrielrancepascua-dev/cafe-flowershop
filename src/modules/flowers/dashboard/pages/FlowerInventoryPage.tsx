@@ -735,7 +735,9 @@ export default function FlowerInventoryPage() {
                             <p className="text-xs font-medium uppercase tracking-wide text-brand-brown/60">
                               {isAllBranchesView ? 'Total on hand' : 'On hand'}
                             </p>
-                            <p className="text-2xl font-bold leading-tight text-brand-dark">{row.on_hand}</p>
+                            <p className={`text-2xl font-bold leading-tight ${row.on_hand < 0 ? 'text-red-700' : 'text-brand-dark'}`}>
+                          {row.on_hand}
+                        </p>
                           </div>
                         </div>
                         {isAdmin && !isAllBranchesView ? (
@@ -775,7 +777,9 @@ export default function FlowerInventoryPage() {
                         <p className="text-xs font-medium uppercase tracking-wide text-brand-brown/60">
                           {isAllBranchesView ? 'Total on hand' : 'On hand'}
                         </p>
-                        <p className="text-2xl font-bold leading-tight text-brand-dark">{row.on_hand}</p>
+                        <p className={`text-2xl font-bold leading-tight ${row.on_hand < 0 ? 'text-red-700' : 'text-brand-dark'}`}>
+                          {row.on_hand}
+                        </p>
                       </div>
                     </div>
                     {isAdmin && !isAllBranchesView ? (
@@ -861,7 +865,7 @@ export default function FlowerInventoryPage() {
                             <td className="min-w-[10rem] px-3 py-2">
                               <InventoryStockRowLabel name={row.product_name} color={row.product_color} />
                             </td>
-                            <td className="px-3 py-2 font-semibold">{row.on_hand}</td>
+                            <td className={`px-3 py-2 font-semibold ${row.on_hand < 0 ? 'text-red-700' : ''}`}>{row.on_hand}</td>
                             {isAdmin && !isAllBranchesView ? (
                               <td className="min-w-[16rem] px-3 py-2">
                                 <StockAdjustControls
@@ -897,7 +901,7 @@ export default function FlowerInventoryPage() {
                         <td className="min-w-[10rem] px-3 py-2">
                           <InventoryMiscRowLabel name={row.product_name} />
                         </td>
-                        <td className="px-3 py-2 font-semibold">{row.on_hand}</td>
+                        <td className={`px-3 py-2 font-semibold ${row.on_hand < 0 ? 'text-red-700' : ''}`}>{row.on_hand}</td>
                         {isAdmin && !isAllBranchesView ? (
                           <td className="min-w-[16rem] px-3 py-2">
                             <StockAdjustControls
