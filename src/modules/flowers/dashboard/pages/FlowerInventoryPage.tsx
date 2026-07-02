@@ -11,7 +11,7 @@ import type { FlowerBranchOption, FlowerInventoryMovementRow, FlowerInventorySto
 import FlowerPageHeader from '../../shared/components/FlowerPageHeader';
 import { RequireFlowerAdmin } from '../components/RequireFlowerAuth';
 import FlowerInventoryStockPrint from '../components/FlowerPrintableInventoryStockPanel';
-import { Minus, Plus, ArrowLeftRight, Package, Printer } from 'lucide-react';
+import { Minus, Plus, ArrowLeftRight, Package, Printer, ChevronDown } from 'lucide-react';
 import { INVENTORY_MOVEMENT_TYPE_LABELS } from '../../shared/utils/flower-format';
 import {
   compareInventoryStockRows,
@@ -47,22 +47,322 @@ function aggregateStockByProduct(rows: FlowerInventoryStockRow[]): FlowerInvento
   return [...totals.values()].sort(compareInventoryStockRows);
 }
 
-function InventoryFlowerTypeSectionHeader({
+function InventoryColorVariantLabel({ color }: { color: string }) {
+  const normalizedColor = normalizeFlowerProductColor(color);
+
+  return (
+    <div className="flex min-w-0 items-center gap-2 pl-2 sm:pl-4">
+      <span
+        className={`h-3.5 w-3.5 shrink-0 rounded-full ${flowerProductColorSwatchClass(normalizedColor)}`}
+        aria-hidden="true"
+      />
+      <span className="inline-flex rounded-full border border-brand-muted/45 bg-white px-2.5 py-0.5 text-xs font-semibold text-brand-dark">
+        {normalizedColor}
+      </span>
+    </div>
+  );
+}
+
+function InventoryFlowerCategoryHeader({
   flowerType,
-  itemCount,
-  unitTotal,
+  rows,
+  expanded,
+  onToggle,
 }: {
   flowerType: string;
-  itemCount: number;
-  unitTotal: number;
+  rows: FlowerInventoryStockRow[];
+  expanded: boolean;
+  onToggle: () => void;
+}) {
+  const unitTotal = rows.reduce((sum, row) => sum + row.on_hand, 0);
+  const panelId = `inventory-category-${flowerType.replace(/\s+/g, '-').toLowerCase()}`;
+
+  return (
+    <button
+      type="button"
+      aria-expanded={expanded}
+      aria-controls={panelId}
+      onClick={onToggle}
+      className="flex w-full items-start gap-2 text-left transition hover:opacity-90"
+    >
+      <ChevronDown
+        className={`mt-0.5 h-4 w-4 shrink-0 text-brand-brown/70 transition-transform ${
+          expanded ? 'rotate-0' : '-rotate-90'
+        }`}
+        aria-hidden
+      />
+      <div className="min-w-0 flex-1">
+        <div className="flex flex-wrap items-center gap-2">
+          <p className="font-semibold text-brand-dark">{flowerType}</p>
+          <span className="rounded-full border border-brand-muted/40 bg-white/90 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-brand-brown/70">
+            Category
+          </span>
+        </div>
+        <p className="mt-0.5 text-xs text-brand-brown/65">
+          {rows.length} colors · {unitTotal} units · {expanded ? 'tap to collapse' : 'tap to expand'}
+        </p>
+        {!expanded ? (
+          <div className="mt-2 flex flex-wrap gap-1.5">
+            {rows.map((row) => {
+              const normalizedColor = normalizeFlowerProductColor(row.product_color);
+              return (
+                <span
+                  key={row.product_id}
+                  className="inline-flex items-center gap-1.5 rounded-full border border-brand-muted/45 bg-white px-2 py-0.5 text-xs font-semibold text-brand-dark"
+                >
+                  <span
+                    className={`h-2.5 w-2.5 rounded-full ${flowerProductColorSwatchClass(normalizedColor)}`}
+                    aria-hidden
+                  />
+                  {normalizedColor}
+                  <span className="font-normal text-brand-brown/60">({row.on_hand})</span>
+                </span>
+              );
+            })}
+          </div>
+        ) : null}
+      </div>
+    </button>
+  );
+}
+
+function InventoryFlowerCategoryMobileGroup({
+  section,
+  isAllBranchesView,
+  isAdmin,
+  onAdjust,
+}: {
+  section: { flowerType: string; rows: FlowerInventoryStockRow[] };
+  isAllBranchesView: boolean;
+  isAdmin: boolean;
+  onAdjust: (
+    branchId: string,
+    productId: string,
+    movementType: 'stock_in' | 'stock_out',
+    quantity: number,
+  ) => Promise<void>;
+}) {
+  const isCategory = section.rows.length > 1;
+  const [expanded, setExpanded] = useState(false);
+  const panelId = `inventory-category-mobile-${section.flowerType.replace(/\s+/g, '-').toLowerCase()}`;
+
+  if (!isCategory) {
+    const row = section.rows[0];
+    if (!row) {
+      return null;
+    }
+
+    return (
+      <InventoryFlowerMobileStockCard
+        row={row}
+        isAllBranchesView={isAllBranchesView}
+        isAdmin={isAdmin}
+        onAdjust={onAdjust}
+        showColorVariant={false}
+      />
+    );
+  }
+
+  return (
+    <div className="overflow-hidden rounded-xl border border-brand-muted/40 bg-white shadow-sm">
+      <div
+        className={`bg-gradient-to-r from-brand-beige/70 to-brand-cream/40 px-3 py-3 sm:px-4 ${
+          expanded ? 'border-b border-brand-muted/25' : ''
+        }`}
+      >
+        <InventoryFlowerCategoryHeader
+          flowerType={section.flowerType}
+          rows={section.rows}
+          expanded={expanded}
+          onToggle={() => setExpanded((current) => !current)}
+        />
+      </div>
+
+      {expanded ? (
+        <div id={panelId} className="divide-y divide-brand-muted/15 bg-brand-cream/10">
+          {section.rows.map((row) => (
+            <InventoryFlowerMobileStockCard
+              key={isAllBranchesView ? row.product_id : `${row.branch_id}-${row.product_id}-card`}
+              row={row}
+              isAllBranchesView={isAllBranchesView}
+              isAdmin={isAdmin}
+              onAdjust={onAdjust}
+              showColorVariant
+              nested
+            />
+          ))}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+function InventoryFlowerMobileStockCard({
+  row,
+  isAllBranchesView,
+  isAdmin,
+  onAdjust,
+  showColorVariant,
+  nested = false,
+}: {
+  row: FlowerInventoryStockRow;
+  isAllBranchesView: boolean;
+  isAdmin: boolean;
+  onAdjust: (
+    branchId: string,
+    productId: string,
+    movementType: 'stock_in' | 'stock_out',
+    quantity: number,
+  ) => Promise<void>;
+  showColorVariant: boolean;
+  nested?: boolean;
 }) {
   return (
-    <div className="flex items-center justify-between gap-3 rounded-xl border border-brand-muted/40 bg-brand-beige/35 px-3 py-2.5">
-      <p className="font-semibold text-brand-dark">{flowerType}</p>
-      <p className="shrink-0 text-xs font-medium text-brand-brown/70">
-        {itemCount} color{itemCount === 1 ? '' : 's'} · {unitTotal} units
-      </p>
+    <div className={nested ? 'px-4 py-3' : 'flower-card p-4'}>
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0 flex-1">
+          {showColorVariant ? (
+            <InventoryColorVariantLabel color={row.product_color} />
+          ) : (
+            <InventoryStockRowLabel name={row.product_name} color={row.product_color} />
+          )}
+          <p className="mt-1 text-xs text-brand-brown/70">
+            {isAllBranchesView ? 'All branches total' : row.branch_name}
+          </p>
+        </div>
+        <div className="shrink-0 text-right">
+          <p className="text-xs font-medium uppercase tracking-wide text-brand-brown/60">
+            {isAllBranchesView ? 'Total on hand' : 'On hand'}
+          </p>
+          <p
+            className={`text-2xl font-bold leading-tight ${
+              row.on_hand < 0 ? 'text-red-700' : 'text-brand-dark'
+            }`}
+          >
+            {row.on_hand}
+          </p>
+        </div>
+      </div>
+      {isAdmin && !isAllBranchesView ? (
+        <div className="mt-4 border-t border-brand-muted/30 pt-4">
+          <StockAdjustControls branchId={row.branch_id} productId={row.product_id} onAdjust={onAdjust} />
+        </div>
+      ) : null}
     </div>
+  );
+}
+
+function InventoryFlowerCategoryDesktopGroup({
+  section,
+  isAllBranchesView,
+  isAdmin,
+  stockTableColSpan,
+  onAdjust,
+}: {
+  section: { flowerType: string; rows: FlowerInventoryStockRow[] };
+  isAllBranchesView: boolean;
+  isAdmin: boolean;
+  stockTableColSpan: number;
+  onAdjust: (
+    branchId: string,
+    productId: string,
+    movementType: 'stock_in' | 'stock_out',
+    quantity: number,
+  ) => Promise<void>;
+}) {
+  const isCategory = section.rows.length > 1;
+  const [expanded, setExpanded] = useState(false);
+
+  if (!isCategory) {
+    const row = section.rows[0];
+    if (!row) {
+      return null;
+    }
+
+    return (
+      <InventoryFlowerDesktopStockRow
+        row={row}
+        isAllBranchesView={isAllBranchesView}
+        isAdmin={isAdmin}
+        onAdjust={onAdjust}
+        showColorVariant={false}
+      />
+    );
+  }
+
+  return (
+    <Fragment>
+      <tr className="border-t border-brand-muted/30 bg-brand-beige/25">
+        <td colSpan={stockTableColSpan} className="px-3 py-2.5">
+          <InventoryFlowerCategoryHeader
+            flowerType={section.flowerType}
+            rows={section.rows}
+            expanded={expanded}
+            onToggle={() => setExpanded((current) => !current)}
+          />
+        </td>
+      </tr>
+      {expanded
+        ? section.rows.map((row) => (
+            <InventoryFlowerDesktopStockRow
+              key={isAllBranchesView ? row.product_id : `${row.branch_id}-${row.product_id}`}
+              row={row}
+              isAllBranchesView={isAllBranchesView}
+              isAdmin={isAdmin}
+              onAdjust={onAdjust}
+              showColorVariant
+              nested
+            />
+          ))
+        : null}
+    </Fragment>
+  );
+}
+
+function InventoryFlowerDesktopStockRow({
+  row,
+  isAllBranchesView,
+  isAdmin,
+  onAdjust,
+  showColorVariant,
+  nested = false,
+}: {
+  row: FlowerInventoryStockRow;
+  isAllBranchesView: boolean;
+  isAdmin: boolean;
+  onAdjust: (
+    branchId: string,
+    productId: string,
+    movementType: 'stock_in' | 'stock_out',
+    quantity: number,
+  ) => Promise<void>;
+  showColorVariant: boolean;
+  nested?: boolean;
+}) {
+  return (
+    <tr className={`border-t border-brand-muted/30 ${nested ? 'bg-brand-cream/10' : ''}`}>
+      {isAllBranchesView ? null : (
+        <td className="px-3 py-2 whitespace-nowrap">{row.branch_name}</td>
+      )}
+      <td className="min-w-[10rem] px-3 py-2">
+        {showColorVariant ? (
+          <InventoryColorVariantLabel color={row.product_color} />
+        ) : (
+          <InventoryStockRowLabel name={row.product_name} color={row.product_color} />
+        )}
+      </td>
+      <td className={`px-3 py-2 font-semibold ${row.on_hand < 0 ? 'text-red-700' : ''}`}>{row.on_hand}</td>
+      {isAdmin && !isAllBranchesView ? (
+        <td className="min-w-[16rem] px-3 py-2">
+          <StockAdjustControls
+            branchId={row.branch_id}
+            productId={row.product_id}
+            onAdjust={onAdjust}
+            layout="inline"
+          />
+        </td>
+      ) : null}
+    </tr>
   );
 }
 
@@ -706,49 +1006,17 @@ export default function FlowerInventoryPage() {
             {isRefreshing ? ' · Updating…' : ''}
           </p>
 
-          <div className="mt-5 space-y-5 md:hidden">
+          <div className="mt-5 space-y-3 md:hidden">
             {stockKindTab === 'flower' ? (
               <>
                 {stockByFlowerType.map((section) => (
-                  <div key={section.flowerType} className="space-y-3">
-                    <InventoryFlowerTypeSectionHeader
-                      flowerType={section.flowerType}
-                      itemCount={section.rows.length}
-                      unitTotal={section.rows.reduce((sum, row) => sum + row.on_hand, 0)}
-                    />
-                    {section.rows.map((row) => (
-                      <div
-                        key={isAllBranchesView ? row.product_id : `${row.branch_id}-${row.product_id}-card`}
-                        className="flower-card p-4"
-                      >
-                        <div className="flex items-start justify-between gap-3">
-                          <div className="min-w-0 flex-1">
-                            <InventoryStockRowLabel name={row.product_name} color={row.product_color} />
-                            <p className="mt-1 text-xs text-brand-brown/70">
-                              {isAllBranchesView ? 'All branches total' : row.branch_name}
-                            </p>
-                          </div>
-                          <div className="shrink-0 text-right">
-                            <p className="text-xs font-medium uppercase tracking-wide text-brand-brown/60">
-                              {isAllBranchesView ? 'Total on hand' : 'On hand'}
-                            </p>
-                            <p className={`text-2xl font-bold leading-tight ${row.on_hand < 0 ? 'text-red-700' : 'text-brand-dark'}`}>
-                          {row.on_hand}
-                        </p>
-                          </div>
-                        </div>
-                        {isAdmin && !isAllBranchesView ? (
-                          <div className="mt-4 border-t border-brand-muted/30 pt-4">
-                            <StockAdjustControls
-                              branchId={row.branch_id}
-                              productId={row.product_id}
-                              onAdjust={handleAdjust}
-                            />
-                          </div>
-                        ) : null}
-                      </div>
-                    ))}
-                  </div>
+                  <InventoryFlowerCategoryMobileGroup
+                    key={section.flowerType}
+                    section={section}
+                    isAllBranchesView={isAllBranchesView}
+                    isAdmin={isAdmin}
+                    onAdjust={handleAdjust}
+                  />
                 ))}
                 {stockByFlowerType.length === 0 ? (
                   <p className="rounded-xl border border-brand-muted/30 px-3 py-6 text-center text-sm text-brand-brown/60">
@@ -841,41 +1109,14 @@ export default function FlowerInventoryPage() {
                 {stockKindTab === 'flower' ? (
                   <>
                     {stockByFlowerType.map((section) => (
-                      <Fragment key={section.flowerType}>
-                        <tr className="border-t border-brand-muted/30 bg-brand-beige/25">
-                          <td colSpan={stockTableColSpan} className="px-3 py-2">
-                            <InventoryFlowerTypeSectionHeader
-                              flowerType={section.flowerType}
-                              itemCount={section.rows.length}
-                              unitTotal={section.rows.reduce((sum, row) => sum + row.on_hand, 0)}
-                            />
-                          </td>
-                        </tr>
-                        {section.rows.map((row) => (
-                          <tr
-                            key={isAllBranchesView ? row.product_id : `${row.branch_id}-${row.product_id}`}
-                            className="border-t border-brand-muted/30"
-                          >
-                            {isAllBranchesView ? null : (
-                              <td className="px-3 py-2 whitespace-nowrap">{row.branch_name}</td>
-                            )}
-                            <td className="min-w-[10rem] px-3 py-2">
-                              <InventoryStockRowLabel name={row.product_name} color={row.product_color} />
-                            </td>
-                            <td className={`px-3 py-2 font-semibold ${row.on_hand < 0 ? 'text-red-700' : ''}`}>{row.on_hand}</td>
-                            {isAdmin && !isAllBranchesView ? (
-                              <td className="min-w-[16rem] px-3 py-2">
-                                <StockAdjustControls
-                                  branchId={row.branch_id}
-                                  productId={row.product_id}
-                                  onAdjust={handleAdjust}
-                                  layout="inline"
-                                />
-                              </td>
-                            ) : null}
-                          </tr>
-                        ))}
-                      </Fragment>
+                      <InventoryFlowerCategoryDesktopGroup
+                        key={section.flowerType}
+                        section={section}
+                        isAllBranchesView={isAllBranchesView}
+                        isAdmin={isAdmin}
+                        stockTableColSpan={stockTableColSpan}
+                        onAdjust={handleAdjust}
+                      />
                     ))}
                     {stockByFlowerType.length === 0 ? (
                       <tr>
