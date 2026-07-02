@@ -1,5 +1,5 @@
 import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
-import { Minus, Plus, X } from 'lucide-react';
+import { ChevronDown, Minus, Plus, X } from 'lucide-react';
 import { listFlowerInventoryStock } from '../../../../services/flowers/inventory';
 import type { FlowerProduct } from '../../shared/types/flower-product';
 import type { FlowerBranchOption } from '../../shared/types/flower-inventory';
@@ -538,7 +538,23 @@ function FlowerCategoryPickerGroup({
   onSetQuantity: (productId: string, rawValue: string) => void;
   onAdjustQuantity: (productId: string, delta: number) => void;
 }) {
-  const groupHasSelection = group.variants.some((variant) => (Number(quantities[variant.id]) || 0) > 0);
+  const selectedVariants = group.variants
+    .map((variant) => ({
+      variant,
+      quantity: Number(quantities[variant.id]) || 0,
+    }))
+    .filter((entry) => entry.quantity > 0);
+  const groupUnits = selectedVariants.reduce((sum, entry) => sum + entry.quantity, 0);
+  const groupHasSelection = groupUnits > 0;
+  const [expanded, setExpanded] = useState(groupHasSelection);
+  const panelId = `flower-category-${group.flowerType.replace(/\s+/g, '-').toLowerCase()}`;
+
+  const collapsedSummary = selectedVariants
+    .map(({ variant, quantity }) => {
+      const colorLabel = normalizeFlowerProductColor(variant.color) || 'Color';
+      return `${colorLabel} x${quantity}`;
+    })
+    .join(', ');
 
   return (
     <div className="border-b border-brand-muted/30 p-2 last:border-b-0">
@@ -547,74 +563,89 @@ function FlowerCategoryPickerGroup({
           groupHasSelection ? 'border-brand-dark/25 ring-1 ring-brand-dark/10' : 'border-brand-muted/40'
         }`}
       >
-        <div className="border-b border-brand-muted/25 bg-gradient-to-r from-brand-beige/70 to-brand-cream/40 px-3 py-2.5">
-          <div className="flex items-start justify-between gap-2">
-            <div>
+        <button
+          type="button"
+          aria-expanded={expanded}
+          aria-controls={panelId}
+          onClick={() => setExpanded((current) => !current)}
+          className="flex w-full items-start gap-2 border-b border-brand-muted/25 bg-gradient-to-r from-brand-beige/70 to-brand-cream/40 px-3 py-2.5 text-left transition hover:from-brand-beige/85 hover:to-brand-cream/55"
+        >
+          <ChevronDown
+            className={`mt-0.5 h-4 w-4 shrink-0 text-brand-brown/70 transition-transform ${
+              expanded ? 'rotate-0' : '-rotate-90'
+            }`}
+            aria-hidden
+          />
+          <div className="min-w-0 flex-1">
+            <div className="flex items-start justify-between gap-2">
               <p className="text-sm font-semibold text-brand-dark">{group.flowerType}</p>
-              <p className="mt-0.5 text-[11px] font-medium uppercase tracking-wide text-brand-brown/55">
-                {group.variants.length} color variations
-              </p>
+              <span className="shrink-0 rounded-full border border-brand-muted/40 bg-white/90 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-brand-brown/70">
+                Category
+              </span>
             </div>
-            <span className="shrink-0 rounded-full border border-brand-muted/40 bg-white/90 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-brand-brown/70">
-              Category
-            </span>
+            <p className="mt-0.5 text-[11px] font-medium uppercase tracking-wide text-brand-brown/55">
+              {group.variants.length} colors
+              {groupHasSelection ? ` · ${groupUnits} stem${groupUnits === 1 ? '' : 's'} selected` : ' · tap to choose'}
+            </p>
+            {!expanded && groupHasSelection ? (
+              <p className="mt-1 text-xs text-brand-brown/70">{collapsedSummary}</p>
+            ) : null}
           </div>
-        </div>
+        </button>
 
-        <div className="divide-y divide-brand-muted/15 bg-brand-cream/15">
-          {group.variants.map((variant) => {
-            const qty = Number(quantities[variant.id]) || 0;
-            const onHand = branchSelected && !stockLoading
-              ? (stockByProductId[variant.id] ?? 0) + (creditByProductId[variant.id] ?? 0)
-              : null;
-            const willGoNegative = onHand !== null && qty > onHand;
-            const colorLabel = normalizeFlowerProductColor(variant.color) || 'Color';
-            const ariaLabel = `${group.flowerType} — ${colorLabel}`;
+        {expanded ? (
+          <div id={panelId} className="divide-y divide-brand-muted/15 bg-brand-cream/15">
+            {group.variants.map((variant) => {
+              const qty = Number(quantities[variant.id]) || 0;
+              const onHand = branchSelected && !stockLoading
+                ? (stockByProductId[variant.id] ?? 0) + (creditByProductId[variant.id] ?? 0)
+                : null;
+              const willGoNegative = onHand !== null && qty > onHand;
+              const colorLabel = normalizeFlowerProductColor(variant.color) || 'Color';
+              const ariaLabel = `${group.flowerType} — ${colorLabel}`;
 
-            return (
-              <div
-                key={variant.id}
-                className={`flex items-center gap-2 py-2 pr-3 pl-4 sm:pl-5 ${
-                  qty > 0 ? 'bg-brand-beige/35' : 'bg-white/60'
-                }`}
-              >
-                <span
-                  aria-hidden
-                  className="mt-0.5 h-full w-0.5 shrink-0 self-stretch rounded-full bg-brand-muted/50"
-                />
-                <div className="min-w-0 flex-1">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <span className="rounded-full border border-brand-muted/45 bg-white px-2.5 py-0.5 text-xs font-semibold text-brand-dark">
+              return (
+                <div
+                  key={variant.id}
+                  className={`flex items-center gap-2 py-2 pr-3 pl-4 sm:pl-5 ${
+                    qty > 0 ? 'bg-brand-beige/35' : 'bg-white/60'
+                  }`}
+                >
+                  <span
+                    aria-hidden
+                    className="mt-0.5 h-full w-0.5 shrink-0 self-stretch rounded-full bg-brand-muted/50"
+                  />
+                  <div className="min-w-0 flex-1">
+                    <span className="inline-flex rounded-full border border-brand-muted/45 bg-white px-2.5 py-0.5 text-xs font-semibold text-brand-dark">
                       {colorLabel}
                     </span>
-                    <span className="text-[11px] text-brand-brown/55">variation</span>
+                    {onHand !== null ? (
+                      <p
+                        className={`mt-1 text-[11px] sm:hidden ${
+                          willGoNegative ? 'text-amber-800' : 'text-brand-brown/60'
+                        }`}
+                      >
+                        {onHand} on hand
+                        {willGoNegative ? ' — will go negative on day close' : ''}
+                      </p>
+                    ) : null}
                   </div>
-                  {onHand !== null ? (
-                    <p
-                      className={`mt-1 text-[11px] sm:hidden ${
-                        willGoNegative ? 'text-amber-800' : 'text-brand-brown/60'
-                      }`}
-                    >
-                      {onHand} on hand
-                      {willGoNegative ? ' — will go negative on day close' : ''}
-                    </p>
-                  ) : null}
-                </div>
 
-                <FlowerQuantityControls
-                  productId={variant.id}
-                  label={ariaLabel}
-                  qty={qty}
-                  onHand={onHand}
-                  willGoNegative={willGoNegative}
-                  onSetQuantity={onSetQuantity}
-                  onAdjustQuantity={onAdjustQuantity}
-                  compact
-                />
-              </div>
-            );
-          })}
-        </div>
+                  <FlowerQuantityControls
+                    productId={variant.id}
+                    label={ariaLabel}
+                    qty={qty}
+                    onHand={onHand}
+                    willGoNegative={willGoNegative}
+                    onSetQuantity={onSetQuantity}
+                    onAdjustQuantity={onAdjustQuantity}
+                    compact
+                  />
+                </div>
+              );
+            })}
+          </div>
+        ) : null}
       </div>
     </div>
   );
@@ -1906,7 +1937,7 @@ export default function FlowerOrderFormModal({
                 </p>
               ) : !isViewMode ? (
                 <p className="text-xs text-brand-brown/60">
-                  Single flowers use one row · multi-color types open as a category with color variations inside
+                  Multi-color flowers collapse by default — tap the name to expand colors, tap again to collapse
                 </p>
               ) : null}
             </div>
