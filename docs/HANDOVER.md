@@ -10,6 +10,8 @@ Use this before collecting the ₱30k balance. Run on the **production** deploy 
 - [x] `supabase/schema_flowers_v2.sql` applied in Supabase SQL editor
 - [ ] `supabase/fix_flower_branches_rls.sql` applied (if branch dropdown is empty)
 - [ ] `supabase/seed_flowers_products_and_stock.sql` applied (products + starting stock)
+- [ ] `supabase/add_flower_product_color.sql` applied (flower color categories on Products)
+- [ ] `supabase/add_flower_product_kind.sql` applied (Miscellaneous tab for wrappers, chocolates, etc.)
 - [ ] `supabase/add_staff_management.sql` applied (team page + first-login onboarding)
 - [ ] `supabase/seed_admin_aleajcq.sql` applied after creating Auth user **aleajcq@gmail.com** (temp password `1234`; owner sets personal password on first login — no branch step)
 - [ ] `SUPABASE_SERVICE_ROLE_KEY` set on Vercel (server only — enables **Team** page to create staff)

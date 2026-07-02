@@ -1,4 +1,5 @@
 import type { FlowerInventoryStockRow } from '../types/flower-inventory';
+import { normalizeFlowerProductKind } from './flower-product-kind';
 
 export const FLOWER_PRODUCT_COLOR_UNCategorized = 'Uncategorized';
 
@@ -86,6 +87,21 @@ export function compareFlowerTypeLabels(left: string, right: string): number {
 }
 
 export function compareInventoryStockRows(left: FlowerInventoryStockRow, right: FlowerInventoryStockRow): number {
+  if (left.branch_name !== right.branch_name) {
+    return left.branch_name.localeCompare(right.branch_name);
+  }
+
+  const leftKind = normalizeFlowerProductKind(left.product_kind);
+  const rightKind = normalizeFlowerProductKind(right.product_kind);
+
+  if (leftKind !== rightKind) {
+    return leftKind.localeCompare(rightKind);
+  }
+
+  if (leftKind === 'misc') {
+    return left.product_name.localeCompare(right.product_name);
+  }
+
   const typeCompare = compareFlowerTypeLabels(
     deriveFlowerTypeFromProduct(left.product_name, left.product_color),
     deriveFlowerTypeFromProduct(right.product_name, right.product_color),
@@ -116,6 +132,7 @@ export function compareFlowerProducts(
       product_id: left.name,
       product_name: left.name,
       product_color: left.color,
+      product_kind: 'flower',
       branch_id: '',
       branch_name: '',
       on_hand: 0,
@@ -126,6 +143,7 @@ export function compareFlowerProducts(
       product_id: right.name,
       product_name: right.name,
       product_color: right.color,
+      product_kind: 'flower',
       branch_id: '',
       branch_name: '',
       on_hand: 0,
@@ -142,6 +160,10 @@ export function groupInventoryStockByFlowerType(rows: FlowerInventoryStockRow[])
   const buckets = new Map<string, FlowerInventoryStockRow[]>();
 
   for (const row of rows) {
+    if (normalizeFlowerProductKind(row.product_kind) !== 'flower') {
+      continue;
+    }
+
     const flowerType = deriveFlowerTypeFromProduct(row.product_name, row.product_color);
     const bucket = buckets.get(flowerType) ?? [];
     bucket.push(row);
@@ -154,6 +176,12 @@ export function groupInventoryStockByFlowerType(rows: FlowerInventoryStockRow[])
       flowerType,
       rows: [...typeRows].sort(compareInventoryStockRows),
     }));
+}
+
+export function groupInventoryStockMisc(rows: FlowerInventoryStockRow[]): FlowerInventoryStockRow[] {
+  return [...rows]
+    .filter((row) => normalizeFlowerProductKind(row.product_kind) === 'misc')
+    .sort((left, right) => left.product_name.localeCompare(right.product_name));
 }
 
 /** @deprecated Use groupInventoryStockByFlowerType */

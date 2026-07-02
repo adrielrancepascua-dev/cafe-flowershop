@@ -452,7 +452,7 @@ export default function FlowerOrderFormModal({
   const activeProducts = useMemo(
     () =>
       products
-        .filter((product) => product.is_active)
+        .filter((product) => product.is_active && product.product_kind === 'flower')
         .sort((left, right) => left.name.localeCompare(right.name)),
     [products],
   );

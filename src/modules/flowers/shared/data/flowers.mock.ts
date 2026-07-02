@@ -14,16 +14,16 @@ export const FLOWER_BRANCHES_MOCK: FlowerBranchOption[] = [
 ];
 
 export const FLOWER_STEMS_MOCK: FlowerStemCatalogItem[] = [
-  { id: 'stem-rose-red', name: 'Red Rose', color: 'Red', unit_cost: 45, is_active: true, created_at: NOW },
-  { id: 'stem-rose-pink', name: 'Pink Rose', color: 'Pink', unit_cost: 45, is_active: true, created_at: NOW },
-  { id: 'stem-tulip', name: 'Tulip', color: 'Mixed', unit_cost: 55, is_active: true, created_at: NOW },
-  { id: 'stem-sunflower', name: 'Sunflower', color: 'Yellow', unit_cost: 40, is_active: true, created_at: NOW },
-  { id: 'stem-carnation', name: 'Carnation', color: 'Pink', unit_cost: 35, is_active: true, created_at: NOW },
-  { id: 'stem-lily', name: 'Lily', color: 'White', unit_cost: 60, is_active: true, created_at: NOW },
-  { id: 'stem-babys-breath', name: "Baby's Breath", color: 'White', unit_cost: 25, is_active: true, created_at: NOW },
-  { id: 'stem-eucalyptus', name: 'Eucalyptus', color: 'Green', unit_cost: 30, is_active: true, created_at: NOW },
-  { id: 'stem-hydrangea', name: 'Hydrangea', color: 'Blue', unit_cost: 75, is_active: true, created_at: NOW },
-  { id: 'stem-gerbera', name: 'Gerbera', color: 'Orange', unit_cost: 38, is_active: true, created_at: NOW },
+  { id: 'stem-rose-red', name: 'Red Rose', product_kind: 'flower', color: 'Red', unit_cost: 45, is_active: true, created_at: NOW },
+  { id: 'stem-rose-pink', name: 'Pink Rose', product_kind: 'flower', color: 'Pink', unit_cost: 45, is_active: true, created_at: NOW },
+  { id: 'stem-tulip', name: 'Tulip', product_kind: 'flower', color: 'Mixed', unit_cost: 55, is_active: true, created_at: NOW },
+  { id: 'stem-sunflower', name: 'Sunflower', product_kind: 'flower', color: 'Yellow', unit_cost: 40, is_active: true, created_at: NOW },
+  { id: 'stem-carnation', name: 'Carnation', product_kind: 'flower', color: 'Pink', unit_cost: 35, is_active: true, created_at: NOW },
+  { id: 'stem-lily', name: 'Lily', product_kind: 'flower', color: 'White', unit_cost: 60, is_active: true, created_at: NOW },
+  { id: 'stem-babys-breath', name: "Baby's Breath", product_kind: 'flower', color: 'White', unit_cost: 25, is_active: true, created_at: NOW },
+  { id: 'stem-eucalyptus', name: 'Eucalyptus', product_kind: 'flower', color: 'Green', unit_cost: 30, is_active: true, created_at: NOW },
+  { id: 'stem-hydrangea', name: 'Hydrangea', product_kind: 'flower', color: 'Blue', unit_cost: 75, is_active: true, created_at: NOW },
+  { id: 'stem-gerbera', name: 'Gerbera', product_kind: 'flower', color: 'Orange', unit_cost: 38, is_active: true, created_at: NOW },
 ];
 
 export const FLOWER_INVENTORY_SEED: Record<string, Record<string, number>> = {

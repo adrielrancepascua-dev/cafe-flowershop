@@ -12,9 +12,10 @@ import type {
 } from '../../../modules/flowers/shared/types/flower-inventory';
 import { getLocalDayBoundsIso } from '../../../modules/flowers/shared/utils/flower-format';
 import {
-  compareFlowerProductColorLabels,
+  compareInventoryStockRows,
   normalizeFlowerProductColor,
 } from '../../../modules/flowers/shared/utils/flower-product-colors';
+import { normalizeFlowerProductKind } from '../../../modules/flowers/shared/utils/flower-product-kind';
 import {
   queryFlowerProductSummariesWithColorFallback,
   type FlowerProductSummaryDbRow,
@@ -29,6 +30,7 @@ type BranchRow = {
 type ProductRow = {
   id: string;
   name: string;
+  product_kind: string;
   color: string;
   is_active: boolean;
 };
@@ -182,6 +184,7 @@ export async function listFlowerInventoryStockSupabase(
         branch_name: branch.name,
         product_id: product.id,
         product_name: product.name,
+        product_kind: normalizeFlowerProductKind(product.product_kind),
         product_color: normalizeFlowerProductColor(product.color),
         product_is_active: Boolean(product.is_active),
         on_hand: Number(stock?.on_hand ?? 0),
@@ -190,18 +193,7 @@ export async function listFlowerInventoryStockSupabase(
     }
   }
 
-  rows.sort((a, b) => {
-    if (a.branch_name !== b.branch_name) {
-      return a.branch_name.localeCompare(b.branch_name);
-    }
-
-    const colorCompare = compareFlowerProductColorLabels(a.product_color, b.product_color);
-    if (colorCompare !== 0) {
-      return colorCompare;
-    }
-
-    return a.product_name.localeCompare(b.product_name);
-  });
+  rows.sort(compareInventoryStockRows);
 
   return rows;
 }

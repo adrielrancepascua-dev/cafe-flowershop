@@ -17,8 +17,13 @@ import {
   compareInventoryStockRows,
   flowerProductColorSwatchClass,
   groupInventoryStockByFlowerType,
+  groupInventoryStockMisc,
   normalizeFlowerProductColor,
 } from '../../shared/utils/flower-product-colors';
+import {
+  FLOWER_PRODUCT_KIND_LABELS,
+  type FlowerProductKind,
+} from '../../shared/utils/flower-product-kind';
 
 function aggregateStockByProduct(rows: FlowerInventoryStockRow[]): FlowerInventoryStockRow[] {
   const totals = new Map<string, FlowerInventoryStockRow>();
@@ -76,6 +81,10 @@ function InventoryStockRowLabel({ name, color }: { name: string; color: string }
       </div>
     </div>
   );
+}
+
+function InventoryMiscRowLabel({ name }: { name: string }) {
+  return <p className="font-medium text-brand-dark">{name}</p>;
 }
 
 function StockAdjustControls({
@@ -224,6 +233,7 @@ export default function FlowerInventoryPage() {
   const [transferProductId, setTransferProductId] = useState('');
   const [transferQty, setTransferQty] = useState('1');
   const [activeTab, setActiveTab] = useState<InventoryTab>('stock');
+  const [stockKindTab, setStockKindTab] = useState<FlowerProductKind>('flower');
   const [colorFilter, setColorFilter] = useState('all');
   const [fromBranchStock, setFromBranchStock] = useState<FlowerInventoryStockRow[]>([]);
   const [fromBranchStockLoading, setFromBranchStockLoading] = useState(false);
@@ -278,7 +288,7 @@ export default function FlowerInventoryPage() {
 
   useEffect(() => {
     setColorFilter('all');
-  }, [selectedBranchId]);
+  }, [selectedBranchId, stockKindTab]);
 
   useEffect(() => {
     if (!fromBranchId) {
@@ -305,27 +315,35 @@ export default function FlowerInventoryPage() {
     return aggregateStockByProduct(stockRows);
   }, [isAllBranchesView, stockRows]);
 
+  const kindFilteredDisplayStock = useMemo(() => {
+    return displayStock.filter((row) => row.product_kind === stockKindTab);
+  }, [displayStock, stockKindTab]);
+
   const filteredDisplayStock = useMemo(() => {
-    if (colorFilter === 'all') {
-      return displayStock;
+    if (stockKindTab === 'misc' || colorFilter === 'all') {
+      return kindFilteredDisplayStock;
     }
 
-    return displayStock.filter(
+    return kindFilteredDisplayStock.filter(
       (row) => normalizeFlowerProductColor(row.product_color) === colorFilter,
     );
-  }, [colorFilter, displayStock]);
+  }, [colorFilter, kindFilteredDisplayStock, stockKindTab]);
 
   const stockByFlowerType = useMemo(
     () => groupInventoryStockByFlowerType(filteredDisplayStock),
     [filteredDisplayStock],
   );
+  const miscStockRows = useMemo(
+    () => groupInventoryStockMisc(filteredDisplayStock),
+    [filteredDisplayStock],
+  );
 
   const availableColorFilters = useMemo(
     () =>
-      [...new Set(displayStock.map((row) => normalizeFlowerProductColor(row.product_color)))].sort(
+      [...new Set(kindFilteredDisplayStock.map((row) => normalizeFlowerProductColor(row.product_color)))].sort(
         (left, right) => left.localeCompare(right),
       ),
-    [displayStock],
+    [kindFilteredDisplayStock],
   );
 
   const totalUnitsOnHand = useMemo(
@@ -446,11 +464,19 @@ export default function FlowerInventoryPage() {
         description={
           isAdmin
             ? isAllBranchesView
-              ? 'Totals across Dagupan, San Carlos, and Urdaneta. Select a branch to adjust stock by flower type.'
-              : 'Stock grouped by flower type with colors in order. Adjust quantities for this branch below.'
+              ? stockKindTab === 'flower'
+                ? 'Flower totals across Dagupan, San Carlos, and Urdaneta. Select a branch to adjust stock.'
+                : 'Miscellaneous supply totals across all branches. Select a branch to adjust stock.'
+              : stockKindTab === 'flower'
+                ? 'Flower stock grouped by type with colors in order.'
+                : 'Wrappers, chocolates, and other supplies tracked separately from flowers.'
             : isAllBranchesView
-              ? 'Combined stock totals across all branches, grouped by flower type.'
-              : 'View-only stock levels for this branch, grouped by flower type.'
+              ? stockKindTab === 'flower'
+                ? 'Combined flower totals across all branches.'
+                : 'Combined miscellaneous supply totals across all branches.'
+              : stockKindTab === 'flower'
+                ? 'View-only flower stock for this branch.'
+                : 'View-only miscellaneous stock for this branch.'
         }
       />
 
@@ -633,6 +659,19 @@ export default function FlowerInventoryPage() {
         </>
       ) : (
         <>
+          <div className="mt-4 inline-flex rounded-xl border border-brand-muted/50 bg-white p-1">
+            {(['flower', 'misc'] as const).map((kind) => (
+              <button
+                key={kind}
+                type="button"
+                onClick={() => setStockKindTab(kind)}
+                className={`flower-pill ${stockKindTab === kind ? 'flower-pill-active' : 'flower-pill-inactive'}`}
+              >
+                {FLOWER_PRODUCT_KIND_LABELS[kind]}
+              </button>
+            ))}
+          </div>
+
           <div className="mt-4 flex flex-wrap items-center gap-2">
             <select
               value={selectedBranchId}
@@ -646,7 +685,7 @@ export default function FlowerInventoryPage() {
                 </option>
               ))}
             </select>
-            {availableColorFilters.length > 1 ? (
+            {stockKindTab === 'flower' && availableColorFilters.length > 1 ? (
               <select
                 value={colorFilter}
                 onChange={(event) => setColorFilter(event.target.value)}
@@ -663,27 +702,71 @@ export default function FlowerInventoryPage() {
           </div>
           <p className="mt-2 text-sm text-brand-brown/70">
             {isAllBranchesView
-              ? `Showing combined totals for all branches (${totalUnitsOnHand} units on hand).`
-              : `Showing stock for ${selectedBranchName} (${totalUnitsOnHand} units on hand), grouped by flower type.`}
+              ? `Showing combined ${stockKindTab === 'flower' ? 'flower' : 'misc'} totals (${totalUnitsOnHand} units on hand).`
+              : `Showing ${stockKindTab === 'flower' ? 'flower' : 'misc'} stock for ${selectedBranchName} (${totalUnitsOnHand} units on hand)${
+                  stockKindTab === 'flower' ? ', grouped by flower type' : ''
+                }.`}
             {isRefreshing ? ' · Updating…' : ''}
           </p>
 
           <div className="mt-5 space-y-5 md:hidden">
-            {stockByFlowerType.map((section) => (
-              <div key={section.flowerType} className="space-y-3">
-                <InventoryFlowerTypeSectionHeader
-                  flowerType={section.flowerType}
-                  itemCount={section.rows.length}
-                  unitTotal={section.rows.reduce((sum, row) => sum + row.on_hand, 0)}
-                />
-                {section.rows.map((row) => (
+            {stockKindTab === 'flower' ? (
+              <>
+                {stockByFlowerType.map((section) => (
+                  <div key={section.flowerType} className="space-y-3">
+                    <InventoryFlowerTypeSectionHeader
+                      flowerType={section.flowerType}
+                      itemCount={section.rows.length}
+                      unitTotal={section.rows.reduce((sum, row) => sum + row.on_hand, 0)}
+                    />
+                    {section.rows.map((row) => (
+                      <div
+                        key={isAllBranchesView ? row.product_id : `${row.branch_id}-${row.product_id}-card`}
+                        className="flower-card p-4"
+                      >
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="min-w-0 flex-1">
+                            <InventoryStockRowLabel name={row.product_name} color={row.product_color} />
+                            <p className="mt-1 text-xs text-brand-brown/70">
+                              {isAllBranchesView ? 'All branches total' : row.branch_name}
+                            </p>
+                          </div>
+                          <div className="shrink-0 text-right">
+                            <p className="text-xs font-medium uppercase tracking-wide text-brand-brown/60">
+                              {isAllBranchesView ? 'Total on hand' : 'On hand'}
+                            </p>
+                            <p className="text-2xl font-bold leading-tight text-brand-dark">{row.on_hand}</p>
+                          </div>
+                        </div>
+                        {isAdmin && !isAllBranchesView ? (
+                          <div className="mt-4 border-t border-brand-muted/30 pt-4">
+                            <StockAdjustControls
+                              branchId={row.branch_id}
+                              productId={row.product_id}
+                              onAdjust={handleAdjust}
+                            />
+                          </div>
+                        ) : null}
+                      </div>
+                    ))}
+                  </div>
+                ))}
+                {stockByFlowerType.length === 0 ? (
+                  <p className="rounded-xl border border-brand-muted/30 px-3 py-6 text-center text-sm text-brand-brown/60">
+                    No flower stock to show for this filter.
+                  </p>
+                ) : null}
+              </>
+            ) : (
+              <>
+                {miscStockRows.map((row) => (
                   <div
                     key={isAllBranchesView ? row.product_id : `${row.branch_id}-${row.product_id}-card`}
                     className="flower-card p-4"
                   >
                     <div className="flex items-start justify-between gap-3">
                       <div className="min-w-0 flex-1">
-                        <InventoryStockRowLabel name={row.product_name} color={row.product_color} />
+                        <InventoryMiscRowLabel name={row.product_name} />
                         <p className="mt-1 text-xs text-brand-brown/70">
                           {isAllBranchesView ? 'All branches total' : row.branch_name}
                         </p>
@@ -706,13 +789,13 @@ export default function FlowerInventoryPage() {
                     ) : null}
                   </div>
                 ))}
-              </div>
-            ))}
-            {stockByFlowerType.length === 0 ? (
-              <p className="rounded-xl border border-brand-muted/30 px-3 py-6 text-center text-sm text-brand-brown/60">
-                No stock to show for this filter.
-              </p>
-            ) : null}
+                {miscStockRows.length === 0 ? (
+                  <p className="rounded-xl border border-brand-muted/30 px-3 py-6 text-center text-sm text-brand-brown/60">
+                    No miscellaneous stock to show yet.
+                  </p>
+                ) : null}
+              </>
+            )}
             {isAdmin && !isAllBranchesView && filteredDisplayStock.length > 0 ? (
               <div className="flex justify-end">
                 <button
@@ -744,7 +827,9 @@ export default function FlowerInventoryPage() {
               <thead className="bg-brand-beige/40 text-brand-brown">
                 <tr>
                   {isAllBranchesView ? null : <th className="px-3 py-2">Branch</th>}
-                  <th className="min-w-[10rem] px-3 py-2">Flower</th>
+                  <th className="min-w-[10rem] px-3 py-2">
+                    {stockKindTab === 'flower' ? 'Flower' : 'Item'}
+                  </th>
                   <th className="px-3 py-2">{isAllBranchesView ? 'Total on hand' : 'On hand'}</th>
                   {isAdmin && !isAllBranchesView ? (
                     <th className="min-w-[16rem] px-3 py-2">Adjust stock</th>
@@ -752,18 +837,56 @@ export default function FlowerInventoryPage() {
                 </tr>
               </thead>
               <tbody>
-                {stockByFlowerType.map((section) => (
-                  <Fragment key={section.flowerType}>
-                    <tr className="border-t border-brand-muted/30 bg-brand-beige/25">
-                      <td colSpan={stockTableColSpan} className="px-3 py-2">
-                        <InventoryFlowerTypeSectionHeader
-                          flowerType={section.flowerType}
-                          itemCount={section.rows.length}
-                          unitTotal={section.rows.reduce((sum, row) => sum + row.on_hand, 0)}
-                        />
-                      </td>
-                    </tr>
-                    {section.rows.map((row) => (
+                {stockKindTab === 'flower' ? (
+                  <>
+                    {stockByFlowerType.map((section) => (
+                      <Fragment key={section.flowerType}>
+                        <tr className="border-t border-brand-muted/30 bg-brand-beige/25">
+                          <td colSpan={stockTableColSpan} className="px-3 py-2">
+                            <InventoryFlowerTypeSectionHeader
+                              flowerType={section.flowerType}
+                              itemCount={section.rows.length}
+                              unitTotal={section.rows.reduce((sum, row) => sum + row.on_hand, 0)}
+                            />
+                          </td>
+                        </tr>
+                        {section.rows.map((row) => (
+                          <tr
+                            key={isAllBranchesView ? row.product_id : `${row.branch_id}-${row.product_id}`}
+                            className="border-t border-brand-muted/30"
+                          >
+                            {isAllBranchesView ? null : (
+                              <td className="px-3 py-2 whitespace-nowrap">{row.branch_name}</td>
+                            )}
+                            <td className="min-w-[10rem] px-3 py-2">
+                              <InventoryStockRowLabel name={row.product_name} color={row.product_color} />
+                            </td>
+                            <td className="px-3 py-2 font-semibold">{row.on_hand}</td>
+                            {isAdmin && !isAllBranchesView ? (
+                              <td className="min-w-[16rem] px-3 py-2">
+                                <StockAdjustControls
+                                  branchId={row.branch_id}
+                                  productId={row.product_id}
+                                  onAdjust={handleAdjust}
+                                  layout="inline"
+                                />
+                              </td>
+                            ) : null}
+                          </tr>
+                        ))}
+                      </Fragment>
+                    ))}
+                    {stockByFlowerType.length === 0 ? (
+                      <tr>
+                        <td colSpan={stockTableColSpan} className="px-3 py-8 text-center text-brand-brown/60">
+                          No flower stock to show for this filter.
+                        </td>
+                      </tr>
+                    ) : null}
+                  </>
+                ) : (
+                  <>
+                    {miscStockRows.map((row) => (
                       <tr
                         key={isAllBranchesView ? row.product_id : `${row.branch_id}-${row.product_id}`}
                         className="border-t border-brand-muted/30"
@@ -772,7 +895,7 @@ export default function FlowerInventoryPage() {
                           <td className="px-3 py-2 whitespace-nowrap">{row.branch_name}</td>
                         )}
                         <td className="min-w-[10rem] px-3 py-2">
-                          <InventoryStockRowLabel name={row.product_name} color={row.product_color} />
+                          <InventoryMiscRowLabel name={row.product_name} />
                         </td>
                         <td className="px-3 py-2 font-semibold">{row.on_hand}</td>
                         {isAdmin && !isAllBranchesView ? (
@@ -787,15 +910,15 @@ export default function FlowerInventoryPage() {
                         ) : null}
                       </tr>
                     ))}
-                  </Fragment>
-                ))}
-                {stockByFlowerType.length === 0 ? (
-                  <tr>
-                    <td colSpan={stockTableColSpan} className="px-3 py-8 text-center text-brand-brown/60">
-                      No stock to show for this filter.
-                    </td>
-                  </tr>
-                ) : null}
+                    {miscStockRows.length === 0 ? (
+                      <tr>
+                        <td colSpan={stockTableColSpan} className="px-3 py-8 text-center text-brand-brown/60">
+                          No miscellaneous stock to show yet.
+                        </td>
+                      </tr>
+                    ) : null}
+                  </>
+                )}
               </tbody>
             </table>
           </div>

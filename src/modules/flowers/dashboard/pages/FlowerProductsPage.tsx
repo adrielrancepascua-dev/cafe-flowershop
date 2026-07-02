@@ -13,11 +13,19 @@ import {
   FLOWER_PRODUCT_COLOR_OPTIONS,
   normalizeFlowerProductColor,
 } from '../../shared/utils/flower-product-colors';
+import {
+  FLOWER_PRODUCT_KIND_LABELS,
+  type FlowerProductKind,
+} from '../../shared/utils/flower-product-kind';
 
 function groupProductsByFlowerType(products: FlowerProduct[]) {
   const buckets = new Map<string, FlowerProduct[]>();
 
   for (const product of products) {
+    if (product.product_kind !== 'flower') {
+      continue;
+    }
+
     const flowerType = deriveFlowerTypeFromProduct(product.name, product.color);
     const bucket = buckets.get(flowerType) ?? [];
     bucket.push(product);
@@ -34,11 +42,25 @@ function groupProductsByFlowerType(products: FlowerProduct[]) {
 export default function FlowerProductsPage() {
   const [products, setProducts] = useState<FlowerProduct[]>([]);
   const [loading, setLoading] = useState(true);
+  const [catalogTab, setCatalogTab] = useState<FlowerProductKind>('flower');
   const [newName, setNewName] = useState('');
   const [newColor, setNewColor] = useState<string>(FLOWER_PRODUCT_COLOR_OPTIONS[0]);
   const [newCost, setNewCost] = useState('');
   const [errorMessage, setErrorMessage] = useState('');
   const [colorMigrationNeeded, setColorMigrationNeeded] = useState(false);
+
+  const flowerProducts = useMemo(
+    () => products.filter((product) => product.product_kind === 'flower'),
+    [products],
+  );
+  const miscProducts = useMemo(
+    () =>
+      products
+        .filter((product) => product.product_kind === 'misc')
+        .sort((left, right) => left.name.localeCompare(right.name)),
+    [products],
+  );
+  const visibleProducts = catalogTab === 'flower' ? flowerProducts : miscProducts;
 
   async function loadProducts() {
     setLoading(true);
@@ -59,25 +81,35 @@ export default function FlowerProductsPage() {
   }, []);
 
   const activeCount = useMemo(
-    () => products.filter((product) => product.is_active).length,
-    [products],
+    () => visibleProducts.filter((product) => product.is_active).length,
+    [visibleProducts],
   );
 
-  const productsByFlowerType = useMemo(() => groupProductsByFlowerType(products), [products]);
+  const productsByFlowerType = useMemo(() => groupProductsByFlowerType(flowerProducts), [flowerProducts]);
   const existingProductColors = useMemo(
-    () => products.map((product) => product.color),
-    [products],
+    () => flowerProducts.map((product) => product.color),
+    [flowerProducts],
   );
 
   async function handleCreate(event: React.FormEvent) {
     event.preventDefault();
     const unit_cost = Number(newCost);
-    if (!newName.trim() || !Number.isFinite(unit_cost) || unit_cost < 0 || !newColor.trim()) {
+    if (!newName.trim() || !Number.isFinite(unit_cost) || unit_cost < 0) {
+      setErrorMessage('Enter a valid name and cost.');
+      return;
+    }
+
+    if (catalogTab === 'flower' && !newColor.trim()) {
       setErrorMessage('Enter a valid name, color, and cost.');
       return;
     }
 
-    await createFlowerProduct({ name: newName.trim(), color: newColor.trim(), unit_cost });
+    await createFlowerProduct({
+      name: newName.trim(),
+      product_kind: catalogTab,
+      color: catalogTab === 'flower' ? newColor.trim() : '',
+      unit_cost,
+    });
     setNewName('');
     setNewColor(FLOWER_PRODUCT_COLOR_OPTIONS[0]);
     setNewCost('');
@@ -88,33 +120,54 @@ export default function FlowerProductsPage() {
   return (
     <div className="animate-fade-in">
       <FlowerPageHeader
-        label="Flower Types"
+        label="Catalog"
         title="Products"
-        description="Flower stems grouped by type in inventory. Pick a preset color or add a custom one for unusual shades."
+        description="Flowers for daily orders and a separate miscellaneous list for wrappers, chocolates, and other shop supplies."
       />
 
+      <div className="mt-4 inline-flex rounded-xl border border-brand-muted/50 bg-white p-1">
+        {(['flower', 'misc'] as const).map((kind) => (
+          <button
+            key={kind}
+            type="button"
+            onClick={() => setCatalogTab(kind)}
+            className={`flower-pill ${catalogTab === kind ? 'flower-pill-active' : 'flower-pill-inactive'}`}
+          >
+            {FLOWER_PRODUCT_KIND_LABELS[kind]}
+          </button>
+        ))}
+      </div>
+
       <p className="mt-2 text-sm text-brand-brown/70">
-        Active products: {activeCount} / {products.length}
+        Active {catalogTab === 'flower' ? 'flowers' : 'misc items'}: {activeCount} / {visibleProducts.length}
       </p>
 
       <RequireFlowerAdmin>
         <form
           onSubmit={handleCreate}
-          className="mt-5 grid grid-cols-1 gap-3 rounded-2xl border border-brand-muted/40 bg-brand-cream/20 p-4 sm:grid-cols-[1fr_minmax(140px,180px)_160px_auto]"
+          className={`mt-5 grid grid-cols-1 gap-3 rounded-2xl border border-brand-muted/40 bg-brand-cream/20 p-4 ${
+            catalogTab === 'flower'
+              ? 'sm:grid-cols-[1fr_minmax(140px,180px)_160px_auto]'
+              : 'sm:grid-cols-[1fr_160px_auto]'
+          }`}
         >
           <input
             type="text"
             value={newName}
             onChange={(event) => setNewName(event.target.value)}
-            placeholder="Flower name (e.g. Red Rose)"
+            placeholder={
+              catalogTab === 'flower' ? 'Flower name (e.g. Red Rose)' : 'Item name (e.g. Wrapper, Chocolate)'
+            }
             className="flower-input"
           />
-          <FlowerProductColorPicker
-            value={newColor}
-            onChange={setNewColor}
-            existingColors={existingProductColors}
-            required
-          />
+          {catalogTab === 'flower' ? (
+            <FlowerProductColorPicker
+              value={newColor}
+              onChange={setNewColor}
+              existingColors={existingProductColors}
+              required
+            />
+          ) : null}
           <input
             type="number"
             min="0"
@@ -125,12 +178,12 @@ export default function FlowerProductsPage() {
             className="flower-input"
           />
           <button type="submit" className="flower-btn-primary">
-            Add product
+            Add {catalogTab === 'flower' ? 'flower' : 'item'}
           </button>
         </form>
       </RequireFlowerAdmin>
 
-      {colorMigrationNeeded ? (
+      {colorMigrationNeeded && catalogTab === 'flower' ? (
         <p className="mt-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-950">
           Color categories are not saved yet — run{' '}
           <span className="font-semibold">supabase/add_flower_product_color.sql</span> in Supabase once.
@@ -146,7 +199,7 @@ export default function FlowerProductsPage() {
 
       {loading ? (
         <p className="mt-6 text-sm text-brand-brown/60">Loading products...</p>
-      ) : (
+      ) : catalogTab === 'flower' ? (
         <>
           <div className="mt-5 space-y-5 md:hidden">
             {productsByFlowerType.map((section) => (
@@ -198,6 +251,46 @@ export default function FlowerProductsPage() {
                     ))}
                   </Fragment>
                 ))}
+              </tbody>
+            </table>
+          </div>
+        </>
+      ) : (
+        <>
+          <div className="mt-5 space-y-3 md:hidden">
+            {miscProducts.map((product) => (
+              <MiscProductCard key={product.id} product={product} onChanged={loadProducts} />
+            ))}
+            {miscProducts.length === 0 ? (
+              <p className="rounded-xl border border-brand-muted/30 px-3 py-6 text-center text-sm text-brand-brown/60">
+                No miscellaneous items yet.
+              </p>
+            ) : null}
+          </div>
+
+          <div className="mt-5 hidden overflow-x-auto rounded-2xl border border-brand-muted/40 md:block">
+            <table className="min-w-full text-left text-sm">
+              <thead className="bg-brand-beige/40 text-brand-brown">
+                <tr>
+                  <th className="min-w-[12rem] px-3 py-2">Name</th>
+                  <th className="px-3 py-2">Unit cost</th>
+                  <th className="px-3 py-2">Status</th>
+                  <RequireFlowerAdmin silent>
+                    <th className="min-w-[14rem] px-3 py-2">Actions</th>
+                  </RequireFlowerAdmin>
+                </tr>
+              </thead>
+              <tbody>
+                {miscProducts.map((product) => (
+                  <MiscProductRow key={product.id} product={product} onChanged={loadProducts} />
+                ))}
+                {miscProducts.length === 0 ? (
+                  <tr>
+                    <td colSpan={4} className="px-3 py-8 text-center text-brand-brown/60">
+                      No miscellaneous items yet.
+                    </td>
+                  </tr>
+                ) : null}
               </tbody>
             </table>
           </div>
@@ -369,6 +462,96 @@ function ProductRow({
           existingColors={existingProductColors}
           className="flower-input min-w-[120px]"
         />
+      </td>
+      <td className="px-3 py-2 whitespace-nowrap">{PRICE_FORMATTER.format(product.unit_cost)}</td>
+      <td className="px-3 py-2">
+        <ProductStatusBadge isActive={product.is_active} />
+      </td>
+      <RequireFlowerAdmin silent>
+        <td className="min-w-[14rem] px-3 py-2">
+          <ProductActions product={product} onSave={save} onChanged={onChanged} />
+        </td>
+      </RequireFlowerAdmin>
+    </tr>
+  );
+}
+
+function MiscProductCard({
+  product,
+  onChanged,
+}: {
+  product: FlowerProduct;
+  onChanged: () => Promise<void>;
+}) {
+  const [name, setName] = useState(product.name);
+
+  useEffect(() => {
+    setName(product.name);
+  }, [product.id, product.name]);
+
+  async function save() {
+    await updateFlowerProduct(product.id, {
+      name,
+      color: '',
+      unit_cost: product.unit_cost,
+    });
+    await onChanged();
+  }
+
+  return (
+    <div className="flower-card p-4">
+      <label className="block text-xs font-medium uppercase tracking-wide text-brand-brown/60">
+        Item name
+        <input
+          value={name}
+          onChange={(event) => setName(event.target.value)}
+          className="flower-input mt-1.5"
+        />
+      </label>
+
+      <div className="mt-3 flex items-center justify-between gap-3">
+        <div>
+          <p className="text-xs font-medium uppercase tracking-wide text-brand-brown/60">Unit cost</p>
+          <p className="mt-0.5 font-semibold text-brand-dark">{PRICE_FORMATTER.format(product.unit_cost)}</p>
+        </div>
+        <ProductStatusBadge isActive={product.is_active} />
+      </div>
+
+      <RequireFlowerAdmin silent>
+        <div className="mt-4 border-t border-brand-muted/30 pt-4">
+          <ProductActions product={product} onSave={save} onChanged={onChanged} />
+        </div>
+      </RequireFlowerAdmin>
+    </div>
+  );
+}
+
+function MiscProductRow({
+  product,
+  onChanged,
+}: {
+  product: FlowerProduct;
+  onChanged: () => Promise<void>;
+}) {
+  const [name, setName] = useState(product.name);
+
+  useEffect(() => {
+    setName(product.name);
+  }, [product.id, product.name]);
+
+  async function save() {
+    await updateFlowerProduct(product.id, {
+      name,
+      color: '',
+      unit_cost: product.unit_cost,
+    });
+    await onChanged();
+  }
+
+  return (
+    <tr className="border-t border-brand-muted/30">
+      <td className="min-w-[12rem] px-3 py-2">
+        <input value={name} onChange={(event) => setName(event.target.value)} className="flower-input min-w-[10rem]" />
       </td>
       <td className="px-3 py-2 whitespace-nowrap">{PRICE_FORMATTER.format(product.unit_cost)}</td>
       <td className="px-3 py-2">
