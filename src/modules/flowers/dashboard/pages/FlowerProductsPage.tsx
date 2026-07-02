@@ -476,40 +476,13 @@ function ProductStandaloneCard({
   onChanged: () => Promise<void>;
 }) {
   const { isAdmin } = useFlowerAuth();
-  const [name, setName] = useState(product.name);
   const fixedColor = normalizeFlowerProductColor(product.color);
-
-  useEffect(() => {
-    setName(product.name);
-  }, [product.id, product.name]);
-
-  async function save() {
-    const trimmedName = name.trim();
-    await updateFlowerProduct(product.id, {
-      name: trimmedName,
-      flower_type: trimmedName,
-      color: fixedColor,
-      unit_cost: product.unit_cost,
-    });
-    await onChanged();
-  }
 
   return (
     <div className="rounded-xl border border-brand-muted/40 bg-white/80 px-4 py-3 shadow-sm">
       <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
         <div className="min-w-0 flex-1 space-y-2">
-          {isAdmin ? (
-            <label className="block text-xs font-medium uppercase tracking-wide text-brand-brown/60">
-              Flower type
-              <input
-                value={name}
-                onChange={(event) => setName(event.target.value)}
-                className="flower-input mt-1.5"
-              />
-            </label>
-          ) : (
-            <p className="text-sm font-semibold text-brand-dark">{product.name}</p>
-          )}
+          <p className="text-sm font-semibold text-brand-dark">{product.name}</p>
           <div className="flex flex-wrap items-center gap-2">
             <span className="text-xs font-medium uppercase tracking-wide text-brand-brown/60">Color</span>
             <FixedFlowerColorBadge color={fixedColor} />
@@ -527,7 +500,7 @@ function ProductStandaloneCard({
           <p className="text-sm font-semibold text-brand-dark">{PRICE_FORMATTER.format(product.unit_cost)}</p>
           <ProductStatusBadge isActive={product.is_active} />
           <RequireFlowerAdmin silent>
-            <ProductActions product={product} onSave={save} onChanged={onChanged} />
+            <ProductVariantActions product={product} onChanged={onChanged} />
           </RequireFlowerAdmin>
         </div>
       </div>
