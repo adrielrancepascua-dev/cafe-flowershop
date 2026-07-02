@@ -411,92 +411,277 @@ function FlowerTypeOrderPicker({
       />
 
       <div className="overflow-hidden rounded-xl border border-brand-muted/40 bg-brand-cream/10">
-        <div className="max-h-[min(40vh,320px)] overflow-y-auto divide-y divide-brand-muted/25">
+        <div className="max-h-[min(40vh,320px)] overflow-y-auto">
           {groups.length === 0 ? (
             <p className="px-3 py-4 text-center text-sm text-brand-brown/60">No flowers match your search.</p>
           ) : (
-            groups.map((group) => (
-              <div key={group.flowerType}>
-                {group.isCategory ? (
-                  <div className="border-b border-brand-muted/20 bg-brand-beige/35 px-3 py-2">
-                    <p className="text-sm font-semibold text-brand-dark">{group.flowerType}</p>
-                    <p className="text-xs text-brand-brown/65">
-                      {group.variants.length} colors · pick quantities per color
-                    </p>
-                  </div>
-                ) : null}
-
-                {group.variants.map((variant) => {
-                  const qty = Number(quantities[variant.id]) || 0;
-                  const onHand = branchSelected && !stockLoading
-                    ? (stockByProductId[variant.id] ?? 0) + (creditByProductId[variant.id] ?? 0)
-                    : null;
-                  const isSelected = qty > 0;
-                  const willGoNegative = onHand !== null && qty > onHand;
-                  const label = group.isCategory
-                    ? normalizeFlowerProductColor(variant.color) || 'Color'
-                    : group.flowerType;
-
-                  return (
-                    <div
-                      key={variant.id}
-                      className={`px-3 py-2.5 ${
-                        isSelected ? 'bg-brand-beige/50' : 'bg-white/70'
-                      }`}
-                    >
-                      <div className="flex items-center gap-3">
-                        <div className="min-w-0 flex-1">
-                          <p className="text-sm font-medium text-brand-dark">{label}</p>
-                          {onHand !== null ? (
-                            <p
-                              className={`text-xs ${
-                                willGoNegative ? 'text-amber-800' : 'text-brand-brown/65'
-                              }`}
-                            >
-                              {onHand} on hand
-                              {willGoNegative ? ' — will go negative on day close' : ''}
-                            </p>
-                          ) : null}
-                        </div>
-
-                        <div className="flex shrink-0 items-center gap-1.5">
-                          <button
-                            type="button"
-                            aria-label={`Remove one ${label}`}
-                            disabled={qty <= 0}
-                            onClick={() => onAdjustQuantity(variant.id, -1)}
-                            className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-brand-muted/50 bg-white text-brand-dark transition hover:border-brand-dark/30 disabled:cursor-not-allowed disabled:opacity-40"
-                          >
-                            <Minus className="h-4 w-4" />
-                          </button>
-                          <input
-                            type="text"
-                            inputMode="numeric"
-                            value={qty > 0 ? String(qty) : ''}
-                            placeholder="0"
-                            onChange={(event) => onSetQuantity(variant.id, event.target.value)}
-                            className="flower-input h-9 w-12 px-1 text-center text-sm"
-                            aria-label={`Stems for ${label}`}
-                          />
-                          <button
-                            type="button"
-                            aria-label={`Add one ${label}`}
-                            onClick={() => onAdjustQuantity(variant.id, 1)}
-                            className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-brand-dark/20 bg-brand-dark text-white transition hover:bg-brand-brown"
-                          >
-                            <Plus className="h-4 w-4" />
-                          </button>
-                        </div>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            ))
+            groups.map((group) =>
+              group.isCategory ? (
+                <FlowerCategoryPickerGroup
+                  key={group.flowerType}
+                  group={group}
+                  quantities={quantities}
+                  branchSelected={branchSelected}
+                  stockLoading={stockLoading}
+                  stockByProductId={stockByProductId}
+                  creditByProductId={creditByProductId}
+                  onSetQuantity={onSetQuantity}
+                  onAdjustQuantity={onAdjustQuantity}
+                />
+              ) : (
+                <FlowerStandalonePickerRow
+                  key={group.flowerType}
+                  group={group}
+                  quantities={quantities}
+                  branchSelected={branchSelected}
+                  stockLoading={stockLoading}
+                  stockByProductId={stockByProductId}
+                  creditByProductId={creditByProductId}
+                  onSetQuantity={onSetQuantity}
+                  onAdjustQuantity={onAdjustQuantity}
+                />
+              ),
+            )
           )}
         </div>
       </div>
     </>
+  );
+}
+
+function FlowerQuantityControls({
+  productId,
+  label,
+  qty,
+  onHand,
+  willGoNegative,
+  onSetQuantity,
+  onAdjustQuantity,
+  compact = false,
+}: {
+  productId: string;
+  label: string;
+  qty: number;
+  onHand: number | null;
+  willGoNegative: boolean;
+  onSetQuantity: (productId: string, rawValue: string) => void;
+  onAdjustQuantity: (productId: string, delta: number) => void;
+  compact?: boolean;
+}) {
+  const buttonClass = compact
+    ? 'inline-flex h-8 w-8 items-center justify-center rounded-lg border border-brand-muted/50 bg-white text-brand-dark transition hover:border-brand-dark/30 disabled:cursor-not-allowed disabled:opacity-40'
+    : 'inline-flex h-9 w-9 items-center justify-center rounded-lg border border-brand-muted/50 bg-white text-brand-dark transition hover:border-brand-dark/30 disabled:cursor-not-allowed disabled:opacity-40';
+  const addButtonClass = compact
+    ? 'inline-flex h-8 w-8 items-center justify-center rounded-lg border border-brand-dark/20 bg-brand-dark text-white transition hover:bg-brand-brown'
+    : 'inline-flex h-9 w-9 items-center justify-center rounded-lg border border-brand-dark/20 bg-brand-dark text-white transition hover:bg-brand-brown';
+  const inputClass = compact
+    ? 'flower-input h-8 w-11 px-1 text-center text-sm'
+    : 'flower-input h-9 w-12 px-1 text-center text-sm';
+
+  return (
+    <div className="flex shrink-0 items-center gap-1.5">
+      <button
+        type="button"
+        aria-label={`Remove one ${label}`}
+        disabled={qty <= 0}
+        onClick={() => onAdjustQuantity(productId, -1)}
+        className={buttonClass}
+      >
+        <Minus className="h-4 w-4" />
+      </button>
+      <input
+        type="text"
+        inputMode="numeric"
+        value={qty > 0 ? String(qty) : ''}
+        placeholder="0"
+        onChange={(event) => onSetQuantity(productId, event.target.value)}
+        className={inputClass}
+        aria-label={`Stems for ${label}`}
+      />
+      <button
+        type="button"
+        aria-label={`Add one ${label}`}
+        onClick={() => onAdjustQuantity(productId, 1)}
+        className={addButtonClass}
+      >
+        <Plus className="h-4 w-4" />
+      </button>
+      {onHand !== null ? (
+        <span
+          className={`hidden min-w-[4.5rem] text-right text-[11px] sm:inline ${
+            willGoNegative ? 'text-amber-800' : 'text-brand-brown/60'
+          }`}
+        >
+          {onHand} on hand
+        </span>
+      ) : null}
+    </div>
+  );
+}
+
+function FlowerCategoryPickerGroup({
+  group,
+  quantities,
+  branchSelected,
+  stockLoading,
+  stockByProductId,
+  creditByProductId,
+  onSetQuantity,
+  onAdjustQuantity,
+}: {
+  group: FlowerProductTypeGroup;
+  quantities: ProductQuantities;
+  branchSelected: boolean;
+  stockLoading: boolean;
+  stockByProductId: Record<string, number>;
+  creditByProductId: Record<string, number>;
+  onSetQuantity: (productId: string, rawValue: string) => void;
+  onAdjustQuantity: (productId: string, delta: number) => void;
+}) {
+  const groupHasSelection = group.variants.some((variant) => (Number(quantities[variant.id]) || 0) > 0);
+
+  return (
+    <div className="border-b border-brand-muted/30 p-2 last:border-b-0">
+      <div
+        className={`overflow-hidden rounded-xl border bg-white shadow-sm ${
+          groupHasSelection ? 'border-brand-dark/25 ring-1 ring-brand-dark/10' : 'border-brand-muted/40'
+        }`}
+      >
+        <div className="border-b border-brand-muted/25 bg-gradient-to-r from-brand-beige/70 to-brand-cream/40 px-3 py-2.5">
+          <div className="flex items-start justify-between gap-2">
+            <div>
+              <p className="text-sm font-semibold text-brand-dark">{group.flowerType}</p>
+              <p className="mt-0.5 text-[11px] font-medium uppercase tracking-wide text-brand-brown/55">
+                {group.variants.length} color variations
+              </p>
+            </div>
+            <span className="shrink-0 rounded-full border border-brand-muted/40 bg-white/90 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-brand-brown/70">
+              Category
+            </span>
+          </div>
+        </div>
+
+        <div className="divide-y divide-brand-muted/15 bg-brand-cream/15">
+          {group.variants.map((variant) => {
+            const qty = Number(quantities[variant.id]) || 0;
+            const onHand = branchSelected && !stockLoading
+              ? (stockByProductId[variant.id] ?? 0) + (creditByProductId[variant.id] ?? 0)
+              : null;
+            const willGoNegative = onHand !== null && qty > onHand;
+            const colorLabel = normalizeFlowerProductColor(variant.color) || 'Color';
+            const ariaLabel = `${group.flowerType} — ${colorLabel}`;
+
+            return (
+              <div
+                key={variant.id}
+                className={`flex items-center gap-2 py-2 pr-3 pl-4 sm:pl-5 ${
+                  qty > 0 ? 'bg-brand-beige/35' : 'bg-white/60'
+                }`}
+              >
+                <span
+                  aria-hidden
+                  className="mt-0.5 h-full w-0.5 shrink-0 self-stretch rounded-full bg-brand-muted/50"
+                />
+                <div className="min-w-0 flex-1">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="rounded-full border border-brand-muted/45 bg-white px-2.5 py-0.5 text-xs font-semibold text-brand-dark">
+                      {colorLabel}
+                    </span>
+                    <span className="text-[11px] text-brand-brown/55">variation</span>
+                  </div>
+                  {onHand !== null ? (
+                    <p
+                      className={`mt-1 text-[11px] sm:hidden ${
+                        willGoNegative ? 'text-amber-800' : 'text-brand-brown/60'
+                      }`}
+                    >
+                      {onHand} on hand
+                      {willGoNegative ? ' — will go negative on day close' : ''}
+                    </p>
+                  ) : null}
+                </div>
+
+                <FlowerQuantityControls
+                  productId={variant.id}
+                  label={ariaLabel}
+                  qty={qty}
+                  onHand={onHand}
+                  willGoNegative={willGoNegative}
+                  onSetQuantity={onSetQuantity}
+                  onAdjustQuantity={onAdjustQuantity}
+                  compact
+                />
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function FlowerStandalonePickerRow({
+  group,
+  quantities,
+  branchSelected,
+  stockLoading,
+  stockByProductId,
+  creditByProductId,
+  onSetQuantity,
+  onAdjustQuantity,
+}: {
+  group: FlowerProductTypeGroup;
+  quantities: ProductQuantities;
+  branchSelected: boolean;
+  stockLoading: boolean;
+  stockByProductId: Record<string, number>;
+  creditByProductId: Record<string, number>;
+  onSetQuantity: (productId: string, rawValue: string) => void;
+  onAdjustQuantity: (productId: string, delta: number) => void;
+}) {
+  const variant = group.variants[0];
+  if (!variant) {
+    return null;
+  }
+
+  const qty = Number(quantities[variant.id]) || 0;
+  const onHand = branchSelected && !stockLoading
+    ? (stockByProductId[variant.id] ?? 0) + (creditByProductId[variant.id] ?? 0)
+    : null;
+  const willGoNegative = onHand !== null && qty > onHand;
+
+  return (
+    <div
+      className={`border-b border-brand-muted/25 px-3 py-3 last:border-b-0 ${
+        qty > 0 ? 'bg-brand-beige/45' : 'bg-white/75'
+      }`}
+    >
+      <div className="flex items-center gap-3">
+        <div className="min-w-0 flex-1">
+          <p className="text-sm font-semibold text-brand-dark">{group.flowerType}</p>
+          {onHand !== null ? (
+            <p
+              className={`mt-0.5 text-xs ${
+                willGoNegative ? 'text-amber-800' : 'text-brand-brown/65'
+              }`}
+            >
+              {onHand} on hand
+              {willGoNegative ? ' — will go negative on day close' : ''}
+            </p>
+          ) : null}
+        </div>
+
+        <FlowerQuantityControls
+          productId={variant.id}
+          label={group.flowerType}
+          qty={qty}
+          onHand={onHand}
+          willGoNegative={willGoNegative}
+          onSetQuantity={onSetQuantity}
+          onAdjustQuantity={onAdjustQuantity}
+        />
+      </div>
+    </div>
   );
 }
 
@@ -1720,7 +1905,9 @@ export default function FlowerOrderFormModal({
                   {flowerSelectionSummary.units} stem{flowerSelectionSummary.units === 1 ? '' : 's'}
                 </p>
               ) : !isViewMode ? (
-                <p className="text-xs text-brand-brown/60">Tap + to add stems per flower type and color</p>
+                <p className="text-xs text-brand-brown/60">
+                  Single flowers use one row · multi-color types open as a category with color variations inside
+                </p>
               ) : null}
             </div>
 
