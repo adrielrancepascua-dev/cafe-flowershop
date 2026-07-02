@@ -79,6 +79,202 @@ function parseDownpaymentDraft(draft: string): number {
   return Number.isFinite(parsed) ? parsed : 0;
 }
 
+function formatWrapperColorSummary(
+  catalog: FlowerProduct[],
+  quantities: ProductQuantities,
+): string {
+  return catalog
+    .map((product) => {
+      const quantity = Number(quantities[product.id]) || 0;
+      if (quantity <= 0) {
+        return null;
+      }
+
+      return quantity === 1 ? product.name : `${product.name} x${quantity}`;
+    })
+    .filter((line): line is string => line !== null)
+    .join(', ');
+}
+
+function buildCatalogOrderItems(
+  catalog: FlowerProduct[],
+  quantities: ProductQuantities,
+): CreateFlowerOrderInput['items'] {
+  return catalog
+    .map((product) => {
+      const quantity = Number(quantities[product.id]);
+      if (!Number.isFinite(quantity) || quantity <= 0) {
+        return null;
+      }
+
+      return {
+        product_id: product.id,
+        item_name: product.name,
+        quantity,
+      };
+    })
+    .filter((item): item is NonNullable<typeof item> => item !== null);
+}
+
+function summarizeCatalogSelection(
+  catalog: FlowerProduct[],
+  quantities: ProductQuantities,
+): { types: number; units: number } {
+  let types = 0;
+  let units = 0;
+
+  for (const product of catalog) {
+    const quantity = Number(quantities[product.id]) || 0;
+    if (quantity > 0) {
+      types += 1;
+      units += quantity;
+    }
+  }
+
+  return { types, units };
+}
+
+function sortPickerProducts<T extends { id: string }>(
+  catalog: T[],
+  quantities: ProductQuantities,
+): T[] {
+  const selected: T[] = [];
+  const unselected: T[] = [];
+
+  for (const product of catalog) {
+    if ((Number(quantities[product.id]) || 0) > 0) {
+      selected.push(product);
+    } else {
+      unselected.push(product);
+    }
+  }
+
+  return [...selected, ...unselected];
+}
+
+function OrderCatalogQuantityPicker({
+  products,
+  quantities,
+  stockByProductId,
+  creditByProductId,
+  branchSelected,
+  stockLoading,
+  search,
+  onSearchChange,
+  searchPlaceholder,
+  emptySearchMessage,
+  unitLabel,
+  onSetQuantity,
+  onAdjustQuantity,
+}: {
+  products: FlowerProduct[];
+  quantities: ProductQuantities;
+  stockByProductId: Record<string, number>;
+  creditByProductId: Record<string, number>;
+  branchSelected: boolean;
+  stockLoading: boolean;
+  search: string;
+  onSearchChange: (value: string) => void;
+  searchPlaceholder: string;
+  emptySearchMessage: string;
+  unitLabel: string;
+  onSetQuantity: (productId: string, rawValue: string) => void;
+  onAdjustQuantity: (productId: string, delta: number) => void;
+}) {
+  return (
+    <>
+      {!branchSelected ? (
+        <p className="mb-2 text-xs text-amber-800">
+          Select a branch above to see on-hand counts for each item.
+        </p>
+      ) : stockLoading ? (
+        <p className="mb-2 text-xs text-brand-brown/60">Loading branch stock...</p>
+      ) : (
+        <p className="mb-2 text-xs text-brand-brown/65">
+          Walk-in orders are allowed even at 0 stock — inventory may go negative until you stock in.
+        </p>
+      )}
+
+      <input
+        type="search"
+        value={search}
+        onChange={(event) => onSearchChange(event.target.value)}
+        placeholder={searchPlaceholder}
+        className="flower-input mb-2"
+      />
+
+      <div className="overflow-hidden rounded-xl border border-brand-muted/40 bg-brand-cream/10">
+        <div className="max-h-[min(40vh,320px)] overflow-y-auto divide-y divide-brand-muted/25">
+          {products.length === 0 ? (
+            <p className="px-3 py-4 text-center text-sm text-brand-brown/60">{emptySearchMessage}</p>
+          ) : (
+            products.map((product) => {
+              const qty = Number(quantities[product.id]) || 0;
+              const onHand = branchSelected && !stockLoading
+                ? (stockByProductId[product.id] ?? 0) + (creditByProductId[product.id] ?? 0)
+                : null;
+              const isSelected = qty > 0;
+              const willGoNegative = onHand !== null && qty > onHand;
+
+              return (
+                <div
+                  key={product.id}
+                  className={`flex items-center gap-3 px-3 py-2.5 ${
+                    isSelected ? 'bg-brand-beige/50' : 'bg-white/70'
+                  }`}
+                >
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm font-medium text-brand-dark">{product.name}</p>
+                    {onHand !== null ? (
+                      <p
+                        className={`text-xs ${
+                          willGoNegative ? 'text-amber-800' : 'text-brand-brown/65'
+                        }`}
+                      >
+                        {onHand} on hand
+                        {willGoNegative ? ' — will go negative on day close' : ''}
+                      </p>
+                    ) : null}
+                  </div>
+
+                  <div className="flex shrink-0 items-center gap-1.5">
+                    <button
+                      type="button"
+                      aria-label={`Remove one ${product.name}`}
+                      disabled={qty <= 0}
+                      onClick={() => onAdjustQuantity(product.id, -1)}
+                      className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-brand-muted/50 bg-white text-brand-dark transition hover:border-brand-dark/30 disabled:cursor-not-allowed disabled:opacity-40"
+                    >
+                      <Minus className="h-4 w-4" />
+                    </button>
+                    <input
+                      type="text"
+                      inputMode="numeric"
+                      value={qty > 0 ? String(qty) : ''}
+                      placeholder="0"
+                      onChange={(event) => onSetQuantity(product.id, event.target.value)}
+                      className="flower-input h-9 w-12 px-1 text-center text-sm"
+                      aria-label={`${unitLabel} for ${product.name}`}
+                    />
+                    <button
+                      type="button"
+                      aria-label={`Add one ${product.name}`}
+                      onClick={() => onAdjustQuantity(product.id, 1)}
+                      className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-brand-dark/20 bg-brand-dark text-white transition hover:bg-brand-brown"
+                    >
+                      <Plus className="h-4 w-4" />
+                    </button>
+                  </div>
+                </div>
+              );
+            })
+          )}
+        </div>
+      </div>
+    </>
+  );
+}
+
 function isCompleteOrderStatus(status: FlowerOrderStatus): boolean {
   return FLOWER_ORDER_COMPLETE_STATUSES.includes(status);
 }
@@ -179,6 +375,7 @@ export default function FlowerOrderFormModal({
   );
   const [productQuantities, setProductQuantities] = useState<ProductQuantities>({});
   const [flowerSearch, setFlowerSearch] = useState('');
+  const [miscSearch, setMiscSearch] = useState('');
   const [downpaymentDraft, setDownpaymentDraft] = useState('');
   const [totalAmountDraft, setTotalAmountDraft] = useState('');
   const [stockByProductId, setStockByProductId] = useState<Record<string, number>>({});
@@ -211,6 +408,24 @@ export default function FlowerOrderFormModal({
   const showReadyPhotoRequirement = Boolean(existingOrder && !readyPhotoSaved);
 
   function loadExistingOrderIntoForm(order: FlowerOrder) {
+    const quantities = quantitiesFromOrderItems(order.items);
+    const miscCatalog = products.filter(
+      (product) => product.is_active && product.product_kind === 'misc',
+    );
+    const miscProductIds = new Set(miscCatalog.map((product) => product.id));
+    const hasMiscLineItems = order.items.some((item) => miscProductIds.has(item.product_id));
+
+    if (!hasMiscLineItems && order.wrapper_color.trim()) {
+      const legacyName = order.wrapper_color
+        .split(/[,;]+/)[0]
+        ?.trim()
+        .replace(/\s+x\d+$/i, '');
+      const legacyMatch = miscCatalog.find((product) => product.name === legacyName);
+      if (legacyMatch) {
+        quantities[legacyMatch.id] = '1';
+      }
+    }
+
     setForm({
       branch_id: order.branch_id,
       receiver: order.receiver,
@@ -237,8 +452,9 @@ export default function FlowerOrderFormModal({
       created_by_name: order.created_by_name,
       items: order.items.map((item) => ({ ...item })),
     });
-    setProductQuantities(quantitiesFromOrderItems(order.items));
+    setProductQuantities(quantities);
     setFlowerSearch('');
+    setMiscSearch('');
     setDownpaymentDraft(order.downpayment > 0 ? String(order.downpayment) : '');
     setTotalAmountDraft(String(order.total_amount));
     setStatusDraft(normalizeOrderStatusForPicker(order.status, order.claim_mode));
@@ -266,6 +482,7 @@ export default function FlowerOrderFormModal({
     setForm(emptyForm(initialPickupIso ?? new Date().toISOString(), staffId, staffName));
     setProductQuantities({});
     setFlowerSearch('');
+    setMiscSearch('');
     setDownpaymentDraft('');
     setTotalAmountDraft('');
     setStatusDraft('not_started');
@@ -412,7 +629,7 @@ export default function FlowerOrderFormModal({
     [products],
   );
 
-  const filteredProducts = useMemo(() => {
+  const filteredFlowerProducts = useMemo(() => {
     const query = flowerSearch.trim().toLowerCase();
     if (!query) {
       return activeProducts;
@@ -421,35 +638,58 @@ export default function FlowerOrderFormModal({
     return activeProducts.filter((product) => product.name.toLowerCase().includes(query));
   }, [activeProducts, flowerSearch]);
 
-  const pickerProducts = useMemo(() => {
-    const selected: typeof activeProducts = [];
-    const unselected: typeof activeProducts = [];
-
-    for (const product of filteredProducts) {
-      if ((Number(productQuantities[product.id]) || 0) > 0) {
-        selected.push(product);
-      } else {
-        unselected.push(product);
-      }
+  const filteredMiscProducts = useMemo(() => {
+    const query = miscSearch.trim().toLowerCase();
+    if (!query) {
+      return miscProducts;
     }
 
-    return [...selected, ...unselected];
-  }, [filteredProducts, productQuantities, activeProducts]);
+    return miscProducts.filter((product) => product.name.toLowerCase().includes(query));
+  }, [miscProducts, miscSearch]);
 
-  const flowerSelectionSummary = useMemo(() => {
-    let types = 0;
-    let stems = 0;
+  const pickerFlowerProducts = useMemo(
+    () => sortPickerProducts(filteredFlowerProducts, productQuantities),
+    [filteredFlowerProducts, productQuantities],
+  );
 
-    for (const qtyStr of Object.values(productQuantities)) {
-      const qty = Number(qtyStr) || 0;
-      if (qty > 0) {
-        types += 1;
-        stems += qty;
-      }
-    }
+  const pickerMiscProducts = useMemo(
+    () => sortPickerProducts(filteredMiscProducts, productQuantities),
+    [filteredMiscProducts, productQuantities],
+  );
 
-    return { types, stems };
-  }, [productQuantities]);
+  const flowerSelectionSummary = useMemo(
+    () => summarizeCatalogSelection(activeProducts, productQuantities),
+    [activeProducts, productQuantities],
+  );
+
+  const miscSelectionSummary = useMemo(
+    () => summarizeCatalogSelection(miscProducts, productQuantities),
+    [miscProducts, productQuantities],
+  );
+
+  const flowerViewItems = useMemo(
+    () =>
+      activeProducts
+        .map((product) => ({
+          productId: product.id,
+          name: product.name,
+          quantity: Number(productQuantities[product.id]) || 0,
+        }))
+        .filter((item) => item.quantity > 0),
+    [activeProducts, productQuantities],
+  );
+
+  const miscViewItems = useMemo(
+    () =>
+      miscProducts
+        .map((product) => ({
+          productId: product.id,
+          name: product.name,
+          quantity: Number(productQuantities[product.id]) || 0,
+        }))
+        .filter((item) => item.quantity > 0),
+    [miscProducts, productQuantities],
+  );
 
   const requiresDownpaymentProof = useMemo(() => hasDownpayment, [hasDownpayment]);
   const activeBranchId = existingOrder?.branch_id ?? form.branch_id;
@@ -545,21 +785,10 @@ export default function FlowerOrderFormModal({
   }
 
   function validateForm(): CreateFlowerOrderInput | null {
-    const items = activeProducts
-      .map((product) => {
-        const quantity = Number(productQuantities[product.id]);
-
-        if (!Number.isFinite(quantity) || quantity <= 0) {
-          return null;
-        }
-
-        return {
-          product_id: product.id,
-          item_name: product.name,
-          quantity,
-        };
-      })
-      .filter((item): item is NonNullable<typeof item> => item !== null);
+    const flowerItems = buildCatalogOrderItems(activeProducts, productQuantities);
+    const miscItems = buildCatalogOrderItems(miscProducts, productQuantities);
+    const items = [...flowerItems, ...miscItems];
+    const wrapper_color = formatWrapperColorSummary(miscProducts, productQuantities);
 
     if (!form.branch_id) {
       setErrorMessage('Branch is required.');
@@ -586,8 +815,13 @@ export default function FlowerOrderFormModal({
       return null;
     }
 
-    if (items.length === 0) {
+    if (flowerItems.length === 0) {
       setErrorMessage('Add at least one flower type with quantity.');
+      return null;
+    }
+
+    if (miscItems.length === 0) {
+      setErrorMessage('Add at least one wrapper or miscellaneous item.');
       return null;
     }
 
@@ -619,7 +853,6 @@ export default function FlowerOrderFormModal({
     const requiresProof = downpayment > 0;
 
     const requiredTextFields: Array<[string, string]> = [
-      ['Wrapper color', form.wrapper_color],
       ['Greeting card', form.greeting_card],
       ['Instructions', form.special_instructions],
       ['Note', form.notes],
@@ -647,7 +880,7 @@ export default function FlowerOrderFormModal({
     }
 
     setErrorMessage('');
-    return { ...form, downpayment, total_amount, items };
+    return { ...form, wrapper_color, downpayment, total_amount, items };
   }
 
   async function handleSubmit(event: React.FormEvent) {
@@ -1165,37 +1398,6 @@ export default function FlowerOrderFormModal({
             </label>
 
             <label className="block text-sm font-medium text-brand-brown">
-              Wrapper / misc item
-              {isViewMode ? (
-                <p className={`flower-input mt-1.5 ${readOnlyFieldClass}`}>{form.wrapper_color}</p>
-              ) : (
-                <>
-                  <select
-                    value={form.wrapper_color}
-                    onChange={(event) => updateField('wrapper_color', event.target.value)}
-                    className="flower-input mt-1.5"
-                    required
-                  >
-                    <option value="">
-                      {miscProducts.length > 0
-                        ? 'Select wrapper / misc item'
-                        : 'Add Miscellaneous products first'}
-                    </option>
-                    {miscProducts.map((product) => (
-                      <option key={product.id} value={product.name}>
-                        {product.name}
-                      </option>
-                    ))}
-                  </select>
-                  <span className="mt-1 block text-xs text-brand-brown/60">
-                    Add options like Red Wrapper, Yellow Wrapper, Chocolate, etc. in
-                    Products → Miscellaneous.
-                  </span>
-                </>
-              )}
-            </label>
-
-            <label className="block text-sm font-medium text-brand-brown">
               Greeting card
               <input
                 type="text"
@@ -1222,11 +1424,66 @@ export default function FlowerOrderFormModal({
 
           <div className="mt-5">
             <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+              <h3 className="text-sm font-semibold text-brand-dark">Wrappers &amp; miscellaneous</h3>
+              {miscSelectionSummary.types > 0 ? (
+                <p className="text-xs font-medium text-brand-brown/75">
+                  {miscSelectionSummary.types} item{miscSelectionSummary.types === 1 ? '' : 's'} ·{' '}
+                  {miscSelectionSummary.units} unit{miscSelectionSummary.units === 1 ? '' : 's'}
+                </p>
+              ) : !isViewMode ? (
+                <p className="text-xs text-brand-brown/60">Tap + to add wrappers, chocolates, etc.</p>
+              ) : null}
+            </div>
+
+            {isViewMode ? (
+              miscViewItems.length > 0 ? (
+                <ul className="space-y-2 rounded-xl border border-brand-muted/40 bg-brand-cream/20 p-3">
+                  {miscViewItems.map((item) => (
+                    <li key={item.productId} className="flex justify-between text-sm text-brand-dark">
+                      <span>{item.name}</span>
+                      <span className="font-semibold">x{item.quantity}</span>
+                    </li>
+                  ))}
+                </ul>
+              ) : form.wrapper_color.trim() ? (
+                <p className="rounded-xl border border-brand-muted/40 bg-brand-cream/20 px-3 py-2 text-sm text-brand-dark">
+                  {form.wrapper_color}
+                </p>
+              ) : (
+                <p className="rounded-xl border border-brand-muted/30 px-3 py-4 text-center text-sm text-brand-brown/60">
+                  No wrappers or miscellaneous items selected.
+                </p>
+              )
+            ) : miscProducts.length === 0 ? (
+              <p className="rounded-xl border border-brand-muted/30 px-3 py-4 text-center text-sm text-brand-brown/60">
+                Add wrappers and supplies under Products → Miscellaneous first.
+              </p>
+            ) : (
+              <OrderCatalogQuantityPicker
+                products={pickerMiscProducts}
+                quantities={productQuantities}
+                stockByProductId={stockByProductId}
+                creditByProductId={creditByProductId}
+                branchSelected={Boolean(form.branch_id)}
+                stockLoading={stockLoading}
+                search={miscSearch}
+                onSearchChange={setMiscSearch}
+                searchPlaceholder="Search wrappers, chocolates..."
+                emptySearchMessage="No miscellaneous items match your search."
+                unitLabel="Quantity"
+                onSetQuantity={setProductQuantity}
+                onAdjustQuantity={adjustProductQuantity}
+              />
+            )}
+          </div>
+
+          <div className="mt-5">
+            <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
               <h3 className="text-sm font-semibold text-brand-dark">Flowers &amp; fillers</h3>
               {flowerSelectionSummary.types > 0 ? (
                 <p className="text-xs font-medium text-brand-brown/75">
                   {flowerSelectionSummary.types} type{flowerSelectionSummary.types === 1 ? '' : 's'} ·{' '}
-                  {flowerSelectionSummary.stems} stem{flowerSelectionSummary.stems === 1 ? '' : 's'}
+                  {flowerSelectionSummary.units} stem{flowerSelectionSummary.units === 1 ? '' : 's'}
                 </p>
               ) : !isViewMode ? (
                 <p className="text-xs text-brand-brown/60">Tap + to add stems</p>
@@ -1234,115 +1491,36 @@ export default function FlowerOrderFormModal({
             </div>
 
             {isViewMode ? (
-              <ul className="space-y-2 rounded-xl border border-brand-muted/40 bg-brand-cream/20 p-3">
-                {Object.entries(productQuantities).map(([productId, quantity]) => {
-                  const productName =
-                    activeProducts.find((product) => product.id === productId)?.name ??
-                    existingOrder?.items.find((item) => item.product_id === productId)?.item_name ??
-                    'Flower';
-
-                  return (
-                    <li key={productId} className="flex justify-between text-sm text-brand-dark">
-                      <span>{productName}</span>
-                      <span className="font-semibold">x{quantity}</span>
+              flowerViewItems.length > 0 ? (
+                <ul className="space-y-2 rounded-xl border border-brand-muted/40 bg-brand-cream/20 p-3">
+                  {flowerViewItems.map((item) => (
+                    <li key={item.productId} className="flex justify-between text-sm text-brand-dark">
+                      <span>{item.name}</span>
+                      <span className="font-semibold">x{item.quantity}</span>
                     </li>
-                  );
-                })}
-              </ul>
+                  ))}
+                </ul>
+              ) : (
+                <p className="rounded-xl border border-brand-muted/30 px-3 py-4 text-center text-sm text-brand-brown/60">
+                  No flowers selected.
+                </p>
+              )
             ) : (
-              <>
-                {!form.branch_id ? (
-                  <p className="mb-2 text-xs text-amber-800">
-                    Select a branch above to see on-hand counts for each flower type.
-                  </p>
-                ) : stockLoading ? (
-                  <p className="mb-2 text-xs text-brand-brown/60">Loading branch stock...</p>
-                ) : (
-                  <p className="mb-2 text-xs text-brand-brown/65">
-                    Walk-in orders are allowed even at 0 stock — inventory may go negative until you stock in.
-                  </p>
-                )}
-
-                <input
-                  type="search"
-                  value={flowerSearch}
-                  onChange={(event) => setFlowerSearch(event.target.value)}
-                  placeholder="Search flowers..."
-                  className="flower-input mb-2"
-                />
-
-                <div className="overflow-hidden rounded-xl border border-brand-muted/40 bg-brand-cream/10">
-                  <div className="max-h-[min(50vh,420px)] overflow-y-auto divide-y divide-brand-muted/25">
-                    {pickerProducts.length === 0 ? (
-                      <p className="px-3 py-4 text-center text-sm text-brand-brown/60">
-                        No flowers match your search.
-                      </p>
-                    ) : (
-                      pickerProducts.map((product) => {
-                        const qty = Number(productQuantities[product.id]) || 0;
-                        const onHand =
-                          form.branch_id && !stockLoading
-                            ? (stockByProductId[product.id] ?? 0) + (creditByProductId[product.id] ?? 0)
-                            : null;
-                        const isSelected = qty > 0;
-                        const willGoNegative = onHand !== null && qty > onHand;
-
-                        return (
-                          <div
-                            key={product.id}
-                            className={`flex items-center gap-3 px-3 py-2.5 ${
-                              isSelected ? 'bg-brand-beige/50' : 'bg-white/70'
-                            }`}
-                          >
-                            <div className="min-w-0 flex-1">
-                              <p className="text-sm font-medium text-brand-dark">{product.name}</p>
-                              {onHand !== null ? (
-                                <p
-                                  className={`text-xs ${
-                                    willGoNegative ? 'text-amber-800' : 'text-brand-brown/65'
-                                  }`}
-                                >
-                                  {onHand} on hand
-                                  {willGoNegative ? ' — will go negative on day close' : ''}
-                                </p>
-                              ) : null}
-                            </div>
-
-                            <div className="flex shrink-0 items-center gap-1.5">
-                              <button
-                                type="button"
-                                aria-label={`Remove one ${product.name}`}
-                                disabled={qty <= 0}
-                                onClick={() => adjustProductQuantity(product.id, -1)}
-                                className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-brand-muted/50 bg-white text-brand-dark transition hover:border-brand-dark/30 disabled:cursor-not-allowed disabled:opacity-40"
-                              >
-                                <Minus className="h-4 w-4" />
-                              </button>
-                              <input
-                                type="text"
-                                inputMode="numeric"
-                                value={qty > 0 ? String(qty) : ''}
-                                placeholder="0"
-                                onChange={(event) => setProductQuantity(product.id, event.target.value)}
-                                className="flower-input h-9 w-12 px-1 text-center text-sm"
-                                aria-label={`Quantity for ${product.name}`}
-                              />
-                              <button
-                                type="button"
-                                aria-label={`Add one ${product.name}`}
-                                onClick={() => adjustProductQuantity(product.id, 1)}
-                                className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-brand-dark/20 bg-brand-dark text-white transition hover:bg-brand-brown"
-                              >
-                                <Plus className="h-4 w-4" />
-                              </button>
-                            </div>
-                          </div>
-                        );
-                      })
-                    )}
-                  </div>
-                </div>
-              </>
+              <OrderCatalogQuantityPicker
+                products={pickerFlowerProducts}
+                quantities={productQuantities}
+                stockByProductId={stockByProductId}
+                creditByProductId={creditByProductId}
+                branchSelected={Boolean(form.branch_id)}
+                stockLoading={stockLoading}
+                search={flowerSearch}
+                onSearchChange={setFlowerSearch}
+                searchPlaceholder="Search flowers..."
+                emptySearchMessage="No flowers match your search."
+                unitLabel="Quantity"
+                onSetQuantity={setProductQuantity}
+                onAdjustQuantity={adjustProductQuantity}
+              />
             )}
           </div>
 
