@@ -1,4 +1,5 @@
 export {
+  completeAdminOnboarding,
   completeStaffOnboarding,
   createFlowerStaff,
   deleteFlowerTeamMember,

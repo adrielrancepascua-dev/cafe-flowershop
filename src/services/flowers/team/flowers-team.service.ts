@@ -3,6 +3,7 @@ import type { CreateFlowerStaffResult, FlowerTeamMember } from '../../../modules
 import { STAFF_EMAIL_DOMAIN } from '../../../modules/flowers/shared/config/brand';
 import { getFlowerStorageMode, shouldUseFlowerSupabase } from '../storage-mode';
 import {
+  completeAdminOnboardingLocal,
   completeStaffOnboardingLocal,
   createFlowerStaffLocal,
   deleteFlowerTeamMemberLocal,
@@ -10,6 +11,7 @@ import {
   setFlowerTeamMemberActiveLocal,
 } from './flowers-team.local';
 import {
+  completeAdminOnboardingSupabase,
   completeStaffOnboardingSupabase,
   createFlowerStaffSupabase,
   deleteFlowerTeamMemberSupabase,
@@ -79,4 +81,21 @@ export async function completeStaffOnboarding(
   }
 
   throw new Error('Staff onboarding is only available in production mode.');
+}
+
+export async function completeAdminOnboarding(
+  userId: string,
+  newPassword: string,
+): Promise<void> {
+  if (shouldUseFlowerSupabase(getFlowerStorageMode())) {
+    await completeAdminOnboardingSupabase(newPassword);
+    return;
+  }
+
+  if (isFlowerDemoMode()) {
+    await completeAdminOnboardingLocal(userId, newPassword);
+    return;
+  }
+
+  throw new Error('Admin onboarding is only available in production mode.');
 }

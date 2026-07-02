@@ -122,3 +122,25 @@ export async function completeStaffOnboardingSupabase(
     throw rpcError;
   }
 }
+
+export async function completeAdminOnboardingSupabase(newPassword: string): Promise<void> {
+  await ensureSupabaseSession();
+  const supabase = getSupabaseClient();
+  if (!supabase) {
+    throw new Error('Supabase is not configured.');
+  }
+
+  const { error: passwordError } = await supabase.auth.updateUser({
+    password: newPassword,
+  });
+
+  if (passwordError) {
+    throw passwordError;
+  }
+
+  const { error: rpcError } = await supabase.rpc('complete_admin_onboarding');
+
+  if (rpcError) {
+    throw rpcError;
+  }
+}

@@ -301,6 +301,14 @@ export function needsStaffOnboarding(user: FlowerUser | null | undefined): boole
   return Boolean(user && user.role === 'staff' && !user.onboarding_completed && user.is_active);
 }
 
+export function needsAdminOnboarding(user: FlowerUser | null | undefined): boolean {
+  return Boolean(user && user.role === 'admin' && !user.onboarding_completed && user.is_active);
+}
+
+export function needsFlowerOnboarding(user: FlowerUser | null | undefined): boolean {
+  return needsStaffOnboarding(user) || needsAdminOnboarding(user);
+}
+
 export async function refreshFlowerSession(): Promise<FlowerAuthSession | null> {
   const session = await restoreFlowerSession();
   if (session) {

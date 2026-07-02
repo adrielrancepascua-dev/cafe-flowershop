@@ -130,3 +130,46 @@ export async function completeStaffOnboardingLocal(
 
   writeTeam(next);
 }
+
+export async function completeAdminOnboardingLocal(
+  userId: string,
+  newPassword: string,
+): Promise<void> {
+  if (typeof window === 'undefined') {
+    return;
+  }
+
+  const raw = window.localStorage.getItem('papers_petals_auth_v1');
+  if (!raw) {
+    throw new Error('No active session found.');
+  }
+
+  const session = JSON.parse(raw) as {
+    user: {
+      id: string;
+      role: string;
+      onboarding_completed?: boolean;
+    };
+    token: string;
+  };
+
+  if (session.user.id !== userId || session.user.role !== 'admin') {
+    throw new Error('Admin account not found in demo session.');
+  }
+
+  session.user.onboarding_completed = true;
+  window.localStorage.setItem('papers_petals_auth_v1', JSON.stringify(session));
+
+  const teamRaw = window.localStorage.getItem('papers_petals_team_v1');
+  if (teamRaw) {
+    try {
+      const team = JSON.parse(teamRaw) as Array<{ id: string; password?: string }>;
+      const updatedTeam = team.map((member) =>
+        member.id === userId ? { ...member, password: newPassword } : member,
+      );
+      window.localStorage.setItem('papers_petals_team_v1', JSON.stringify(updatedTeam));
+    } catch {
+      // ignore malformed team storage
+    }
+  }
+}

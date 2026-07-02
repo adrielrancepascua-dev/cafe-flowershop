@@ -60,3 +60,24 @@ end;
 $$;
 
 grant execute on function public.complete_staff_onboarding(text) to authenticated;
+
+-- Admin completes first-login setup (password only — no branch)
+create or replace function public.complete_admin_onboarding()
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  if public.flower_current_role() is distinct from 'admin' then
+    raise exception 'Only admin accounts can complete admin onboarding.';
+  end if;
+
+  update public.flower_profiles
+  set onboarding_completed = true
+  where id = auth.uid()
+    and onboarding_completed = false;
+end;
+$$;
+
+grant execute on function public.complete_admin_onboarding() to authenticated;

@@ -14,9 +14,9 @@ import FlowerInventoryStockPrint from '../components/FlowerPrintableInventorySto
 import { Minus, Plus, ArrowLeftRight, Package, Printer } from 'lucide-react';
 import { INVENTORY_MOVEMENT_TYPE_LABELS } from '../../shared/utils/flower-format';
 import {
-  compareFlowerProductColorLabels,
+  compareInventoryStockRows,
   flowerProductColorSwatchClass,
-  groupInventoryStockByColor,
+  groupInventoryStockByFlowerType,
   normalizeFlowerProductColor,
 } from '../../shared/utils/flower-product-colors';
 
@@ -39,37 +39,41 @@ function aggregateStockByProduct(rows: FlowerInventoryStockRow[]): FlowerInvento
     });
   }
 
-  return [...totals.values()].sort((left, right) => {
-    const colorCompare = compareFlowerProductColorLabels(left.product_color, right.product_color);
-    if (colorCompare !== 0) {
-      return colorCompare;
-    }
-
-    return left.product_name.localeCompare(right.product_name);
-  });
+  return [...totals.values()].sort(compareInventoryStockRows);
 }
 
-function InventoryColorSectionHeader({
-  color,
+function InventoryFlowerTypeSectionHeader({
+  flowerType,
   itemCount,
   unitTotal,
 }: {
-  color: string;
+  flowerType: string;
   itemCount: number;
   unitTotal: number;
 }) {
   return (
     <div className="flex items-center justify-between gap-3 rounded-xl border border-brand-muted/40 bg-brand-beige/35 px-3 py-2.5">
-      <div className="flex min-w-0 items-center gap-2.5">
-        <span
-          className={`h-4 w-4 shrink-0 rounded-full ${flowerProductColorSwatchClass(color)}`}
-          aria-hidden="true"
-        />
-        <p className="font-semibold text-brand-dark">{color}</p>
-      </div>
+      <p className="font-semibold text-brand-dark">{flowerType}</p>
       <p className="shrink-0 text-xs font-medium text-brand-brown/70">
-        {itemCount} flower{itemCount === 1 ? '' : 's'} · {unitTotal} units
+        {itemCount} color{itemCount === 1 ? '' : 's'} · {unitTotal} units
       </p>
+    </div>
+  );
+}
+
+function InventoryStockRowLabel({ name, color }: { name: string; color: string }) {
+  const normalizedColor = normalizeFlowerProductColor(color);
+
+  return (
+    <div className="flex min-w-0 items-center gap-2">
+      <span
+        className={`h-3.5 w-3.5 shrink-0 rounded-full ${flowerProductColorSwatchClass(normalizedColor)}`}
+        aria-hidden="true"
+      />
+      <div className="min-w-0">
+        <p className="font-medium text-brand-dark">{name}</p>
+        <p className="text-xs text-brand-brown/65">{normalizedColor}</p>
+      </div>
     </div>
   );
 }
@@ -311,13 +315,16 @@ export default function FlowerInventoryPage() {
     );
   }, [colorFilter, displayStock]);
 
-  const stockByColor = useMemo(
-    () => groupInventoryStockByColor(filteredDisplayStock),
+  const stockByFlowerType = useMemo(
+    () => groupInventoryStockByFlowerType(filteredDisplayStock),
     [filteredDisplayStock],
   );
 
   const availableColorFilters = useMemo(
-    () => groupInventoryStockByColor(displayStock).map((section) => section.color),
+    () =>
+      [...new Set(displayStock.map((row) => normalizeFlowerProductColor(row.product_color)))].sort(
+        (left, right) => left.localeCompare(right),
+      ),
     [displayStock],
   );
 
@@ -439,11 +446,11 @@ export default function FlowerInventoryPage() {
         description={
           isAdmin
             ? isAllBranchesView
-              ? 'Totals across Dagupan, San Carlos, and Urdaneta. Select a branch to adjust stock by color.'
-              : 'Stock grouped by color. Adjust quantities for this branch below.'
+              ? 'Totals across Dagupan, San Carlos, and Urdaneta. Select a branch to adjust stock by flower type.'
+              : 'Stock grouped by flower type with colors in order. Adjust quantities for this branch below.'
             : isAllBranchesView
-              ? 'Combined stock totals across all branches, grouped by color.'
-              : 'View-only stock levels for this branch, grouped by color.'
+              ? 'Combined stock totals across all branches, grouped by flower type.'
+              : 'View-only stock levels for this branch, grouped by flower type.'
         }
       />
 
@@ -657,15 +664,15 @@ export default function FlowerInventoryPage() {
           <p className="mt-2 text-sm text-brand-brown/70">
             {isAllBranchesView
               ? `Showing combined totals for all branches (${totalUnitsOnHand} units on hand).`
-              : `Showing stock for ${selectedBranchName} (${totalUnitsOnHand} units on hand), grouped by color.`}
+              : `Showing stock for ${selectedBranchName} (${totalUnitsOnHand} units on hand), grouped by flower type.`}
             {isRefreshing ? ' · Updating…' : ''}
           </p>
 
           <div className="mt-5 space-y-5 md:hidden">
-            {stockByColor.map((section) => (
-              <div key={section.color} className="space-y-3">
-                <InventoryColorSectionHeader
-                  color={section.color}
+            {stockByFlowerType.map((section) => (
+              <div key={section.flowerType} className="space-y-3">
+                <InventoryFlowerTypeSectionHeader
+                  flowerType={section.flowerType}
                   itemCount={section.rows.length}
                   unitTotal={section.rows.reduce((sum, row) => sum + row.on_hand, 0)}
                 />
@@ -676,8 +683,8 @@ export default function FlowerInventoryPage() {
                   >
                     <div className="flex items-start justify-between gap-3">
                       <div className="min-w-0 flex-1">
-                        <p className="font-semibold text-brand-dark">{row.product_name}</p>
-                        <p className="mt-0.5 text-xs text-brand-brown/70">
+                        <InventoryStockRowLabel name={row.product_name} color={row.product_color} />
+                        <p className="mt-1 text-xs text-brand-brown/70">
                           {isAllBranchesView ? 'All branches total' : row.branch_name}
                         </p>
                       </div>
@@ -701,7 +708,7 @@ export default function FlowerInventoryPage() {
                 ))}
               </div>
             ))}
-            {stockByColor.length === 0 ? (
+            {stockByFlowerType.length === 0 ? (
               <p className="rounded-xl border border-brand-muted/30 px-3 py-6 text-center text-sm text-brand-brown/60">
                 No stock to show for this filter.
               </p>
@@ -745,12 +752,12 @@ export default function FlowerInventoryPage() {
                 </tr>
               </thead>
               <tbody>
-                {stockByColor.map((section) => (
-                  <Fragment key={section.color}>
+                {stockByFlowerType.map((section) => (
+                  <Fragment key={section.flowerType}>
                     <tr className="border-t border-brand-muted/30 bg-brand-beige/25">
                       <td colSpan={stockTableColSpan} className="px-3 py-2">
-                        <InventoryColorSectionHeader
-                          color={section.color}
+                        <InventoryFlowerTypeSectionHeader
+                          flowerType={section.flowerType}
                           itemCount={section.rows.length}
                           unitTotal={section.rows.reduce((sum, row) => sum + row.on_hand, 0)}
                         />
@@ -764,7 +771,9 @@ export default function FlowerInventoryPage() {
                         {isAllBranchesView ? null : (
                           <td className="px-3 py-2 whitespace-nowrap">{row.branch_name}</td>
                         )}
-                        <td className="min-w-[10rem] px-3 py-2">{row.product_name}</td>
+                        <td className="min-w-[10rem] px-3 py-2">
+                          <InventoryStockRowLabel name={row.product_name} color={row.product_color} />
+                        </td>
                         <td className="px-3 py-2 font-semibold">{row.on_hand}</td>
                         {isAdmin && !isAllBranchesView ? (
                           <td className="min-w-[16rem] px-3 py-2">
@@ -780,7 +789,7 @@ export default function FlowerInventoryPage() {
                     ))}
                   </Fragment>
                 ))}
-                {stockByColor.length === 0 ? (
+                {stockByFlowerType.length === 0 ? (
                   <tr>
                     <td colSpan={stockTableColSpan} className="px-3 py-8 text-center text-brand-brown/60">
                       No stock to show for this filter.

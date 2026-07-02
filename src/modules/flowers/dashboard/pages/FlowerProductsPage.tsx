@@ -4,32 +4,33 @@ import { productColorColumnSupported } from '../../../../services/flowers/produc
 import type { FlowerProduct } from '../../shared/types/flower-product';
 import FlowerPageHeader from '../../shared/components/FlowerPageHeader';
 import { RequireFlowerAdmin } from '../components/RequireFlowerAuth';
+import FlowerProductColorPicker from '../components/FlowerProductColorPicker';
 import { PRICE_FORMATTER } from '../../shared/utils/flower-format';
 import {
-  compareFlowerProductColorLabels,
+  compareFlowerProducts,
+  compareFlowerTypeLabels,
+  deriveFlowerTypeFromProduct,
   FLOWER_PRODUCT_COLOR_OPTIONS,
-  flowerProductColorSwatchClass,
   normalizeFlowerProductColor,
 } from '../../shared/utils/flower-product-colors';
 
-function groupProductsByColor(products: FlowerProduct[]) {
+function groupProductsByFlowerType(products: FlowerProduct[]) {
   const buckets = new Map<string, FlowerProduct[]>();
 
   for (const product of products) {
-    const color = normalizeFlowerProductColor(product.color);
-    const bucket = buckets.get(color) ?? [];
+    const flowerType = deriveFlowerTypeFromProduct(product.name, product.color);
+    const bucket = buckets.get(flowerType) ?? [];
     bucket.push(product);
-    buckets.set(color, bucket);
+    buckets.set(flowerType, bucket);
   }
 
   return [...buckets.entries()]
-    .sort(([left], [right]) => compareFlowerProductColorLabels(left, right))
-    .map(([color, colorProducts]) => ({
-      color,
-      products: [...colorProducts].sort((left, right) => left.name.localeCompare(right.name)),
+    .sort(([left], [right]) => compareFlowerTypeLabels(left, right))
+    .map(([flowerType, flowerProducts]) => ({
+      flowerType,
+      products: [...flowerProducts].sort(compareFlowerProducts),
     }));
 }
-
 export default function FlowerProductsPage() {
   const [products, setProducts] = useState<FlowerProduct[]>([]);
   const [loading, setLoading] = useState(true);
@@ -62,17 +63,21 @@ export default function FlowerProductsPage() {
     [products],
   );
 
-  const productsByColor = useMemo(() => groupProductsByColor(products), [products]);
+  const productsByFlowerType = useMemo(() => groupProductsByFlowerType(products), [products]);
+  const existingProductColors = useMemo(
+    () => products.map((product) => product.color),
+    [products],
+  );
 
   async function handleCreate(event: React.FormEvent) {
     event.preventDefault();
     const unit_cost = Number(newCost);
-    if (!newName.trim() || !Number.isFinite(unit_cost) || unit_cost < 0 || !newColor) {
+    if (!newName.trim() || !Number.isFinite(unit_cost) || unit_cost < 0 || !newColor.trim()) {
       setErrorMessage('Enter a valid name, color, and cost.');
       return;
     }
 
-    await createFlowerProduct({ name: newName, color: newColor, unit_cost });
+    await createFlowerProduct({ name: newName.trim(), color: newColor.trim(), unit_cost });
     setNewName('');
     setNewColor(FLOWER_PRODUCT_COLOR_OPTIONS[0]);
     setNewCost('');
@@ -85,7 +90,7 @@ export default function FlowerProductsPage() {
       <FlowerPageHeader
         label="Flower Types"
         title="Products"
-        description="Flower stems with a color category for inventory grouping. Set color here — stock pages group by it."
+        description="Flower stems grouped by type in inventory. Pick a preset color or add a custom one for unusual shades."
       />
 
       <p className="mt-2 text-sm text-brand-brown/70">
@@ -95,7 +100,7 @@ export default function FlowerProductsPage() {
       <RequireFlowerAdmin>
         <form
           onSubmit={handleCreate}
-          className="mt-5 grid grid-cols-1 gap-3 rounded-2xl border border-brand-muted/40 bg-brand-cream/20 p-4 sm:grid-cols-[1fr_140px_160px_auto]"
+          className="mt-5 grid grid-cols-1 gap-3 rounded-2xl border border-brand-muted/40 bg-brand-cream/20 p-4 sm:grid-cols-[1fr_minmax(140px,180px)_160px_auto]"
         >
           <input
             type="text"
@@ -104,18 +109,12 @@ export default function FlowerProductsPage() {
             placeholder="Flower name (e.g. Red Rose)"
             className="flower-input"
           />
-          <select
+          <FlowerProductColorPicker
             value={newColor}
-            onChange={(event) => setNewColor(event.target.value)}
-            className="flower-input"
+            onChange={setNewColor}
+            existingColors={existingProductColors}
             required
-          >
-            {FLOWER_PRODUCT_COLOR_OPTIONS.map((color) => (
-              <option key={color} value={color}>
-                {color}
-              </option>
-            ))}
-          </select>
+          />
           <input
             type="number"
             min="0"
@@ -150,11 +149,16 @@ export default function FlowerProductsPage() {
       ) : (
         <>
           <div className="mt-5 space-y-5 md:hidden">
-            {productsByColor.map((section) => (
-              <div key={section.color} className="space-y-3">
-                <ProductColorSectionHeader color={section.color} count={section.products.length} />
+            {productsByFlowerType.map((section) => (
+              <div key={section.flowerType} className="space-y-3">
+                <ProductFlowerTypeSectionHeader flowerType={section.flowerType} count={section.products.length} />
                 {section.products.map((product) => (
-                  <ProductCard key={product.id} product={product} onChanged={loadProducts} />
+                  <ProductCard
+                    key={product.id}
+                    product={product}
+                    existingProductColors={existingProductColors}
+                    onChanged={loadProducts}
+                  />
                 ))}
               </div>
             ))}
@@ -174,15 +178,23 @@ export default function FlowerProductsPage() {
                 </tr>
               </thead>
               <tbody>
-                {productsByColor.map((section) => (
-                  <Fragment key={section.color}>
+                {productsByFlowerType.map((section) => (
+                  <Fragment key={section.flowerType}>
                     <tr className="border-t border-brand-muted/30 bg-brand-beige/25">
                       <td colSpan={5} className="px-3 py-2">
-                        <ProductColorSectionHeader color={section.color} count={section.products.length} />
+                        <ProductFlowerTypeSectionHeader
+                          flowerType={section.flowerType}
+                          count={section.products.length}
+                        />
                       </td>
                     </tr>
                     {section.products.map((product) => (
-                      <ProductRow key={product.id} product={product} onChanged={loadProducts} />
+                      <ProductRow
+                        key={product.id}
+                        product={product}
+                        existingProductColors={existingProductColors}
+                        onChanged={loadProducts}
+                      />
                     ))}
                   </Fragment>
                 ))}
@@ -195,18 +207,18 @@ export default function FlowerProductsPage() {
   );
 }
 
-function ProductColorSectionHeader({ color, count }: { color: string; count: number }) {
+function ProductFlowerTypeSectionHeader({
+  flowerType,
+  count,
+}: {
+  flowerType: string;
+  count: number;
+}) {
   return (
     <div className="flex items-center justify-between gap-3">
-      <div className="flex items-center gap-2.5">
-        <span
-          className={`h-4 w-4 shrink-0 rounded-full ${flowerProductColorSwatchClass(color)}`}
-          aria-hidden="true"
-        />
-        <p className="font-semibold text-brand-dark">{color}</p>
-      </div>
+      <p className="font-semibold text-brand-dark">{flowerType}</p>
       <p className="text-xs font-medium text-brand-brown/70">
-        {count} product{count === 1 ? '' : 's'}
+        {count} color{count === 1 ? '' : 's'}
       </p>
     </div>
   );
@@ -256,9 +268,11 @@ function ProductActions({
 
 function ProductCard({
   product,
+  existingProductColors,
   onChanged,
 }: {
   product: FlowerProduct;
+  existingProductColors: string[];
   onChanged: () => Promise<void>;
 }) {
   const [name, setName] = useState(product.name);
@@ -291,17 +305,13 @@ function ProductCard({
 
       <label className="mt-3 block text-xs font-medium uppercase tracking-wide text-brand-brown/60">
         Color category
-        <select
-          value={color}
-          onChange={(event) => setColor(event.target.value)}
-          className="flower-input mt-1.5"
-        >
-          {FLOWER_PRODUCT_COLOR_OPTIONS.map((option) => (
-            <option key={option} value={option}>
-              {option}
-            </option>
-          ))}
-        </select>
+        <div className="mt-1.5">
+          <FlowerProductColorPicker
+            value={color}
+            onChange={setColor}
+            existingColors={existingProductColors}
+          />
+        </div>
       </label>
 
       <div className="mt-3 flex items-center justify-between gap-3">
@@ -323,9 +333,11 @@ function ProductCard({
 
 function ProductRow({
   product,
+  existingProductColors,
   onChanged,
 }: {
   product: FlowerProduct;
+  existingProductColors: string[];
   onChanged: () => Promise<void>;
 }) {
   const [name, setName] = useState(product.name);
@@ -351,17 +363,12 @@ function ProductRow({
         <input value={name} onChange={(event) => setName(event.target.value)} className="flower-input min-w-[10rem]" />
       </td>
       <td className="px-3 py-2">
-        <select
+        <FlowerProductColorPicker
           value={color}
-          onChange={(event) => setColor(event.target.value)}
+          onChange={setColor}
+          existingColors={existingProductColors}
           className="flower-input min-w-[120px]"
-        >
-          {FLOWER_PRODUCT_COLOR_OPTIONS.map((option) => (
-            <option key={option} value={option}>
-              {option}
-            </option>
-          ))}
-        </select>
+        />
       </td>
       <td className="px-3 py-2 whitespace-nowrap">{PRICE_FORMATTER.format(product.unit_cost)}</td>
       <td className="px-3 py-2">

@@ -11,7 +11,7 @@ import type { FlowerAuthSession, FlowerUser } from '../../modules/flowers/shared
 import {
   getStoredFlowerSession,
   isAdminUser,
-  needsStaffOnboarding,
+  needsFlowerOnboarding,
   refreshFlowerSession,
   restoreFlowerSession,
   signInFlowerUser,
@@ -72,7 +72,7 @@ export function FlowerAuthProvider({ children }: { children: ReactNode }) {
       user: session?.user ?? null,
       isLoading,
       isAdmin: isAdminUser(session?.user),
-      needsOnboarding: needsStaffOnboarding(session?.user),
+      needsOnboarding: needsFlowerOnboarding(session?.user),
       signIn,
       signOut,
       refreshUser,
