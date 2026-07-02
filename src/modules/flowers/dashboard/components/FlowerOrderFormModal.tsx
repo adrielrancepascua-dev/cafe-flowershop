@@ -404,6 +404,13 @@ export default function FlowerOrderFormModal({
         .sort((left, right) => left.name.localeCompare(right.name)),
     [products],
   );
+  const miscProducts = useMemo(
+    () =>
+      products
+        .filter((product) => product.is_active && product.product_kind === 'misc')
+        .sort((left, right) => left.name.localeCompare(right.name)),
+    [products],
+  );
 
   const filteredProducts = useMemo(() => {
     const query = flowerSearch.trim().toLowerCase();
@@ -1158,15 +1165,34 @@ export default function FlowerOrderFormModal({
             </label>
 
             <label className="block text-sm font-medium text-brand-brown">
-              Wrapper color
-              <input
-                type="text"
-                value={form.wrapper_color}
-                onChange={(event) => updateField('wrapper_color', event.target.value)}
-                className={`flower-input mt-1.5 ${readOnlyFieldClass}`}
-                readOnly={isViewMode}
-                required
-              />
+              Wrapper / misc item
+              {isViewMode ? (
+                <p className={`flower-input mt-1.5 ${readOnlyFieldClass}`}>{form.wrapper_color}</p>
+              ) : (
+                <>
+                  <select
+                    value={form.wrapper_color}
+                    onChange={(event) => updateField('wrapper_color', event.target.value)}
+                    className="flower-input mt-1.5"
+                    required
+                  >
+                    <option value="">
+                      {miscProducts.length > 0
+                        ? 'Select wrapper / misc item'
+                        : 'Add Miscellaneous products first'}
+                    </option>
+                    {miscProducts.map((product) => (
+                      <option key={product.id} value={product.name}>
+                        {product.name}
+                      </option>
+                    ))}
+                  </select>
+                  <span className="mt-1 block text-xs text-brand-brown/60">
+                    Add options like Red Wrapper, Yellow Wrapper, Chocolate, etc. in
+                    Products → Miscellaneous.
+                  </span>
+                </>
+              )}
             </label>
 
             <label className="block text-sm font-medium text-brand-brown">
