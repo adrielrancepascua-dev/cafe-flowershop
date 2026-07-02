@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { ChevronDown } from 'lucide-react';
 import { listFlowerProducts, createFlowerProduct, updateFlowerProduct, toggleFlowerProductActive, deleteFlowerProduct } from '../../../../services/flowers/products';
 import { productColorColumnSupported } from '../../../../services/flowers/products/flowers-products.supabase';
 import { useFlowerAuth } from '../../../../lib/auth/FlowerAuthContext';
@@ -255,42 +256,6 @@ function FixedFlowerColorBadge({ color }: { color: string }) {
   );
 }
 
-function ProductFlowerTypeSectionHeader({
-  flowerType,
-  count,
-  isCategory,
-  existingColors,
-  onChanged,
-  hideTitle = false,
-}: {
-  flowerType: string;
-  count: number;
-  isCategory: boolean;
-  existingColors: string[];
-  onChanged: () => Promise<void>;
-  hideTitle?: boolean;
-}) {
-  return (
-    <div className={`flex flex-wrap items-center gap-3 ${hideTitle ? 'shrink-0' : 'justify-between'}`}>
-      {hideTitle ? null : (
-        <div>
-          <p className="font-semibold text-brand-dark">{flowerType}</p>
-          <p className="text-xs font-medium text-brand-brown/70">
-            {isCategory ? `${count} colors` : 'Single-color product'}
-          </p>
-        </div>
-      )}
-      <RequireFlowerAdmin silent>
-        <AddColorVariationForm
-          flowerType={flowerType}
-          existingColors={existingColors}
-          onChanged={onChanged}
-        />
-      </RequireFlowerAdmin>
-    </div>
-  );
-}
-
 function AddColorVariationForm({
   flowerType,
   existingColors,
@@ -405,40 +370,67 @@ function ProductCategoryGroup({
   onChanged: () => Promise<void>;
 }) {
   const existingColors = section.variants.map((product) => product.color);
+  const [expanded, setExpanded] = useState(false);
+  const panelId = `product-category-${section.flowerType.replace(/\s+/g, '-').toLowerCase()}`;
 
   return (
     <div className="overflow-hidden rounded-xl border border-brand-muted/40 bg-white shadow-sm">
-      <div className="border-b border-brand-muted/25 bg-gradient-to-r from-brand-beige/70 to-brand-cream/40 px-4 py-3">
-        <div className="flex flex-wrap items-start justify-between gap-3">
-          <div className="flex min-w-0 flex-1 items-start gap-3">
-            <div>
-              <div className="flex flex-wrap items-center gap-2">
-                <p className="font-semibold text-brand-dark">{section.flowerType}</p>
-                <span className="rounded-full border border-brand-muted/40 bg-white/90 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-brand-brown/70">
-                  Category
-                </span>
-              </div>
-              <p className="mt-0.5 text-xs text-brand-brown/65">
-                {section.variants.length} colors · set when adding each color
-              </p>
-            </div>
-          </div>
-          <ProductFlowerTypeSectionHeader
-            flowerType={section.flowerType}
-            count={section.variants.length}
-            isCategory
-            existingColors={existingColors}
-            onChanged={onChanged}
-            hideTitle
+      <div
+        className={`flex items-start gap-2 bg-gradient-to-r from-brand-beige/70 to-brand-cream/40 px-3 py-3 sm:px-4 ${
+          expanded ? 'border-b border-brand-muted/25' : ''
+        }`}
+      >
+        <button
+          type="button"
+          aria-expanded={expanded}
+          aria-controls={panelId}
+          onClick={() => setExpanded((current) => !current)}
+          className="flex min-w-0 flex-1 items-start gap-2 text-left transition hover:opacity-90"
+        >
+          <ChevronDown
+            className={`mt-0.5 h-4 w-4 shrink-0 text-brand-brown/70 transition-transform ${
+              expanded ? 'rotate-0' : '-rotate-90'
+            }`}
+            aria-hidden
           />
+          <div className="min-w-0 flex-1">
+            <div className="flex flex-wrap items-center gap-2">
+              <p className="font-semibold text-brand-dark">{section.flowerType}</p>
+              <span className="rounded-full border border-brand-muted/40 bg-white/90 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-brand-brown/70">
+                Category
+              </span>
+            </div>
+            <p className="mt-0.5 text-xs text-brand-brown/65">
+              {section.variants.length} colors · {expanded ? 'tap to collapse' : 'tap to expand'}
+            </p>
+            {!expanded ? (
+              <div className="mt-2 flex flex-wrap gap-1.5">
+                {section.variants.map((product) => (
+                  <FixedFlowerColorBadge key={product.id} color={product.color} />
+                ))}
+              </div>
+            ) : null}
+          </div>
+        </button>
+
+        <div className="shrink-0" onClick={(event) => event.stopPropagation()}>
+          <RequireFlowerAdmin silent>
+            <AddColorVariationForm
+              flowerType={section.flowerType}
+              existingColors={existingColors}
+              onChanged={onChanged}
+            />
+          </RequireFlowerAdmin>
         </div>
       </div>
 
-      <div className="divide-y divide-brand-muted/15 bg-brand-cream/10">
-        {section.variants.map((product) => (
-          <ProductCategoryVariantRow key={product.id} product={product} onChanged={onChanged} />
-        ))}
-      </div>
+      {expanded ? (
+        <div id={panelId} className="divide-y divide-brand-muted/15 bg-brand-cream/10">
+          {section.variants.map((product) => (
+            <ProductCategoryVariantRow key={product.id} product={product} onChanged={onChanged} />
+          ))}
+        </div>
+      ) : null}
     </div>
   );
 }
