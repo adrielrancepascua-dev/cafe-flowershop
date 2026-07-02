@@ -491,6 +491,7 @@ export async function transferFlowerInventorySupabase(
       delta: -item.quantity,
       movementType: 'transfer_out',
       note,
+      allowNegative: true,
     });
 
     await applyFlowerStockChangeSupabase({

@@ -367,33 +367,33 @@ export default function FlowerInventoryPage() {
 
   const fromBranchName = branches.find((branch) => branch.id === fromBranchId)?.name ?? '';
 
-  const transferAvailableProducts = useMemo(
+  const transferProducts = useMemo(
     () =>
       fromBranchStock
-        .filter((row) => row.product_is_active && row.on_hand > 0)
+        .filter((row) => row.product_is_active)
         .sort((left, right) => left.product_name.localeCompare(right.product_name)),
     [fromBranchStock],
   );
 
-  const selectedTransferAvailability = useMemo(() => {
+  const selectedTransferOnHand = useMemo(() => {
     if (!transferProductId) {
       return null;
     }
 
-    return transferAvailableProducts.find((row) => row.product_id === transferProductId)?.on_hand ?? 0;
-  }, [transferAvailableProducts, transferProductId]);
+    return fromBranchStock.find((row) => row.product_id === transferProductId)?.on_hand ?? 0;
+  }, [fromBranchStock, transferProductId]);
 
-  function clampTransferQty(rawValue: string, maxQuantity: number): string {
+  const transferQtyNumber = Number(transferQty) || 0;
+  const transferWillGoNegative =
+    selectedTransferOnHand !== null && transferQtyNumber > selectedTransferOnHand;
+
+  function sanitizeTransferQty(rawValue: string): string {
     const digits = rawValue.replace(/[^\d]/g, '');
     if (!digits) {
       return '';
     }
 
-    if (maxQuantity <= 0) {
-      return '0';
-    }
-
-    return String(Math.min(maxQuantity, Math.max(1, Number(digits))));
+    return String(Math.max(1, Number(digits)));
   }
 
   async function handleAdjust(
@@ -519,7 +519,7 @@ export default function FlowerInventoryPage() {
             >
               <h3 className="text-sm font-semibold text-brand-dark">Inter-branch transfer</h3>
               <p className="mt-1 text-sm text-brand-brown/70">
-                Move flowers from one branch to another. Stock is deducted from the source branch and added to the destination.
+                Move stock from one branch to another. The source branch can go negative if you transfer more than on hand.
               </p>
               <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
                 <label className="block text-sm font-medium text-brand-brown">
@@ -559,15 +559,13 @@ export default function FlowerInventoryPage() {
                   </select>
                 </label>
                 <label className="block text-sm font-medium text-brand-brown">
-                  Flower type
+                  Flower / item
                   <select
                     value={transferProductId}
                     onChange={(e) => {
                       const nextProductId = e.target.value;
                       setTransferProductId(nextProductId);
-                      const maxQuantity =
-                        transferAvailableProducts.find((row) => row.product_id === nextProductId)?.on_hand ?? 0;
-                      setTransferQty((current) => clampTransferQty(current || '1', maxQuantity));
+                      setTransferQty((current) => sanitizeTransferQty(current || '1'));
                       clearTransferFeedback();
                     }}
                     className="flower-input mt-1.5"
@@ -579,23 +577,28 @@ export default function FlowerInventoryPage() {
                         ? 'Select source branch first'
                         : fromBranchStockLoading
                           ? 'Loading stock...'
-                          : transferAvailableProducts.length === 0
-                            ? 'No flowers in stock at this branch'
-                            : 'Select flower'}
+                          : transferProducts.length === 0
+                            ? 'No active products at this branch'
+                            : 'Select product'}
                     </option>
-                    {transferAvailableProducts.map((row) => (
+                    {transferProducts.map((row) => (
                       <option key={row.product_id} value={row.product_id}>
-                        {row.product_name} ({row.on_hand} available)
+                        {row.product_name} ({row.on_hand} on hand)
                       </option>
                     ))}
                   </select>
-                  {transferProductId && selectedTransferAvailability !== null ? (
-                    <p className="mt-1.5 text-xs text-brand-brown/70">
-                      {selectedTransferAvailability} available at {fromBranchName}
+                  {transferProductId && selectedTransferOnHand !== null ? (
+                    <p
+                      className={`mt-1.5 text-xs ${
+                        transferWillGoNegative ? 'text-amber-800' : 'text-brand-brown/70'
+                      }`}
+                    >
+                      {selectedTransferOnHand} on hand at {fromBranchName}
+                      {transferWillGoNegative ? ' — source branch will go negative' : ''}
                     </p>
-                  ) : fromBranchId && !fromBranchStockLoading && transferAvailableProducts.length === 0 ? (
+                  ) : fromBranchId && !fromBranchStockLoading && transferProducts.length === 0 ? (
                     <p className="mt-1.5 text-xs text-brand-brown/60">
-                      No active flowers with stock at {fromBranchName}.
+                      No active products at {fromBranchName}.
                     </p>
                   ) : null}
                 </label>
@@ -606,19 +609,13 @@ export default function FlowerInventoryPage() {
                     inputMode="numeric"
                     value={transferQty}
                     onChange={(e) => {
-                      const maxQuantity = selectedTransferAvailability ?? 0;
-                      setTransferQty(clampTransferQty(e.target.value, maxQuantity));
+                      setTransferQty(sanitizeTransferQty(e.target.value));
                       clearTransferFeedback();
                     }}
                     className="flower-input mt-1.5"
                     required
-                    disabled={!transferProductId || selectedTransferAvailability === 0}
+                    disabled={!transferProductId}
                   />
-                  {transferProductId && selectedTransferAvailability !== null && selectedTransferAvailability > 0 ? (
-                    <p className="mt-1.5 text-xs text-brand-brown/70">
-                      Max {selectedTransferAvailability}
-                    </p>
-                  ) : null}
                 </label>
                 <div className="flex items-end sm:col-span-2 lg:col-span-2">
                   <button type="submit" className="flower-btn-primary w-full sm:w-auto">

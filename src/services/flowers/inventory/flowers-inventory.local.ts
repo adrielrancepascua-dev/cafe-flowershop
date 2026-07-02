@@ -279,6 +279,7 @@ export async function transferFlowerInventoryLocal(
       delta: -item.quantity,
       movementType: 'transfer_out',
       note,
+      allowNegative: true,
     });
 
     await applyStockChange({
