@@ -28,6 +28,7 @@ import {
   readFileAsDataUrl,
   toDateInputValue,
 } from '../../shared/utils/flower-format';
+import { FLOWER_PRODUCT_COLOR_OPTIONS } from '../../shared/utils/flower-product-colors';
 import {
   formatFinishedPhotoRequirementLabel,
   formatPrepDeadlineTimePh,
@@ -40,6 +41,27 @@ import OrderAttachmentField from './OrderAttachmentField';
 import OrderAttachmentPreview from './OrderAttachmentPreview';
 
 type ProductQuantities = Record<string, string>;
+type ProductColorMixNotes = Record<string, string>;
+
+function formatOrderItemName(productName: string, colorMix: string): string {
+  const mix = colorMix.trim();
+  return mix ? `${productName} (${mix})` : productName;
+}
+
+function parseOrderItemColorMix(itemName: string, productName: string): string {
+  const prefix = `${productName} (`;
+  if (itemName.startsWith(prefix) && itemName.endsWith(')')) {
+    return itemName.slice(prefix.length, -1);
+  }
+
+  return '';
+}
+
+function appendColorMixToken(current: string, color: string): string {
+  const token = `1 ${color}`;
+  const trimmed = current.trim();
+  return trimmed ? `${trimmed}, ${token}` : token;
+}
 
 type OrderFormProps = {
   open: boolean;
@@ -99,6 +121,7 @@ function formatWrapperColorSummary(
 function buildCatalogOrderItems(
   catalog: FlowerProduct[],
   quantities: ProductQuantities,
+  colorMixByProductId: ProductColorMixNotes = {},
 ): CreateFlowerOrderInput['items'] {
   return catalog
     .map((product) => {
@@ -109,7 +132,7 @@ function buildCatalogOrderItems(
 
       return {
         product_id: product.id,
-        item_name: product.name,
+        item_name: formatOrderItemName(product.name, colorMixByProductId[product.id] ?? ''),
         quantity,
       };
     })
@@ -166,6 +189,9 @@ function OrderCatalogQuantityPicker({
   unitLabel,
   onSetQuantity,
   onAdjustQuantity,
+  enableColorMix = false,
+  colorMixByProductId = {},
+  onColorMixChange,
 }: {
   products: FlowerProduct[];
   quantities: ProductQuantities;
@@ -180,6 +206,9 @@ function OrderCatalogQuantityPicker({
   unitLabel: string;
   onSetQuantity: (productId: string, rawValue: string) => void;
   onAdjustQuantity: (productId: string, delta: number) => void;
+  enableColorMix?: boolean;
+  colorMixByProductId?: ProductColorMixNotes;
+  onColorMixChange?: (productId: string, value: string) => void;
 }) {
   return (
     <>
@@ -219,52 +248,85 @@ function OrderCatalogQuantityPicker({
               return (
                 <div
                   key={product.id}
-                  className={`flex items-center gap-3 px-3 py-2.5 ${
+                  className={`px-3 py-2.5 ${
                     isSelected ? 'bg-brand-beige/50' : 'bg-white/70'
                   }`}
                 >
-                  <div className="min-w-0 flex-1">
-                    <p className="text-sm font-medium text-brand-dark">{product.name}</p>
-                    {onHand !== null ? (
-                      <p
-                        className={`text-xs ${
-                          willGoNegative ? 'text-amber-800' : 'text-brand-brown/65'
-                        }`}
+                  <div className="flex items-center gap-3">
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm font-medium text-brand-dark">{product.name}</p>
+                      {onHand !== null ? (
+                        <p
+                          className={`text-xs ${
+                            willGoNegative ? 'text-amber-800' : 'text-brand-brown/65'
+                          }`}
+                        >
+                          {onHand} on hand
+                          {willGoNegative ? ' — will go negative on day close' : ''}
+                        </p>
+                      ) : null}
+                    </div>
+
+                    <div className="flex shrink-0 items-center gap-1.5">
+                      <button
+                        type="button"
+                        aria-label={`Remove one ${product.name}`}
+                        disabled={qty <= 0}
+                        onClick={() => onAdjustQuantity(product.id, -1)}
+                        className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-brand-muted/50 bg-white text-brand-dark transition hover:border-brand-dark/30 disabled:cursor-not-allowed disabled:opacity-40"
                       >
-                        {onHand} on hand
-                        {willGoNegative ? ' — will go negative on day close' : ''}
-                      </p>
-                    ) : null}
+                        <Minus className="h-4 w-4" />
+                      </button>
+                      <input
+                        type="text"
+                        inputMode="numeric"
+                        value={qty > 0 ? String(qty) : ''}
+                        placeholder="0"
+                        onChange={(event) => onSetQuantity(product.id, event.target.value)}
+                        className="flower-input h-9 w-12 px-1 text-center text-sm"
+                        aria-label={`${unitLabel} for ${product.name}`}
+                      />
+                      <button
+                        type="button"
+                        aria-label={`Add one ${product.name}`}
+                        onClick={() => onAdjustQuantity(product.id, 1)}
+                        className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-brand-dark/20 bg-brand-dark text-white transition hover:bg-brand-brown"
+                      >
+                        <Plus className="h-4 w-4" />
+                      </button>
+                    </div>
                   </div>
 
-                  <div className="flex shrink-0 items-center gap-1.5">
-                    <button
-                      type="button"
-                      aria-label={`Remove one ${product.name}`}
-                      disabled={qty <= 0}
-                      onClick={() => onAdjustQuantity(product.id, -1)}
-                      className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-brand-muted/50 bg-white text-brand-dark transition hover:border-brand-dark/30 disabled:cursor-not-allowed disabled:opacity-40"
-                    >
-                      <Minus className="h-4 w-4" />
-                    </button>
-                    <input
-                      type="text"
-                      inputMode="numeric"
-                      value={qty > 0 ? String(qty) : ''}
-                      placeholder="0"
-                      onChange={(event) => onSetQuantity(product.id, event.target.value)}
-                      className="flower-input h-9 w-12 px-1 text-center text-sm"
-                      aria-label={`${unitLabel} for ${product.name}`}
-                    />
-                    <button
-                      type="button"
-                      aria-label={`Add one ${product.name}`}
-                      onClick={() => onAdjustQuantity(product.id, 1)}
-                      className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-brand-dark/20 bg-brand-dark text-white transition hover:bg-brand-brown"
-                    >
-                      <Plus className="h-4 w-4" />
-                    </button>
-                  </div>
+                  {enableColorMix && qty > 0 && onColorMixChange ? (
+                    <div className="mt-2 border-t border-brand-muted/20 pt-2">
+                      <input
+                        type="text"
+                        value={colorMixByProductId[product.id] ?? ''}
+                        onChange={(event) => onColorMixChange(product.id, event.target.value)}
+                        placeholder="Color mix e.g. 2 orange, 2 yellow, 2 red"
+                        className="flower-input text-xs"
+                      />
+                      <div className="mt-1.5 flex flex-wrap gap-1">
+                        {FLOWER_PRODUCT_COLOR_OPTIONS.filter((color) => color !== 'Mixed' && color !== 'Other').map(
+                          (color) => (
+                            <button
+                              key={color}
+                              type="button"
+                              onClick={() =>
+                                onColorMixChange(
+                                  product.id,
+                                  appendColorMixToken(colorMixByProductId[product.id] ?? '', color),
+                                )
+                              }
+                              className="rounded-full border border-brand-muted/50 bg-white px-2 py-0.5 text-[11px] font-medium text-brand-brown transition hover:border-brand-dark/30"
+                            >
+                              +1 {color}
+                            </button>
+                          ),
+                        )}
+                      </div>
+                    </div>
+                  ) : null}
                 </div>
               );
             })
@@ -374,6 +436,7 @@ export default function FlowerOrderFormModal({
     emptyForm(initialPickupIso ?? new Date().toISOString(), staffId, staffName),
   );
   const [productQuantities, setProductQuantities] = useState<ProductQuantities>({});
+  const [productColorMix, setProductColorMix] = useState<ProductColorMixNotes>({});
   const [flowerSearch, setFlowerSearch] = useState('');
   const [miscSearch, setMiscSearch] = useState('');
   const [downpaymentDraft, setDownpaymentDraft] = useState('');
@@ -409,10 +472,25 @@ export default function FlowerOrderFormModal({
 
   function loadExistingOrderIntoForm(order: FlowerOrder) {
     const quantities = quantitiesFromOrderItems(order.items);
+    const colorMix: ProductColorMixNotes = {};
     const miscCatalog = products.filter(
       (product) => product.is_active && product.product_kind === 'misc',
     );
+    const flowerCatalog = products.filter(
+      (product) => product.is_active && product.product_kind === 'flower',
+    );
     const miscProductIds = new Set(miscCatalog.map((product) => product.id));
+
+    for (const item of order.items) {
+      const flowerProduct = flowerCatalog.find((product) => product.id === item.product_id);
+      if (flowerProduct) {
+        const mix = parseOrderItemColorMix(item.item_name, flowerProduct.name);
+        if (mix) {
+          colorMix[item.product_id] = mix;
+        }
+      }
+    }
+
     const hasMiscLineItems = order.items.some((item) => miscProductIds.has(item.product_id));
 
     if (!hasMiscLineItems && order.wrapper_color.trim()) {
@@ -453,6 +531,7 @@ export default function FlowerOrderFormModal({
       items: order.items.map((item) => ({ ...item })),
     });
     setProductQuantities(quantities);
+    setProductColorMix(colorMix);
     setFlowerSearch('');
     setMiscSearch('');
     setDownpaymentDraft(order.downpayment > 0 ? String(order.downpayment) : '');
@@ -481,6 +560,7 @@ export default function FlowerOrderFormModal({
     setIsEditMode(true);
     setForm(emptyForm(initialPickupIso ?? new Date().toISOString(), staffId, staffName));
     setProductQuantities({});
+    setProductColorMix({});
     setFlowerSearch('');
     setMiscSearch('');
     setDownpaymentDraft('');
@@ -565,16 +645,11 @@ export default function FlowerOrderFormModal({
   }, [existingOrder, form.branch_id]);
 
   function setProductQuantity(productId: string, rawValue: string) {
-    setProductQuantities((current) => {
-      const digits = rawValue.replace(/[^\d]/g, '');
-      if (!digits) {
-        const next = { ...current };
-        delete next[productId];
-        return next;
-      }
+    const digits = rawValue.replace(/[^\d]/g, '');
+    const qty = digits ? Math.max(0, Number(digits)) : 0;
 
-      const qty = Math.max(0, Number(digits));
-      if (qty <= 0) {
+    setProductQuantities((current) => {
+      if (!digits || qty <= 0) {
         const next = { ...current };
         delete next[productId];
         return next;
@@ -582,13 +657,25 @@ export default function FlowerOrderFormModal({
 
       return { ...current, [productId]: String(qty) };
     });
+
+    if (!digits || qty <= 0) {
+      setProductColorMix((current) => {
+        if (!(productId in current)) {
+          return current;
+        }
+
+        const next = { ...current };
+        delete next[productId];
+        return next;
+      });
+    }
   }
 
   function adjustProductQuantity(productId: string, delta: number) {
-    setProductQuantities((current) => {
-      const currentQty = Number(current[productId]) || 0;
-      const nextQty = Math.max(0, currentQty + delta);
+    const currentQty = Number(productQuantities[productId]) || 0;
+    const nextQty = Math.max(0, currentQty + delta);
 
+    setProductQuantities((current) => {
       if (nextQty <= 0) {
         const next = { ...current };
         delete next[productId];
@@ -596,6 +683,30 @@ export default function FlowerOrderFormModal({
       }
 
       return { ...current, [productId]: String(nextQty) };
+    });
+
+    if (nextQty <= 0) {
+      setProductColorMix((mix) => {
+        if (!(productId in mix)) {
+          return mix;
+        }
+
+        const nextMix = { ...mix };
+        delete nextMix[productId];
+        return nextMix;
+      });
+    }
+  }
+
+  function setProductColorMixNote(productId: string, value: string) {
+    setProductColorMix((current) => {
+      if (!value.trim()) {
+        const next = { ...current };
+        delete next[productId];
+        return next;
+      }
+
+      return { ...current, [productId]: value };
     });
   }
 
@@ -674,9 +785,10 @@ export default function FlowerOrderFormModal({
           productId: product.id,
           name: product.name,
           quantity: Number(productQuantities[product.id]) || 0,
+          colorMix: productColorMix[product.id]?.trim() ?? '',
         }))
         .filter((item) => item.quantity > 0),
-    [activeProducts, productQuantities],
+    [activeProducts, productColorMix, productQuantities],
   );
 
   const miscViewItems = useMemo(
@@ -731,10 +843,15 @@ export default function FlowerOrderFormModal({
       return;
     }
 
-    const dataUrl = await readFileAsDataUrl(file);
-    updateField(key, dataUrl);
-    if (key === 'ready_photo_data_url') {
-      setReadyPhotoMessage('');
+    try {
+      const dataUrl = await readFileAsDataUrl(file);
+      updateField(key, dataUrl);
+      setErrorMessage('');
+      if (key === 'ready_photo_data_url') {
+        setReadyPhotoMessage('');
+      }
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : 'Could not load photo.');
     }
   }
 
@@ -785,7 +902,7 @@ export default function FlowerOrderFormModal({
   }
 
   function validateForm(): CreateFlowerOrderInput | null {
-    const flowerItems = buildCatalogOrderItems(activeProducts, productQuantities);
+    const flowerItems = buildCatalogOrderItems(activeProducts, productQuantities, productColorMix);
     const miscItems = buildCatalogOrderItems(miscProducts, productQuantities);
     const items = [...flowerItems, ...miscItems];
     const wrapper_color = formatWrapperColorSummary(miscProducts, productQuantities);
@@ -852,25 +969,8 @@ export default function FlowerOrderFormModal({
 
     const requiresProof = downpayment > 0;
 
-    const requiredTextFields: Array<[string, string]> = [
-      ['Greeting card', form.greeting_card],
-      ['Instructions', form.special_instructions],
-      ['Note', form.notes],
-    ];
-
-    if (requiresProof) {
-      requiredTextFields.push(['Reference #', form.payment_reference]);
-    }
-
-    for (const [label, value] of requiredTextFields) {
-      if (!value.trim()) {
-        setErrorMessage(`${label} is required.`);
-        return null;
-      }
-    }
-
-    if (!form.photo_inspo_data_url || !form.order_form_ss_data_url) {
-      setErrorMessage('Photo of order / inspo and SS of order form are required.');
+    if (requiresProof && !form.payment_reference.trim()) {
+      setErrorMessage('Reference # is required when downpayment is greater than 0.');
       return null;
     }
 
@@ -1399,25 +1499,25 @@ export default function FlowerOrderFormModal({
 
             <label className="block text-sm font-medium text-brand-brown">
               Greeting card
+              <span className="ml-1 text-xs font-normal text-brand-brown/60">(optional)</span>
               <input
                 type="text"
                 value={form.greeting_card}
                 onChange={(event) => updateField('greeting_card', event.target.value)}
                 className={`flower-input mt-1.5 ${readOnlyFieldClass}`}
                 readOnly={isViewMode}
-                required
               />
             </label>
 
             <label className="block text-sm font-medium text-brand-brown md:col-span-2">
               Instructions
+              <span className="ml-1 text-xs font-normal text-brand-brown/60">(optional)</span>
               <input
                 type="text"
                 value={form.special_instructions}
                 onChange={(event) => updateField('special_instructions', event.target.value)}
                 className={`flower-input mt-1.5 ${readOnlyFieldClass}`}
                 readOnly={isViewMode}
-                required
               />
             </label>
           </div>
@@ -1486,7 +1586,7 @@ export default function FlowerOrderFormModal({
                   {flowerSelectionSummary.units} stem{flowerSelectionSummary.units === 1 ? '' : 's'}
                 </p>
               ) : !isViewMode ? (
-                <p className="text-xs text-brand-brown/60">Tap + to add stems</p>
+                <p className="text-xs text-brand-brown/60">Tap + to add stems · optional color mix for assorted bouquets</p>
               ) : null}
             </div>
 
@@ -1494,9 +1594,14 @@ export default function FlowerOrderFormModal({
               flowerViewItems.length > 0 ? (
                 <ul className="space-y-2 rounded-xl border border-brand-muted/40 bg-brand-cream/20 p-3">
                   {flowerViewItems.map((item) => (
-                    <li key={item.productId} className="flex justify-between text-sm text-brand-dark">
-                      <span>{item.name}</span>
-                      <span className="font-semibold">x{item.quantity}</span>
+                    <li key={item.productId} className="text-sm text-brand-dark">
+                      <div className="flex justify-between gap-3">
+                        <span>{item.name}</span>
+                        <span className="font-semibold">x{item.quantity}</span>
+                      </div>
+                      {item.colorMix ? (
+                        <p className="mt-0.5 text-xs text-brand-brown/70">Colors: {item.colorMix}</p>
+                      ) : null}
                     </li>
                   ))}
                 </ul>
@@ -1520,6 +1625,9 @@ export default function FlowerOrderFormModal({
                 unitLabel="Quantity"
                 onSetQuantity={setProductQuantity}
                 onAdjustQuantity={adjustProductQuantity}
+                enableColorMix
+                colorMixByProductId={productColorMix}
+                onColorMixChange={setProductColorMixNote}
               />
             )}
           </div>
@@ -1626,12 +1734,12 @@ export default function FlowerOrderFormModal({
 
           <label className="mt-3 block text-sm font-medium text-brand-brown">
             Note
+            <span className="ml-1 text-xs font-normal text-brand-brown/60">(optional)</span>
             <textarea
               value={form.notes}
               onChange={(event) => updateField('notes', event.target.value)}
               className={`flower-input mt-1.5 min-h-[72px] ${readOnlyFieldClass}`}
               readOnly={isViewMode}
-              required={!isViewMode}
             />
           </label>
 
@@ -1640,6 +1748,7 @@ export default function FlowerOrderFormModal({
               label="Photo of order / inspo"
               previewLabel="Current inspo photo"
               value={form.photo_inspo_data_url}
+              optional
               readOnly={isViewMode}
               onEditRequest={() => setIsEditMode(true)}
               onChange={(file) => void handleFileChange('photo_inspo_data_url', file)}
@@ -1657,6 +1766,7 @@ export default function FlowerOrderFormModal({
               label="SS of order form"
               previewLabel="Current order form SS"
               value={form.order_form_ss_data_url}
+              optional
               readOnly={isViewMode}
               onEditRequest={() => setIsEditMode(true)}
               onChange={(file) => void handleFileChange('order_form_ss_data_url', file)}

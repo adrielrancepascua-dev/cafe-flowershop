@@ -2,6 +2,31 @@ export async function readFileAsDataUrl(file: File): Promise<string> {
   return readFileAsCompressedDataUrl(file);
 }
 
+function isLikelyImageFile(file: File): boolean {
+  const type = file.type.toLowerCase();
+  if (type.startsWith('image/')) {
+    return true;
+  }
+
+  return /\.(jpe?g|png|gif|webp|heic|heif|bmp)$/i.test(file.name);
+}
+
+async function readRawFileAsDataUrl(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      if (typeof reader.result === 'string') {
+        resolve(reader.result);
+        return;
+      }
+
+      reject(new Error('Could not read image file.'));
+    };
+    reader.onerror = () => reject(new Error('Could not read image file.'));
+    reader.readAsDataURL(file);
+  });
+}
+
 /** Resize and compress images so demo orders fit in browser localStorage (~5MB cap). */
 export async function readFileAsCompressedDataUrl(
   file: File,
@@ -9,8 +34,8 @@ export async function readFileAsCompressedDataUrl(
 ): Promise<string> {
   const { maxWidth = 1280, maxHeight = 1280, quality = 0.72, maxBytes = 350_000 } = options;
 
-  if (!file.type.startsWith('image/')) {
-    throw new Error('Please upload an image file.');
+  if (!isLikelyImageFile(file)) {
+    throw new Error('Please choose a photo from your gallery or camera.');
   }
 
   const objectUrl = URL.createObjectURL(file);
@@ -44,6 +69,15 @@ export async function readFileAsCompressedDataUrl(
     }
 
     return dataUrl;
+  } catch (error) {
+    const rawDataUrl = await readRawFileAsDataUrl(file);
+    if (estimateDataUrlBytes(rawDataUrl) <= maxBytes * 4) {
+      return rawDataUrl;
+    }
+
+    throw error instanceof Error
+      ? error
+      : new Error('Could not load photo. Try choosing a JPG or PNG from your gallery.');
   } finally {
     URL.revokeObjectURL(objectUrl);
   }

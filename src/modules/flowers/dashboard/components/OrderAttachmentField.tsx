@@ -43,10 +43,13 @@ export default function OrderAttachmentField({
       <input
         ref={inputRef}
         type="file"
-        accept="image/*"
-        onChange={(event) => void onChange(event.target.files?.[0] ?? null)}
+        accept="image/jpeg,image/png,image/webp,image/heic,image/heif,.heic,.heif,image/*"
+        onChange={(event) => {
+          const file = event.target.files?.[0] ?? null;
+          void onChange(file);
+          event.target.value = '';
+        }}
         className="sr-only"
-        aria-hidden
         tabIndex={-1}
       />
       {!value ? (
