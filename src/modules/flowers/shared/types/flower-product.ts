@@ -3,6 +3,7 @@ import type { FlowerProductKind } from '../utils/flower-product-kind';
 export interface FlowerProduct {
   id: string;
   name: string;
+  flower_type: string;
   product_kind: FlowerProductKind;
   color: string;
   unit_cost: number;
@@ -12,6 +13,7 @@ export interface FlowerProduct {
 
 export interface CreateFlowerProductInput {
   name: string;
+  flower_type?: string;
   product_kind?: FlowerProductKind;
   color: string;
   unit_cost: number;
@@ -20,6 +22,7 @@ export interface CreateFlowerProductInput {
 
 export interface UpdateFlowerProductInput {
   name: string;
+  flower_type?: string;
   color: string;
   unit_cost: number;
 }

@@ -10,11 +10,15 @@ import {
   buildFlowerProductWritePayload,
   FLOWER_PRODUCT_SELECT_LEGACY,
   FLOWER_PRODUCT_SELECT_WITH_COLOR,
+  FLOWER_PRODUCT_SELECT_WITH_TYPE,
   isMissingProductColorColumnError,
+  isMissingProductTypeColumnError,
   mapFlowerProductRow,
   markProductColorColumnMissing,
   markProductColorColumnSupported,
+  markProductTypeColumnMissing,
   productColorColumnSupported,
+  productTypeColumnSupported,
   queryFlowerProductsWithColorFallback,
   type FlowerProductDbRow,
 } from './flowers-products-supabase.shared';
@@ -79,14 +83,27 @@ export async function createFlowerProductSupabase(input: CreateFlowerProductInpu
   const supabase = await requireAuthenticatedSupabaseClient();
   const productId = `product-${Date.now()}`;
 
-  const insertWithColor = async () =>
+  const preferredSelect = productTypeColumnSupported()
+    ? FLOWER_PRODUCT_SELECT_WITH_TYPE
+    : FLOWER_PRODUCT_SELECT_WITH_COLOR;
+
+  const insertProduct = async () =>
     supabase
+      .from('flower_products')
+      .insert(buildFlowerProductWritePayload(input, productId))
+      .select(preferredSelect)
+      .single();
+
+  let result = await insertProduct();
+
+  if (result.error && isMissingProductTypeColumnError(result.error)) {
+    markProductTypeColumnMissing();
+    result = await supabase
       .from('flower_products')
       .insert(buildFlowerProductWritePayload(input, productId))
       .select(FLOWER_PRODUCT_SELECT_WITH_COLOR)
       .single();
-
-  let result = await insertWithColor();
+  }
 
   if (result.error && isMissingProductColorColumnError(result.error)) {
     markProductColorColumnMissing();
@@ -103,7 +120,7 @@ export async function createFlowerProductSupabase(input: CreateFlowerProductInpu
     throw result.error ?? new Error('Failed to create product.');
   }
 
-  return mapFlowerProductRow(result.data as FlowerProductDbRow);
+  return mapFlowerProductRow(result.data as unknown as FlowerProductDbRow);
 }
 
 export async function updateFlowerProductSupabase(
@@ -112,15 +129,29 @@ export async function updateFlowerProductSupabase(
 ): Promise<FlowerProduct> {
   const supabase = await requireAuthenticatedSupabaseClient();
 
-  const updateWithColor = async () =>
+  const preferredSelect = productTypeColumnSupported()
+    ? FLOWER_PRODUCT_SELECT_WITH_TYPE
+    : FLOWER_PRODUCT_SELECT_WITH_COLOR;
+
+  const updateProduct = async () =>
     supabase
+      .from('flower_products')
+      .update(buildFlowerProductUpdatePayload(input))
+      .eq('id', productId)
+      .select(preferredSelect)
+      .single();
+
+  let result = await updateProduct();
+
+  if (result.error && isMissingProductTypeColumnError(result.error)) {
+    markProductTypeColumnMissing();
+    result = await supabase
       .from('flower_products')
       .update(buildFlowerProductUpdatePayload(input))
       .eq('id', productId)
       .select(FLOWER_PRODUCT_SELECT_WITH_COLOR)
       .single();
-
-  let result = await updateWithColor();
+  }
 
   if (result.error && isMissingProductColorColumnError(result.error)) {
     markProductColorColumnMissing();
@@ -138,7 +169,7 @@ export async function updateFlowerProductSupabase(
     throw result.error ?? new Error('Failed to update product.');
   }
 
-  return mapFlowerProductRow(result.data as FlowerProductDbRow);
+  return mapFlowerProductRow(result.data as unknown as FlowerProductDbRow);
 }
 
 export async function toggleFlowerProductActiveSupabase(
@@ -156,7 +187,7 @@ export async function toggleFlowerProductActiveSupabase(
     throw error;
   }
 
-  return mapFlowerProductRow(await selectSingleProductRow(productId, FLOWER_PRODUCT_SELECT_WITH_COLOR));
+  return mapFlowerProductRow(await selectSingleProductRow(productId, FLOWER_PRODUCT_SELECT_WITH_TYPE));
 }
 
 export async function deleteFlowerProductSupabase(productId: string): Promise<void> {

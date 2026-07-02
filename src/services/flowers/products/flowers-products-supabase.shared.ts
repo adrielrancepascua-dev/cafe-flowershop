@@ -1,12 +1,17 @@
 import type { PostgrestError } from '@supabase/supabase-js';
 import type { FlowerProduct } from '../../../modules/flowers/shared/types/flower-product';
-import { normalizeFlowerProductColor } from '../../../modules/flowers/shared/utils/flower-product-colors';
+import {
+  deriveFlowerTypeFromProduct,
+  normalizeFlowerProductColor,
+} from '../../../modules/flowers/shared/utils/flower-product-colors';
 import { normalizeFlowerProductKind } from '../../../modules/flowers/shared/utils/flower-product-kind';
+import { normalizeFlowerProductType } from '../../../modules/flowers/shared/utils/flower-product-type';
 
 export type FlowerProductDbRow = {
   id: string;
   name: string;
   product_kind?: string | null;
+  flower_type?: string | null;
   color?: string | null;
   unit_cost: number;
   is_active: boolean;
@@ -17,9 +22,13 @@ export type FlowerProductSummaryDbRow = {
   id: string;
   name: string;
   product_kind?: string | null;
+  flower_type?: string | null;
   color?: string | null;
   is_active: boolean;
 };
+
+export const FLOWER_PRODUCT_SELECT_WITH_TYPE =
+  'id, name, product_kind, flower_type, color, unit_cost, is_active, created_at' as const;
 
 export const FLOWER_PRODUCT_SELECT_WITH_KIND =
   'id, name, product_kind, color, unit_cost, is_active, created_at' as const;
@@ -29,6 +38,8 @@ export const FLOWER_PRODUCT_SELECT_WITH_COLOR =
 
 export const FLOWER_PRODUCT_SELECT_LEGACY = 'id, name, unit_cost, is_active, created_at' as const;
 
+export const FLOWER_PRODUCT_SUMMARY_WITH_TYPE = 'id, name, product_kind, flower_type, color, is_active' as const;
+
 export const FLOWER_PRODUCT_SUMMARY_WITH_KIND = 'id, name, product_kind, color, is_active' as const;
 
 export const FLOWER_PRODUCT_SUMMARY_WITH_COLOR = 'id, name, color, is_active' as const;
@@ -37,6 +48,7 @@ export const FLOWER_PRODUCT_SUMMARY_LEGACY = 'id, name, is_active' as const;
 
 let supportsProductColorColumn: boolean | null = null;
 let supportsProductKindColumn: boolean | null = null;
+let supportsProductTypeColumn: boolean | null = null;
 
 function isMissingProductColumnError(error: unknown, columnName: string): boolean {
   if (!error || typeof error !== 'object') {
@@ -68,12 +80,20 @@ export function isMissingProductKindColumnError(error: unknown): boolean {
   return isMissingProductColumnError(error, 'product_kind');
 }
 
+export function isMissingProductTypeColumnError(error: unknown): boolean {
+  return isMissingProductColumnError(error, 'flower_type');
+}
+
 export function productColorColumnSupported(): boolean {
   return supportsProductColorColumn !== false;
 }
 
 export function productKindColumnSupported(): boolean {
   return supportsProductKindColumn !== false;
+}
+
+export function productTypeColumnSupported(): boolean {
+  return supportsProductTypeColumn !== false;
 }
 
 export function markProductColorColumnMissing(): void {
@@ -92,12 +112,28 @@ export function markProductKindColumnSupported(): void {
   supportsProductKindColumn = true;
 }
 
+export function markProductTypeColumnMissing(): void {
+  supportsProductTypeColumn = false;
+}
+
+export function markProductTypeColumnSupported(): void {
+  supportsProductTypeColumn = true;
+}
+
 export function mapFlowerProductRow(row: FlowerProductDbRow): FlowerProduct {
+  const product_kind = normalizeFlowerProductKind(row.product_kind);
+  const color = normalizeFlowerProductColor(row.color);
+  const flower_type =
+    product_kind === 'flower'
+      ? row.flower_type?.trim() || deriveFlowerTypeFromProduct(row.name, color)
+      : '';
+
   return {
     id: row.id,
     name: row.name,
-    product_kind: normalizeFlowerProductKind(row.product_kind),
-    color: normalizeFlowerProductColor(row.color),
+    flower_type,
+    product_kind,
+    color,
     unit_cost: Number(row.unit_cost ?? 0),
     is_active: Boolean(row.is_active),
     created_at: row.created_at,
@@ -115,6 +151,10 @@ export function mapFlowerProductSummaryRow(row: FlowerProductSummaryDbRow): Flow
 }
 
 function resolveProductSelectColumns(includeUnitCost: boolean): string {
+  if (supportsProductTypeColumn !== false) {
+    return includeUnitCost ? FLOWER_PRODUCT_SELECT_WITH_TYPE : FLOWER_PRODUCT_SUMMARY_WITH_TYPE;
+  }
+
   if (supportsProductKindColumn !== false) {
     return includeUnitCost ? FLOWER_PRODUCT_SELECT_WITH_KIND : FLOWER_PRODUCT_SUMMARY_WITH_KIND;
   }
@@ -130,13 +170,35 @@ async function runProductQueryWithFallback<T>(
   includeUnitCost: boolean,
   runQuery: (columns: string) => Promise<{ data: T[] | null; error: PostgrestError | null }>,
 ): Promise<T[]> {
-  if (supportsProductKindColumn === false && supportsProductColorColumn === false) {
+  if (
+    supportsProductTypeColumn === false &&
+    supportsProductKindColumn === false &&
+    supportsProductColorColumn === false
+  ) {
     const legacy = await runQuery(resolveProductSelectColumns(includeUnitCost));
     if (legacy.error) {
       throw legacy.error;
     }
 
     return legacy.data ?? [];
+  }
+
+  if (supportsProductTypeColumn !== false) {
+    const withType = await runQuery(
+      includeUnitCost ? FLOWER_PRODUCT_SELECT_WITH_TYPE : FLOWER_PRODUCT_SUMMARY_WITH_TYPE,
+    );
+    if (!withType.error) {
+      markProductTypeColumnSupported();
+      markProductKindColumnSupported();
+      markProductColorColumnSupported();
+      return withType.data ?? [];
+    }
+
+    if (!isMissingProductTypeColumnError(withType.error)) {
+      throw withType.error;
+    }
+
+    markProductTypeColumnMissing();
   }
 
   if (supportsProductKindColumn !== false) {
@@ -198,6 +260,7 @@ export async function queryFlowerProductSummariesWithColorFallback(
 export function buildFlowerProductWritePayload(
   input: {
     name: string;
+    flower_type?: string;
     product_kind?: string;
     color: string;
     unit_cost: number;
@@ -205,6 +268,8 @@ export function buildFlowerProductWritePayload(
   },
   includeId?: string,
 ): Record<string, unknown> {
+  const productKind = normalizeFlowerProductKind(input.product_kind);
+  const normalizedColor = normalizeFlowerProductColor(input.color);
   const payload: Record<string, unknown> = {
     name: input.name.trim(),
     unit_cost: input.unit_cost,
@@ -216,11 +281,19 @@ export function buildFlowerProductWritePayload(
   }
 
   if (productKindColumnSupported()) {
-    payload.product_kind = normalizeFlowerProductKind(input.product_kind);
+    payload.product_kind = productKind;
   }
 
   if (productColorColumnSupported()) {
-    payload.color = normalizeFlowerProductColor(input.color);
+    payload.color = normalizedColor;
+  }
+
+  if (productTypeColumnSupported() && productKind === 'flower') {
+    payload.flower_type = normalizeFlowerProductType(
+      input.name,
+      normalizedColor,
+      input.flower_type,
+    );
   }
 
   return payload;
@@ -228,16 +301,26 @@ export function buildFlowerProductWritePayload(
 
 export function buildFlowerProductUpdatePayload(input: {
   name: string;
+  flower_type?: string;
   color: string;
   unit_cost: number;
 }): Record<string, unknown> {
+  const normalizedColor = normalizeFlowerProductColor(input.color);
   const payload: Record<string, unknown> = {
     name: input.name.trim(),
     unit_cost: input.unit_cost,
   };
 
   if (productColorColumnSupported()) {
-    payload.color = normalizeFlowerProductColor(input.color);
+    payload.color = normalizedColor;
+  }
+
+  if (productTypeColumnSupported()) {
+    payload.flower_type = normalizeFlowerProductType(
+      input.name,
+      normalizedColor,
+      input.flower_type,
+    );
   }
 
   return payload;

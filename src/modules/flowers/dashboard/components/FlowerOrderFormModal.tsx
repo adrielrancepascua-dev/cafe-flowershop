@@ -28,7 +28,13 @@ import {
   readFileAsDataUrl,
   toDateInputValue,
 } from '../../shared/utils/flower-format';
-import { FLOWER_PRODUCT_COLOR_OPTIONS } from '../../shared/utils/flower-product-colors';
+import { normalizeFlowerProductColor } from '../../shared/utils/flower-product-colors';
+import {
+  groupFlowerProductsByType,
+  getFlowerProductType,
+  summarizeVariantQuantities,
+  type FlowerProductTypeGroup,
+} from '../../shared/utils/flower-product-type';
 import {
   formatFinishedPhotoRequirementLabel,
   formatPrepDeadlineTimePh,
@@ -41,26 +47,47 @@ import OrderAttachmentField from './OrderAttachmentField';
 import OrderAttachmentPreview from './OrderAttachmentPreview';
 
 type ProductQuantities = Record<string, string>;
-type ProductColorMixNotes = Record<string, string>;
 
-function formatOrderItemName(productName: string, colorMix: string): string {
-  const mix = colorMix.trim();
-  return mix ? `${productName} (${mix})` : productName;
-}
+function formatFlowerOrderItemName(
+  product: FlowerProduct,
+  variantCountByType: Map<string, number>,
+): string {
+  const flowerType = getFlowerProductType(product);
+  const variantCount = variantCountByType.get(flowerType) ?? 1;
+  const color = normalizeFlowerProductColor(product.color).trim();
 
-function parseOrderItemColorMix(itemName: string, productName: string): string {
-  const prefix = `${productName} (`;
-  if (itemName.startsWith(prefix) && itemName.endsWith(')')) {
-    return itemName.slice(prefix.length, -1);
+  if (variantCount > 1 && color) {
+    return `${flowerType} (${color})`;
   }
 
-  return '';
+  return flowerType;
 }
 
-function appendColorMixToken(current: string, color: string): string {
-  const token = `1 ${color}`;
-  const trimmed = current.trim();
-  return trimmed ? `${trimmed}, ${token}` : token;
+function buildFlowerCatalogOrderItems(
+  catalog: FlowerProduct[],
+  quantities: ProductQuantities,
+): CreateFlowerOrderInput['items'] {
+  const variantCountByType = new Map<string, number>();
+
+  for (const product of catalog) {
+    const flowerType = getFlowerProductType(product);
+    variantCountByType.set(flowerType, (variantCountByType.get(flowerType) ?? 0) + 1);
+  }
+
+  return catalog
+    .map((product) => {
+      const quantity = Number(quantities[product.id]);
+      if (!Number.isFinite(quantity) || quantity <= 0) {
+        return null;
+      }
+
+      return {
+        product_id: product.id,
+        item_name: formatFlowerOrderItemName(product, variantCountByType),
+        quantity,
+      };
+    })
+    .filter((item): item is NonNullable<typeof item> => item !== null);
 }
 
 type OrderFormProps = {
@@ -121,7 +148,6 @@ function formatWrapperColorSummary(
 function buildCatalogOrderItems(
   catalog: FlowerProduct[],
   quantities: ProductQuantities,
-  colorMixByProductId: ProductColorMixNotes = {},
 ): CreateFlowerOrderInput['items'] {
   return catalog
     .map((product) => {
@@ -132,7 +158,7 @@ function buildCatalogOrderItems(
 
       return {
         product_id: product.id,
-        item_name: formatOrderItemName(product.name, colorMixByProductId[product.id] ?? ''),
+        item_name: product.name,
         quantity,
       };
     })
@@ -157,22 +183,61 @@ function summarizeCatalogSelection(
   return { types, units };
 }
 
-function sortPickerProducts<T extends { id: string }>(
-  catalog: T[],
+function sortPickerFlowerTypeGroups(
+  groups: FlowerProductTypeGroup[],
   quantities: ProductQuantities,
-): T[] {
-  const selected: T[] = [];
-  const unselected: T[] = [];
+): FlowerProductTypeGroup[] {
+  const selected: FlowerProductTypeGroup[] = [];
+  const unselected: FlowerProductTypeGroup[] = [];
 
-  for (const product of catalog) {
-    if ((Number(quantities[product.id]) || 0) > 0) {
-      selected.push(product);
+  for (const group of groups) {
+    const hasQuantity = group.variants.some((variant) => (Number(quantities[variant.id]) || 0) > 0);
+    if (hasQuantity) {
+      selected.push(group);
     } else {
-      unselected.push(product);
+      unselected.push(group);
     }
   }
 
   return [...selected, ...unselected];
+}
+
+function filterFlowerTypeGroups(
+  groups: FlowerProductTypeGroup[],
+  query: string,
+): FlowerProductTypeGroup[] {
+  const normalizedQuery = query.trim().toLowerCase();
+  if (!normalizedQuery) {
+    return groups;
+  }
+
+  return groups.filter((group) => {
+    if (group.flowerType.toLowerCase().includes(normalizedQuery)) {
+      return true;
+    }
+
+    return group.variants.some((variant) =>
+      normalizeFlowerProductColor(variant.color).toLowerCase().includes(normalizedQuery),
+    );
+  });
+}
+
+function summarizeFlowerTypeSelection(
+  groups: FlowerProductTypeGroup[],
+  quantities: ProductQuantities,
+): { types: number; units: number } {
+  let types = 0;
+  let units = 0;
+
+  for (const group of groups) {
+    const summary = summarizeVariantQuantities(group.variants, quantities);
+    if (summary.units > 0) {
+      types += 1;
+      units += summary.units;
+    }
+  }
+
+  return { types, units };
 }
 
 function OrderCatalogQuantityPicker({
@@ -189,9 +254,6 @@ function OrderCatalogQuantityPicker({
   unitLabel,
   onSetQuantity,
   onAdjustQuantity,
-  enableColorMix = false,
-  colorMixByProductId = {},
-  onColorMixChange,
 }: {
   products: FlowerProduct[];
   quantities: ProductQuantities;
@@ -206,9 +268,6 @@ function OrderCatalogQuantityPicker({
   unitLabel: string;
   onSetQuantity: (productId: string, rawValue: string) => void;
   onAdjustQuantity: (productId: string, delta: number) => void;
-  enableColorMix?: boolean;
-  colorMixByProductId?: ProductColorMixNotes;
-  onColorMixChange?: (productId: string, value: string) => void;
 }) {
   return (
     <>
@@ -296,37 +355,6 @@ function OrderCatalogQuantityPicker({
                       </button>
                     </div>
                   </div>
-
-                  {enableColorMix && qty > 0 && onColorMixChange ? (
-                    <div className="mt-2 border-t border-brand-muted/20 pt-2">
-                      <input
-                        type="text"
-                        value={colorMixByProductId[product.id] ?? ''}
-                        onChange={(event) => onColorMixChange(product.id, event.target.value)}
-                        placeholder="Color mix e.g. 2 orange, 2 yellow, 2 red"
-                        className="flower-input text-xs"
-                      />
-                      <div className="mt-1.5 flex flex-wrap gap-1">
-                        {FLOWER_PRODUCT_COLOR_OPTIONS.filter((color) => color !== 'Mixed' && color !== 'Other').map(
-                          (color) => (
-                            <button
-                              key={color}
-                              type="button"
-                              onClick={() =>
-                                onColorMixChange(
-                                  product.id,
-                                  appendColorMixToken(colorMixByProductId[product.id] ?? '', color),
-                                )
-                              }
-                              className="rounded-full border border-brand-muted/50 bg-white px-2 py-0.5 text-[11px] font-medium text-brand-brown transition hover:border-brand-dark/30"
-                            >
-                              +1 {color}
-                            </button>
-                          ),
-                        )}
-                      </div>
-                    </div>
-                  ) : null}
                 </div>
               );
             })
@@ -335,6 +363,159 @@ function OrderCatalogQuantityPicker({
       </div>
     </>
   );
+}
+
+function FlowerTypeOrderPicker({
+  groups,
+  quantities,
+  stockByProductId,
+  creditByProductId,
+  branchSelected,
+  stockLoading,
+  search,
+  onSearchChange,
+  onSetQuantity,
+  onAdjustQuantity,
+}: {
+  groups: FlowerProductTypeGroup[];
+  quantities: ProductQuantities;
+  stockByProductId: Record<string, number>;
+  creditByProductId: Record<string, number>;
+  branchSelected: boolean;
+  stockLoading: boolean;
+  search: string;
+  onSearchChange: (value: string) => void;
+  onSetQuantity: (productId: string, rawValue: string) => void;
+  onAdjustQuantity: (productId: string, delta: number) => void;
+}) {
+  return (
+    <>
+      {!branchSelected ? (
+        <p className="mb-2 text-xs text-amber-800">
+          Select a branch above to see on-hand counts for each item.
+        </p>
+      ) : stockLoading ? (
+        <p className="mb-2 text-xs text-brand-brown/60">Loading branch stock...</p>
+      ) : (
+        <p className="mb-2 text-xs text-brand-brown/65">
+          Walk-in orders are allowed even at 0 stock — inventory may go negative until you stock in.
+        </p>
+      )}
+
+      <input
+        type="search"
+        value={search}
+        onChange={(event) => onSearchChange(event.target.value)}
+        placeholder="Search flowers..."
+        className="flower-input mb-2"
+      />
+
+      <div className="overflow-hidden rounded-xl border border-brand-muted/40 bg-brand-cream/10">
+        <div className="max-h-[min(40vh,320px)] overflow-y-auto divide-y divide-brand-muted/25">
+          {groups.length === 0 ? (
+            <p className="px-3 py-4 text-center text-sm text-brand-brown/60">No flowers match your search.</p>
+          ) : (
+            groups.map((group) => (
+              <div key={group.flowerType}>
+                {group.isCategory ? (
+                  <div className="border-b border-brand-muted/20 bg-brand-beige/35 px-3 py-2">
+                    <p className="text-sm font-semibold text-brand-dark">{group.flowerType}</p>
+                    <p className="text-xs text-brand-brown/65">
+                      {group.variants.length} colors · pick quantities per color
+                    </p>
+                  </div>
+                ) : null}
+
+                {group.variants.map((variant) => {
+                  const qty = Number(quantities[variant.id]) || 0;
+                  const onHand = branchSelected && !stockLoading
+                    ? (stockByProductId[variant.id] ?? 0) + (creditByProductId[variant.id] ?? 0)
+                    : null;
+                  const isSelected = qty > 0;
+                  const willGoNegative = onHand !== null && qty > onHand;
+                  const label = group.isCategory
+                    ? normalizeFlowerProductColor(variant.color) || 'Color'
+                    : group.flowerType;
+
+                  return (
+                    <div
+                      key={variant.id}
+                      className={`px-3 py-2.5 ${
+                        isSelected ? 'bg-brand-beige/50' : 'bg-white/70'
+                      }`}
+                    >
+                      <div className="flex items-center gap-3">
+                        <div className="min-w-0 flex-1">
+                          <p className="text-sm font-medium text-brand-dark">{label}</p>
+                          {onHand !== null ? (
+                            <p
+                              className={`text-xs ${
+                                willGoNegative ? 'text-amber-800' : 'text-brand-brown/65'
+                              }`}
+                            >
+                              {onHand} on hand
+                              {willGoNegative ? ' — will go negative on day close' : ''}
+                            </p>
+                          ) : null}
+                        </div>
+
+                        <div className="flex shrink-0 items-center gap-1.5">
+                          <button
+                            type="button"
+                            aria-label={`Remove one ${label}`}
+                            disabled={qty <= 0}
+                            onClick={() => onAdjustQuantity(variant.id, -1)}
+                            className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-brand-muted/50 bg-white text-brand-dark transition hover:border-brand-dark/30 disabled:cursor-not-allowed disabled:opacity-40"
+                          >
+                            <Minus className="h-4 w-4" />
+                          </button>
+                          <input
+                            type="text"
+                            inputMode="numeric"
+                            value={qty > 0 ? String(qty) : ''}
+                            placeholder="0"
+                            onChange={(event) => onSetQuantity(variant.id, event.target.value)}
+                            className="flower-input h-9 w-12 px-1 text-center text-sm"
+                            aria-label={`Stems for ${label}`}
+                          />
+                          <button
+                            type="button"
+                            aria-label={`Add one ${label}`}
+                            onClick={() => onAdjustQuantity(variant.id, 1)}
+                            className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-brand-dark/20 bg-brand-dark text-white transition hover:bg-brand-brown"
+                          >
+                            <Plus className="h-4 w-4" />
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            ))
+          )}
+        </div>
+      </div>
+    </>
+  );
+}
+
+function sortPickerProducts<T extends { id: string }>(
+  catalog: T[],
+  quantities: ProductQuantities,
+): T[] {
+  const selected: T[] = [];
+  const unselected: T[] = [];
+
+  for (const product of catalog) {
+    if ((Number(quantities[product.id]) || 0) > 0) {
+      selected.push(product);
+    } else {
+      unselected.push(product);
+    }
+  }
+
+  return [...selected, ...unselected];
 }
 
 function isCompleteOrderStatus(status: FlowerOrderStatus): boolean {
@@ -436,7 +617,6 @@ export default function FlowerOrderFormModal({
     emptyForm(initialPickupIso ?? new Date().toISOString(), staffId, staffName),
   );
   const [productQuantities, setProductQuantities] = useState<ProductQuantities>({});
-  const [productColorMix, setProductColorMix] = useState<ProductColorMixNotes>({});
   const [flowerSearch, setFlowerSearch] = useState('');
   const [miscSearch, setMiscSearch] = useState('');
   const [downpaymentDraft, setDownpaymentDraft] = useState('');
@@ -472,24 +652,10 @@ export default function FlowerOrderFormModal({
 
   function loadExistingOrderIntoForm(order: FlowerOrder) {
     const quantities = quantitiesFromOrderItems(order.items);
-    const colorMix: ProductColorMixNotes = {};
     const miscCatalog = products.filter(
       (product) => product.is_active && product.product_kind === 'misc',
     );
-    const flowerCatalog = products.filter(
-      (product) => product.is_active && product.product_kind === 'flower',
-    );
     const miscProductIds = new Set(miscCatalog.map((product) => product.id));
-
-    for (const item of order.items) {
-      const flowerProduct = flowerCatalog.find((product) => product.id === item.product_id);
-      if (flowerProduct) {
-        const mix = parseOrderItemColorMix(item.item_name, flowerProduct.name);
-        if (mix) {
-          colorMix[item.product_id] = mix;
-        }
-      }
-    }
 
     const hasMiscLineItems = order.items.some((item) => miscProductIds.has(item.product_id));
 
@@ -531,7 +697,6 @@ export default function FlowerOrderFormModal({
       items: order.items.map((item) => ({ ...item })),
     });
     setProductQuantities(quantities);
-    setProductColorMix(colorMix);
     setFlowerSearch('');
     setMiscSearch('');
     setDownpaymentDraft(order.downpayment > 0 ? String(order.downpayment) : '');
@@ -560,7 +725,6 @@ export default function FlowerOrderFormModal({
     setIsEditMode(true);
     setForm(emptyForm(initialPickupIso ?? new Date().toISOString(), staffId, staffName));
     setProductQuantities({});
-    setProductColorMix({});
     setFlowerSearch('');
     setMiscSearch('');
     setDownpaymentDraft('');
@@ -657,18 +821,6 @@ export default function FlowerOrderFormModal({
 
       return { ...current, [productId]: String(qty) };
     });
-
-    if (!digits || qty <= 0) {
-      setProductColorMix((current) => {
-        if (!(productId in current)) {
-          return current;
-        }
-
-        const next = { ...current };
-        delete next[productId];
-        return next;
-      });
-    }
   }
 
   function adjustProductQuantity(productId: string, delta: number) {
@@ -683,30 +835,6 @@ export default function FlowerOrderFormModal({
       }
 
       return { ...current, [productId]: String(nextQty) };
-    });
-
-    if (nextQty <= 0) {
-      setProductColorMix((mix) => {
-        if (!(productId in mix)) {
-          return mix;
-        }
-
-        const nextMix = { ...mix };
-        delete nextMix[productId];
-        return nextMix;
-      });
-    }
-  }
-
-  function setProductColorMixNote(productId: string, value: string) {
-    setProductColorMix((current) => {
-      if (!value.trim()) {
-        const next = { ...current };
-        delete next[productId];
-        return next;
-      }
-
-      return { ...current, [productId]: value };
     });
   }
 
@@ -740,14 +868,20 @@ export default function FlowerOrderFormModal({
     [products],
   );
 
-  const filteredFlowerProducts = useMemo(() => {
-    const query = flowerSearch.trim().toLowerCase();
-    if (!query) {
-      return activeProducts;
-    }
+  const flowerTypeGroups = useMemo(
+    () => groupFlowerProductsByType(activeProducts),
+    [activeProducts],
+  );
 
-    return activeProducts.filter((product) => product.name.toLowerCase().includes(query));
-  }, [activeProducts, flowerSearch]);
+  const filteredFlowerTypeGroups = useMemo(
+    () => filterFlowerTypeGroups(flowerTypeGroups, flowerSearch),
+    [flowerTypeGroups, flowerSearch],
+  );
+
+  const pickerFlowerTypeGroups = useMemo(
+    () => sortPickerFlowerTypeGroups(filteredFlowerTypeGroups, productQuantities),
+    [filteredFlowerTypeGroups, productQuantities],
+  );
 
   const filteredMiscProducts = useMemo(() => {
     const query = miscSearch.trim().toLowerCase();
@@ -758,19 +892,14 @@ export default function FlowerOrderFormModal({
     return miscProducts.filter((product) => product.name.toLowerCase().includes(query));
   }, [miscProducts, miscSearch]);
 
-  const pickerFlowerProducts = useMemo(
-    () => sortPickerProducts(filteredFlowerProducts, productQuantities),
-    [filteredFlowerProducts, productQuantities],
-  );
-
   const pickerMiscProducts = useMemo(
     () => sortPickerProducts(filteredMiscProducts, productQuantities),
     [filteredMiscProducts, productQuantities],
   );
 
   const flowerSelectionSummary = useMemo(
-    () => summarizeCatalogSelection(activeProducts, productQuantities),
-    [activeProducts, productQuantities],
+    () => summarizeFlowerTypeSelection(flowerTypeGroups, productQuantities),
+    [flowerTypeGroups, productQuantities],
   );
 
   const miscSelectionSummary = useMemo(
@@ -778,17 +907,22 @@ export default function FlowerOrderFormModal({
     [miscProducts, productQuantities],
   );
 
-  const flowerViewItems = useMemo(
+  const flowerViewGroups = useMemo(
     () =>
-      activeProducts
-        .map((product) => ({
-          productId: product.id,
-          name: product.name,
-          quantity: Number(productQuantities[product.id]) || 0,
-          colorMix: productColorMix[product.id]?.trim() ?? '',
+      flowerTypeGroups
+        .map((group) => ({
+          flowerType: group.flowerType,
+          isCategory: group.isCategory,
+          variants: group.variants
+            .map((variant) => ({
+              productId: variant.id,
+              color: normalizeFlowerProductColor(variant.color),
+              quantity: Number(productQuantities[variant.id]) || 0,
+            }))
+            .filter((variant) => variant.quantity > 0),
         }))
-        .filter((item) => item.quantity > 0),
-    [activeProducts, productColorMix, productQuantities],
+        .filter((group) => group.variants.length > 0),
+    [flowerTypeGroups, productQuantities],
   );
 
   const miscViewItems = useMemo(
@@ -902,7 +1036,7 @@ export default function FlowerOrderFormModal({
   }
 
   function validateForm(): CreateFlowerOrderInput | null {
-    const flowerItems = buildCatalogOrderItems(activeProducts, productQuantities, productColorMix);
+    const flowerItems = buildFlowerCatalogOrderItems(activeProducts, productQuantities);
     const miscItems = buildCatalogOrderItems(miscProducts, productQuantities);
     const items = [...flowerItems, ...miscItems];
     const wrapper_color = formatWrapperColorSummary(miscProducts, productQuantities);
@@ -1586,22 +1720,33 @@ export default function FlowerOrderFormModal({
                   {flowerSelectionSummary.units} stem{flowerSelectionSummary.units === 1 ? '' : 's'}
                 </p>
               ) : !isViewMode ? (
-                <p className="text-xs text-brand-brown/60">Tap + to add stems · optional color mix for assorted bouquets</p>
+                <p className="text-xs text-brand-brown/60">Tap + to add stems per flower type and color</p>
               ) : null}
             </div>
 
             {isViewMode ? (
-              flowerViewItems.length > 0 ? (
+              flowerViewGroups.length > 0 ? (
                 <ul className="space-y-2 rounded-xl border border-brand-muted/40 bg-brand-cream/20 p-3">
-                  {flowerViewItems.map((item) => (
-                    <li key={item.productId} className="text-sm text-brand-dark">
-                      <div className="flex justify-between gap-3">
-                        <span>{item.name}</span>
-                        <span className="font-semibold">x{item.quantity}</span>
-                      </div>
-                      {item.colorMix ? (
-                        <p className="mt-0.5 text-xs text-brand-brown/70">Colors: {item.colorMix}</p>
-                      ) : null}
+                  {flowerViewGroups.map((group) => (
+                    <li key={group.flowerType} className="text-sm text-brand-dark">
+                      {group.isCategory ? (
+                        <>
+                          <p className="font-semibold">{group.flowerType}</p>
+                          <ul className="mt-1 space-y-1 pl-3">
+                            {group.variants.map((variant) => (
+                              <li key={variant.productId} className="flex justify-between gap-3">
+                                <span>{variant.color || 'Color'}</span>
+                                <span className="font-semibold">x{variant.quantity}</span>
+                              </li>
+                            ))}
+                          </ul>
+                        </>
+                      ) : (
+                        <div className="flex justify-between gap-3">
+                          <span>{group.flowerType}</span>
+                          <span className="font-semibold">x{group.variants[0]?.quantity ?? 0}</span>
+                        </div>
+                      )}
                     </li>
                   ))}
                 </ul>
@@ -1611,8 +1756,8 @@ export default function FlowerOrderFormModal({
                 </p>
               )
             ) : (
-              <OrderCatalogQuantityPicker
-                products={pickerFlowerProducts}
+              <FlowerTypeOrderPicker
+                groups={pickerFlowerTypeGroups}
                 quantities={productQuantities}
                 stockByProductId={stockByProductId}
                 creditByProductId={creditByProductId}
@@ -1620,14 +1765,8 @@ export default function FlowerOrderFormModal({
                 stockLoading={stockLoading}
                 search={flowerSearch}
                 onSearchChange={setFlowerSearch}
-                searchPlaceholder="Search flowers..."
-                emptySearchMessage="No flowers match your search."
-                unitLabel="Quantity"
                 onSetQuantity={setProductQuantity}
                 onAdjustQuantity={adjustProductQuantity}
-                enableColorMix
-                colorMixByProductId={productColorMix}
-                onColorMixChange={setProductColorMixNote}
               />
             )}
           </div>

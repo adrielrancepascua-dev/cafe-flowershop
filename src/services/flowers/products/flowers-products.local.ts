@@ -8,6 +8,7 @@ import type {
 } from '../../../modules/flowers/shared/types/flower-product';
 import { normalizeFlowerProductColor } from '../../../modules/flowers/shared/utils/flower-product-colors';
 import { normalizeFlowerProductKind } from '../../../modules/flowers/shared/utils/flower-product-kind';
+import { getFlowerProductType } from '../../../modules/flowers/shared/utils/flower-product-type';
 
 const PRODUCTS_STORAGE_KEY = 'papers_petals_flower_stems_v2';
 const PRODUCTS_SEEDED_KEY = 'papers_petals_flower_stems_seeded_v2';
@@ -34,11 +35,23 @@ function readProductsFromStorage(): FlowerProduct[] {
 
     const parsed = JSON.parse(raw) as FlowerProduct[];
     return Array.isArray(parsed)
-      ? parsed.map((product) => ({
-          ...product,
-          product_kind: normalizeFlowerProductKind(product.product_kind),
-          color: normalizeFlowerProductColor(product.color),
-        }))
+      ? parsed.map((product) => {
+          const product_kind = normalizeFlowerProductKind(product.product_kind);
+          const color = normalizeFlowerProductColor(product.color);
+          return {
+            ...product,
+            product_kind,
+            color,
+            flower_type:
+              product_kind === 'flower'
+                ? getFlowerProductType({
+                    name: product.name,
+                    color,
+                    flower_type: product.flower_type,
+                  })
+                : '',
+          };
+        })
       : [];
   } catch {
     return FLOWER_STEMS_MOCK.map((product) => ({ ...product }));
@@ -60,11 +73,18 @@ export async function listFlowerStemsLocal(): Promise<FlowerProduct[]> {
 export async function createFlowerStemLocal(input: CreateFlowerProductInput): Promise<FlowerProduct> {
   const products = readProductsFromStorage();
   const product_kind = normalizeFlowerProductKind(input.product_kind);
+  const color = product_kind === 'misc' ? '' : normalizeFlowerProductColor(input.color);
+  const flower_type =
+    product_kind === 'flower'
+      ? (input.flower_type?.trim() || input.name.trim())
+      : '';
+  const name = product_kind === 'flower' ? flower_type : input.name.trim();
   const created: FlowerProduct = {
     id: `${product_kind === 'misc' ? 'misc' : 'stem'}-${Date.now()}`,
-    name: input.name.trim(),
+    name,
+    flower_type,
     product_kind,
-    color: product_kind === 'misc' ? '' : normalizeFlowerProductColor(input.color),
+    color,
     unit_cost: input.unit_cost,
     is_active: input.is_active ?? true,
     created_at: new Date().toISOString(),
@@ -85,10 +105,19 @@ export async function updateFlowerStemLocal(
     throw new Error('Product not found.');
   }
 
+  const product_kind = products[index].product_kind;
+  const color = normalizeFlowerProductColor(input.color);
+  const flower_type =
+    product_kind === 'flower'
+      ? (input.flower_type?.trim() || input.name.trim())
+      : '';
+  const name = product_kind === 'flower' ? flower_type : input.name.trim();
+
   products[index] = {
     ...products[index],
-    name: input.name.trim(),
-    color: normalizeFlowerProductColor(input.color),
+    name,
+    flower_type,
+    color,
     unit_cost: input.unit_cost,
   };
 
