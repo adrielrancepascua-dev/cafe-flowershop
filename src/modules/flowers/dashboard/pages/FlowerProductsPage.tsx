@@ -1,6 +1,7 @@
-import { Fragment, useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { listFlowerProducts, createFlowerProduct, updateFlowerProduct, toggleFlowerProductActive, deleteFlowerProduct } from '../../../../services/flowers/products';
 import { productColorColumnSupported } from '../../../../services/flowers/products/flowers-products.supabase';
+import { useFlowerAuth } from '../../../../lib/auth/FlowerAuthContext';
 import type { FlowerProduct } from '../../shared/types/flower-product';
 import FlowerPageHeader from '../../shared/components/FlowerPageHeader';
 import { RequireFlowerAdmin } from '../components/RequireFlowerAuth';
@@ -14,7 +15,7 @@ import {
   FLOWER_PRODUCT_KIND_LABELS,
   type FlowerProductKind,
 } from '../../shared/utils/flower-product-kind';
-import { groupFlowerProductsByType } from '../../shared/utils/flower-product-type';
+import { groupFlowerProductsByType, type FlowerProductTypeGroup } from '../../shared/utils/flower-product-type';
 export default function FlowerProductsPage() {
   const [products, setProducts] = useState<FlowerProduct[]>([]);
   const [loading, setLoading] = useState(true);
@@ -177,74 +178,28 @@ export default function FlowerProductsPage() {
       {loading ? (
         <p className="mt-6 text-sm text-brand-brown/60">Loading products...</p>
       ) : catalogTab === 'flower' ? (
-        <>
-          <div className="mt-5 space-y-5 md:hidden">
-            {productsByFlowerType.map((section) => (
-              <div key={section.flowerType} className="space-y-3">
-                <ProductFlowerTypeSectionHeader
-                  flowerType={section.flowerType}
-                  count={section.variants.length}
-                  isCategory={section.isCategory}
-                  existingColors={section.variants.map((product) => product.color)}
-                  onChanged={loadProducts}
-                />
-                {section.variants.map((product) => (
-                  <ProductCard
-                    key={product.id}
-                    product={product}
-                    flowerType={section.flowerType}
-                    isCategory={section.isCategory}
-                    existingProductColors={existingProductColors}
-                    onChanged={loadProducts}
-                  />
-                ))}
-              </div>
-            ))}
-          </div>
-
-          <div className="mt-5 hidden overflow-x-auto rounded-2xl border border-brand-muted/40 md:block">
-            <table className="min-w-full text-left text-sm">
-              <thead className="bg-brand-beige/40 text-brand-brown">
-                <tr>
-                  <th className="min-w-[12rem] px-3 py-2">Name</th>
-                  <th className="px-3 py-2">Color</th>
-                  <th className="px-3 py-2">Unit cost</th>
-                  <th className="px-3 py-2">Status</th>
-                  <RequireFlowerAdmin silent>
-                    <th className="min-w-[14rem] px-3 py-2">Actions</th>
-                  </RequireFlowerAdmin>
-                </tr>
-              </thead>
-              <tbody>
-                {productsByFlowerType.map((section) => (
-                  <Fragment key={section.flowerType}>
-                    <tr className="border-t border-brand-muted/30 bg-brand-beige/25">
-                      <td colSpan={5} className="px-3 py-2">
-                        <ProductFlowerTypeSectionHeader
-                          flowerType={section.flowerType}
-                          count={section.variants.length}
-                          isCategory={section.isCategory}
-                          existingColors={section.variants.map((product) => product.color)}
-                          onChanged={loadProducts}
-                        />
-                      </td>
-                    </tr>
-                    {section.variants.map((product) => (
-                      <ProductRow
-                        key={product.id}
-                        product={product}
-                        flowerType={section.flowerType}
-                        isCategory={section.isCategory}
-                        existingProductColors={existingProductColors}
-                        onChanged={loadProducts}
-                      />
-                    ))}
-                  </Fragment>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </>
+        <div className="mt-5 space-y-3">
+          {productsByFlowerType.map((section) =>
+            section.isCategory ? (
+              <ProductCategoryGroup
+                key={section.flowerType}
+                section={section}
+                onChanged={loadProducts}
+              />
+            ) : section.variants[0] ? (
+              <ProductStandaloneCard
+                key={section.flowerType}
+                product={section.variants[0]}
+                onChanged={loadProducts}
+              />
+            ) : null,
+          )}
+          {productsByFlowerType.length === 0 ? (
+            <p className="rounded-xl border border-brand-muted/30 px-3 py-8 text-center text-sm text-brand-brown/60">
+              No flowers yet.
+            </p>
+          ) : null}
+        </div>
       ) : (
         <>
           <div className="mt-5 space-y-3 md:hidden">
@@ -290,31 +245,41 @@ export default function FlowerProductsPage() {
   );
 }
 
+function FixedFlowerColorBadge({ color }: { color: string }) {
+  const label = normalizeFlowerProductColor(color) || '—';
+
+  return (
+    <span className="inline-flex rounded-full border border-brand-muted/45 bg-white px-2.5 py-0.5 text-xs font-semibold text-brand-dark">
+      {label}
+    </span>
+  );
+}
+
 function ProductFlowerTypeSectionHeader({
   flowerType,
   count,
   isCategory,
   existingColors,
   onChanged,
+  hideTitle = false,
 }: {
   flowerType: string;
   count: number;
   isCategory: boolean;
   existingColors: string[];
   onChanged: () => Promise<void>;
+  hideTitle?: boolean;
 }) {
   return (
-    <div className="flex flex-wrap items-center justify-between gap-3">
-      <div>
-        <p className="font-semibold text-brand-dark">{flowerType}</p>
-        <p className="text-xs font-medium text-brand-brown/70">
-          {isCategory
-            ? `${count} color variations`
-            : count === 1
-              ? 'Single-color product'
-              : `${count} colors`}
-        </p>
-      </div>
+    <div className={`flex flex-wrap items-center gap-3 ${hideTitle ? 'shrink-0' : 'justify-between'}`}>
+      {hideTitle ? null : (
+        <div>
+          <p className="font-semibold text-brand-dark">{flowerType}</p>
+          <p className="text-xs font-medium text-brand-brown/70">
+            {isCategory ? `${count} colors` : 'Single-color product'}
+          </p>
+        </div>
+      )}
       <RequireFlowerAdmin silent>
         <AddColorVariationForm
           flowerType={flowerType}
@@ -432,6 +397,171 @@ function ProductStatusBadge({ isActive }: { isActive: boolean }) {
   );
 }
 
+function ProductCategoryGroup({
+  section,
+  onChanged,
+}: {
+  section: FlowerProductTypeGroup;
+  onChanged: () => Promise<void>;
+}) {
+  const existingColors = section.variants.map((product) => product.color);
+
+  return (
+    <div className="overflow-hidden rounded-xl border border-brand-muted/40 bg-white shadow-sm">
+      <div className="border-b border-brand-muted/25 bg-gradient-to-r from-brand-beige/70 to-brand-cream/40 px-4 py-3">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div className="flex min-w-0 flex-1 items-start gap-3">
+            <div>
+              <div className="flex flex-wrap items-center gap-2">
+                <p className="font-semibold text-brand-dark">{section.flowerType}</p>
+                <span className="rounded-full border border-brand-muted/40 bg-white/90 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-brand-brown/70">
+                  Category
+                </span>
+              </div>
+              <p className="mt-0.5 text-xs text-brand-brown/65">
+                {section.variants.length} colors · set when adding each color
+              </p>
+            </div>
+          </div>
+          <ProductFlowerTypeSectionHeader
+            flowerType={section.flowerType}
+            count={section.variants.length}
+            isCategory
+            existingColors={existingColors}
+            onChanged={onChanged}
+            hideTitle
+          />
+        </div>
+      </div>
+
+      <div className="divide-y divide-brand-muted/15 bg-brand-cream/10">
+        {section.variants.map((product) => (
+          <ProductCategoryVariantRow key={product.id} product={product} onChanged={onChanged} />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function ProductCategoryVariantRow({
+  product,
+  onChanged,
+}: {
+  product: FlowerProduct;
+  onChanged: () => Promise<void>;
+}) {
+  return (
+    <div className="flex flex-col gap-3 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+      <div className="flex min-w-0 items-center gap-3 pl-2 sm:pl-4">
+        <span aria-hidden className="h-8 w-0.5 shrink-0 rounded-full bg-brand-muted/50" />
+        <FixedFlowerColorBadge color={product.color} />
+      </div>
+
+      <div className="flex flex-wrap items-center gap-3 sm:justify-end">
+        <p className="text-sm font-semibold text-brand-dark">{PRICE_FORMATTER.format(product.unit_cost)}</p>
+        <ProductStatusBadge isActive={product.is_active} />
+        <RequireFlowerAdmin silent>
+          <ProductVariantActions product={product} onChanged={onChanged} />
+        </RequireFlowerAdmin>
+      </div>
+    </div>
+  );
+}
+
+function ProductStandaloneCard({
+  product,
+  onChanged,
+}: {
+  product: FlowerProduct;
+  onChanged: () => Promise<void>;
+}) {
+  const { isAdmin } = useFlowerAuth();
+  const [name, setName] = useState(product.name);
+  const fixedColor = normalizeFlowerProductColor(product.color);
+
+  useEffect(() => {
+    setName(product.name);
+  }, [product.id, product.name]);
+
+  async function save() {
+    const trimmedName = name.trim();
+    await updateFlowerProduct(product.id, {
+      name: trimmedName,
+      flower_type: trimmedName,
+      color: fixedColor,
+      unit_cost: product.unit_cost,
+    });
+    await onChanged();
+  }
+
+  return (
+    <div className="rounded-xl border border-brand-muted/40 bg-white/80 px-4 py-3 shadow-sm">
+      <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+        <div className="min-w-0 flex-1 space-y-2">
+          {isAdmin ? (
+            <label className="block text-xs font-medium uppercase tracking-wide text-brand-brown/60">
+              Flower type
+              <input
+                value={name}
+                onChange={(event) => setName(event.target.value)}
+                className="flower-input mt-1.5"
+              />
+            </label>
+          ) : (
+            <p className="text-sm font-semibold text-brand-dark">{product.name}</p>
+          )}
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="text-xs font-medium uppercase tracking-wide text-brand-brown/60">Color</span>
+            <FixedFlowerColorBadge color={fixedColor} />
+          </div>
+        </div>
+
+        <div className="flex flex-wrap items-center gap-3 lg:justify-end">
+          {isAdmin ? (
+            <AddColorVariationForm
+              flowerType={product.name}
+              existingColors={[fixedColor]}
+              onChanged={onChanged}
+            />
+          ) : null}
+          <p className="text-sm font-semibold text-brand-dark">{PRICE_FORMATTER.format(product.unit_cost)}</p>
+          <ProductStatusBadge isActive={product.is_active} />
+          <RequireFlowerAdmin silent>
+            <ProductActions product={product} onSave={save} onChanged={onChanged} />
+          </RequireFlowerAdmin>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function ProductVariantActions({
+  product,
+  onChanged,
+}: {
+  product: FlowerProduct;
+  onChanged: () => Promise<void>;
+}) {
+  return (
+    <div className="flex flex-wrap gap-2">
+      <button
+        type="button"
+        className="flower-btn-secondary px-3 py-1.5 text-xs"
+        onClick={() => void toggleFlowerProductActive(product.id, !product.is_active).then(onChanged)}
+      >
+        {product.is_active ? 'Deactivate' : 'Activate'}
+      </button>
+      <button
+        type="button"
+        className="flower-btn-secondary px-3 py-1.5 text-xs text-red-700"
+        onClick={() => void deleteFlowerProduct(product.id).then(onChanged)}
+      >
+        Delete
+      </button>
+    </div>
+  );
+}
+
 function ProductActions({
   product,
   onSave,
@@ -461,145 +591,6 @@ function ProductActions({
         Delete
       </button>
     </div>
-  );
-}
-
-function ProductCard({
-  product,
-  flowerType,
-  isCategory,
-  existingProductColors,
-  onChanged,
-}: {
-  product: FlowerProduct;
-  flowerType: string;
-  isCategory: boolean;
-  existingProductColors: string[];
-  onChanged: () => Promise<void>;
-}) {
-  const [name, setName] = useState(flowerType);
-  const [color, setColor] = useState(normalizeFlowerProductColor(product.color));
-
-  useEffect(() => {
-    setName(flowerType);
-    setColor(normalizeFlowerProductColor(product.color));
-  }, [flowerType, product.id, product.color]);
-
-  async function save() {
-    const trimmedName = name.trim();
-    await updateFlowerProduct(product.id, {
-      name: isCategory ? flowerType : trimmedName,
-      flower_type: isCategory ? flowerType : trimmedName,
-      color,
-      unit_cost: product.unit_cost,
-    });
-    await onChanged();
-  }
-
-  return (
-    <div className="flower-card p-4">
-      {!isCategory ? (
-        <label className="block text-xs font-medium uppercase tracking-wide text-brand-brown/60">
-          Flower type
-          <input
-            value={name}
-            onChange={(event) => setName(event.target.value)}
-            className="flower-input mt-1.5"
-          />
-        </label>
-      ) : (
-        <p className="text-xs font-medium uppercase tracking-wide text-brand-brown/60">
-          Color variation
-        </p>
-      )}
-
-      <label className={`block text-xs font-medium uppercase tracking-wide text-brand-brown/60 ${isCategory ? 'mt-0' : 'mt-3'}`}>
-        {isCategory ? 'Color' : 'Color category'}
-        <div className="mt-1.5">
-          <FlowerProductColorPicker
-            value={color}
-            onChange={setColor}
-            existingColors={existingProductColors}
-          />
-        </div>
-      </label>
-
-      <div className="mt-3 flex items-center justify-between gap-3">
-        <div>
-          <p className="text-xs font-medium uppercase tracking-wide text-brand-brown/60">Unit cost</p>
-          <p className="mt-0.5 font-semibold text-brand-dark">{PRICE_FORMATTER.format(product.unit_cost)}</p>
-        </div>
-        <ProductStatusBadge isActive={product.is_active} />
-      </div>
-
-      <RequireFlowerAdmin silent>
-        <div className="mt-4 border-t border-brand-muted/30 pt-4">
-          <ProductActions product={product} onSave={save} onChanged={onChanged} />
-        </div>
-      </RequireFlowerAdmin>
-    </div>
-  );
-}
-
-function ProductRow({
-  product,
-  flowerType,
-  isCategory,
-  existingProductColors,
-  onChanged,
-}: {
-  product: FlowerProduct;
-  flowerType: string;
-  isCategory: boolean;
-  existingProductColors: string[];
-  onChanged: () => Promise<void>;
-}) {
-  const [name, setName] = useState(flowerType);
-  const [color, setColor] = useState(normalizeFlowerProductColor(product.color));
-
-  useEffect(() => {
-    setName(flowerType);
-    setColor(normalizeFlowerProductColor(product.color));
-  }, [flowerType, product.id, product.color]);
-
-  async function save() {
-    const trimmedName = name.trim();
-    await updateFlowerProduct(product.id, {
-      name: isCategory ? flowerType : trimmedName,
-      flower_type: isCategory ? flowerType : trimmedName,
-      color,
-      unit_cost: product.unit_cost,
-    });
-    await onChanged();
-  }
-
-  return (
-    <tr className="border-t border-brand-muted/30">
-      <td className="min-w-[12rem] px-3 py-2">
-        {isCategory ? (
-          <span className="pl-3 text-sm text-brand-brown/75">{color || '—'}</span>
-        ) : (
-          <input value={name} onChange={(event) => setName(event.target.value)} className="flower-input min-w-[10rem]" />
-        )}
-      </td>
-      <td className="px-3 py-2">
-        <FlowerProductColorPicker
-          value={color}
-          onChange={setColor}
-          existingColors={existingProductColors}
-          className="flower-input min-w-[120px]"
-        />
-      </td>
-      <td className="px-3 py-2 whitespace-nowrap">{PRICE_FORMATTER.format(product.unit_cost)}</td>
-      <td className="px-3 py-2">
-        <ProductStatusBadge isActive={product.is_active} />
-      </td>
-      <RequireFlowerAdmin silent>
-        <td className="min-w-[14rem] px-3 py-2">
-          <ProductActions product={product} onSave={save} onChanged={onChanged} />
-        </td>
-      </RequireFlowerAdmin>
-    </tr>
   );
 }
 
