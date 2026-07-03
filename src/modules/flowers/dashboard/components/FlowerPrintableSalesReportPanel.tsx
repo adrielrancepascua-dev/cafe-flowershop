@@ -12,6 +12,7 @@ type FlowerPrintableSalesReportPanelProps = {
   isAdmin: boolean;
   branchId?: string;
   disabled?: boolean;
+  disabledMessage?: string;
 };
 
 const PERIOD_OPTIONS: Array<{ value: FlowerSalesReportPeriod; label: string }> = [
@@ -25,6 +26,7 @@ export default function FlowerPrintableSalesReportPanel({
   isAdmin,
   branchId,
   disabled = false,
+  disabledMessage,
 }: FlowerPrintableSalesReportPanelProps) {
   const [period, setPeriod] = useState<FlowerSalesReportPeriod>('day');
   const [report, setReport] = useState<FlowerPrintableSalesReport | null>(null);
@@ -92,7 +94,9 @@ export default function FlowerPrintableSalesReportPanel({
             </div>
           ) : null}
 
-          {errorMessage ? (
+          {disabledMessage ? (
+            <p className="mt-3 text-sm text-brand-brown/70">{disabledMessage}</p>
+          ) : errorMessage ? (
             <p className="mt-3 text-sm text-red-700">{errorMessage}</p>
           ) : loading ? (
             <p className="mt-3 text-sm text-brand-brown/60">Preparing report...</p>

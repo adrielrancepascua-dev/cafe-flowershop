@@ -585,7 +585,13 @@ export default function FlowerReportsPage() {
         <FlowerPrintableSalesReportPanel
           anchorDate={effectiveReportDate}
           isAdmin={isAdmin}
-          branchId={staffBranchId ?? undefined}
+          branchId={effectiveBranchFilter}
+          disabled={isAdmin && branchFilter === 'all'}
+          disabledMessage={
+            isAdmin && branchFilter === 'all'
+              ? 'Select a branch above to print its sales report.'
+              : undefined
+          }
         />
       ) : null}
     </div>

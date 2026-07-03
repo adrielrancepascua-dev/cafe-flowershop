@@ -299,22 +299,26 @@ export function FlowerThermalSalesReportDocument({
           </div>
         ))}
 
-        <FlowerThermalDivider />
-
-        <p className="flower-thermal-line flower-thermal-bold">ALL BRANCHES</p>
-        <p className="flower-thermal-line">ORDERS: {report.totals.order_count}</p>
-        <p className="flower-thermal-line">SALES: {PRICE_FORMATTER.format(report.totals.sales_total)}</p>
-        <p className="flower-thermal-line">
-          STAFF EXP: {PRICE_FORMATTER.format(report.totals.staff_expenses)}
-        </p>
-        {showProfitDetails ? (
+        {report.branches.length > 1 ? (
           <>
+            <FlowerThermalDivider />
+
+            <p className="flower-thermal-line flower-thermal-bold">ALL BRANCHES</p>
+            <p className="flower-thermal-line">ORDERS: {report.totals.order_count}</p>
+            <p className="flower-thermal-line">SALES: {PRICE_FORMATTER.format(report.totals.sales_total)}</p>
             <p className="flower-thermal-line">
-              SUPPLIER: {PRICE_FORMATTER.format(report.totals.supplier_costs)}
+              STAFF EXP: {PRICE_FORMATTER.format(report.totals.staff_expenses)}
             </p>
-            <p className="flower-thermal-line flower-thermal-bold">
-              NET: {PRICE_FORMATTER.format(report.totals.net_income)}
-            </p>
+            {showProfitDetails ? (
+              <>
+                <p className="flower-thermal-line">
+                  SUPPLIER: {PRICE_FORMATTER.format(report.totals.supplier_costs)}
+                </p>
+                <p className="flower-thermal-line flower-thermal-bold">
+                  NET: {PRICE_FORMATTER.format(report.totals.net_income)}
+                </p>
+              </>
+            ) : null}
           </>
         ) : null}
       </section>
