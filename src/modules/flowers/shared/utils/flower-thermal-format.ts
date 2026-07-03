@@ -13,7 +13,14 @@ export function formatThermalOrderRef(orderId: string): string {
 }
 
 export function formatThermalClaimMode(claimMode: FlowerClaimMode): string {
-  return claimMode === 'delivery' ? 'DELIVERY' : 'STORE PICK UP';
+  switch (claimMode) {
+    case 'delivery':
+      return 'DELIVERY';
+    case 'walk_in':
+      return 'WALK IN';
+    default:
+      return 'STORE PICK UP';
+  }
 }
 
 export function formatThermalDateLine(iso: string): string {

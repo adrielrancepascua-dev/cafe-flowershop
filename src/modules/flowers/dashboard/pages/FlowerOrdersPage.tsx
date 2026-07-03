@@ -19,6 +19,8 @@ import type { FlowerProduct } from '../../shared/types/flower-product';
 import FlowerPageHeader from '../../shared/components/FlowerPageHeader';
 import FlowerMobileCardList from '../../shared/components/FlowerMobileCardList';
 import { FlowerThermalDailyOrdersDocument } from '../../shared/components/FlowerThermalPrint';
+import FlowerPrintControls from '../../shared/components/FlowerPrintControls';
+import { scheduleFlowerCouponPrint } from '../../shared/utils/flower-print-settings';
 import FlowerOrderFormModal from '../components/FlowerOrderFormModal';
 import FlowerConfirmDialog from '../components/FlowerConfirmDialog';
 import OrderDeadlineAlertsPanel from '../components/OrderDeadlineAlertsPanel';
@@ -770,7 +772,7 @@ export default function FlowerOrdersPage() {
     return '';
   }, [branchFilter, branches, selectedDateKey, selectedDayLabel, viewMode]);
 
-  function handlePrintOrders() {
+  function preparePrintOrders() {
     const branchId = branchFilter === 'all' ? undefined : branchFilter;
 
     void (async () => {
@@ -789,12 +791,12 @@ export default function FlowerOrdersPage() {
       }
 
       setOrdersForPrint(ordersToPrint);
-      requestAnimationFrame(() => {
-        requestAnimationFrame(() => {
-          window.print();
-        });
-      });
     })();
+  }
+
+  function handlePrintOrders() {
+    preparePrintOrders();
+    scheduleFlowerCouponPrint();
   }
 
   const ordersInPrintDocument =
@@ -855,25 +857,22 @@ export default function FlowerOrdersPage() {
         </button>
 
         {!loading && printableOrders.length > 0 && viewMode === 'list' && branchFilter !== 'all' ? (
-          <button
-            type="button"
-            className="flower-btn-secondary inline-flex items-center gap-1.5"
-            onClick={handlePrintOrders}
-          >
-            <Printer className="h-4 w-4" />
-            Print orders
-          </button>
+          <FlowerPrintControls
+            onPrint={preparePrintOrders}
+            label="Print orders"
+            className="inline-flex"
+            showSizeHint={false}
+          />
         ) : null}
 
         {!loading && printableOrders.length > 0 && viewMode === 'calendar' && selectedDateKey ? (
-          <button
-            type="button"
-            className="flower-btn-secondary hidden items-center gap-1.5 lg:inline-flex"
-            onClick={handlePrintOrders}
-          >
-            <Printer className="h-4 w-4" />
-            Print day
-          </button>
+          <div className="hidden lg:block">
+            <FlowerPrintControls
+              onPrint={preparePrintOrders}
+              label="Print day"
+              showSizeHint={false}
+            />
+          </div>
         ) : null}
       </div>
 

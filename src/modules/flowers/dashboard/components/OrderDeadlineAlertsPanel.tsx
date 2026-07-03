@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { ChevronDown, ChevronUp, Clock3 } from 'lucide-react';
 import type { FlowerOrder } from '../../shared/types/flower-order';
+import { formatFlowerClaimModeLabel } from '../../shared/types/flower-order';
 import { formatPickupDateTimeLocal } from '../../shared/utils/flower-format';
 import {
   listActiveOrderPrepDeadlines,
@@ -91,7 +92,7 @@ export default function OrderDeadlineAlertsPanel({
             </>
           ) : (
             <p className="mt-0.5 text-xs text-brand-brown/70">
-              Pick up: photo due 30 min before scheduled time. Delivery: photo due 1 hr before.
+              Pick up: photo due 30 min before scheduled time. Delivery: photo due 1 hr before. Walk in: no photo deadline.
             </p>
           )}
         </div>
@@ -120,8 +121,7 @@ export default function OrderDeadlineAlertsPanel({
                       {formatPickupDateTimeLocal(order.scheduled_for)}
                     </p>
                     <p className="mt-0.5 text-xs text-brand-brown/65">
-                      {order.branch_name} ·{' '}
-                      {order.claim_mode === 'delivery' ? 'Delivery' : 'Pick up'}
+                      {order.branch_name} · {formatFlowerClaimModeLabel(order.claim_mode)}
                     </p>
                   </div>
                   <span

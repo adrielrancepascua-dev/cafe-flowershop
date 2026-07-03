@@ -2,6 +2,7 @@ import { getSupabaseClient } from '../../../lib/supabase/client';
 import { ensureSupabaseSession } from '../../../lib/auth/flower-auth.service';
 import type {
   CreateFlowerOrderInput,
+  FlowerClaimMode,
   FlowerOrder,
   FlowerOrderStatus,
   ListFlowerOrdersOptions,
@@ -36,7 +37,7 @@ type OrderDbRow = {
   customer_social: string;
   scheduled_for: string;
   status: FlowerOrderStatus;
-  claim_mode: 'pickup' | 'delivery';
+  claim_mode: FlowerClaimMode;
   wrapper_color: string;
   greeting_card: string;
   special_instructions: string;

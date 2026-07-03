@@ -580,17 +580,32 @@ function MiscProductCard({
   onChanged: () => Promise<void>;
 }) {
   const [name, setName] = useState(product.name);
+  const [unitCost, setUnitCost] = useState(String(product.unit_cost));
+  const [errorMessage, setErrorMessage] = useState('');
 
   useEffect(() => {
     setName(product.name);
-  }, [product.id, product.name]);
+    setUnitCost(String(product.unit_cost));
+  }, [product.id, product.name, product.unit_cost]);
 
   async function save() {
+    const unit_cost = Number(unitCost);
+    if (!name.trim()) {
+      setErrorMessage('Enter an item name.');
+      return;
+    }
+
+    if (!Number.isFinite(unit_cost) || unit_cost < 0) {
+      setErrorMessage('Enter a valid unit cost.');
+      return;
+    }
+
     await updateFlowerProduct(product.id, {
-      name,
+      name: name.trim(),
       color: '',
-      unit_cost: product.unit_cost,
+      unit_cost,
     });
+    setErrorMessage('');
     await onChanged();
   }
 
@@ -605,13 +620,23 @@ function MiscProductCard({
         />
       </label>
 
-      <div className="mt-3 flex items-center justify-between gap-3">
-        <div>
-          <p className="text-xs font-medium uppercase tracking-wide text-brand-brown/60">Unit cost</p>
-          <p className="mt-0.5 font-semibold text-brand-dark">{PRICE_FORMATTER.format(product.unit_cost)}</p>
-        </div>
+      <label className="mt-3 block text-xs font-medium uppercase tracking-wide text-brand-brown/60">
+        Unit cost
+        <input
+          type="number"
+          min="0"
+          step="0.01"
+          value={unitCost}
+          onChange={(event) => setUnitCost(event.target.value)}
+          className="flower-input mt-1.5"
+        />
+      </label>
+
+      <div className="mt-3 flex items-center justify-end">
         <ProductStatusBadge isActive={product.is_active} />
       </div>
+
+      {errorMessage ? <p className="mt-2 text-xs text-red-700">{errorMessage}</p> : null}
 
       <RequireFlowerAdmin silent>
         <div className="mt-4 border-t border-brand-muted/30 pt-4">
@@ -630,17 +655,32 @@ function MiscProductRow({
   onChanged: () => Promise<void>;
 }) {
   const [name, setName] = useState(product.name);
+  const [unitCost, setUnitCost] = useState(String(product.unit_cost));
+  const [errorMessage, setErrorMessage] = useState('');
 
   useEffect(() => {
     setName(product.name);
-  }, [product.id, product.name]);
+    setUnitCost(String(product.unit_cost));
+  }, [product.id, product.name, product.unit_cost]);
 
   async function save() {
+    const unit_cost = Number(unitCost);
+    if (!name.trim()) {
+      setErrorMessage('Enter an item name.');
+      return;
+    }
+
+    if (!Number.isFinite(unit_cost) || unit_cost < 0) {
+      setErrorMessage('Enter a valid unit cost.');
+      return;
+    }
+
     await updateFlowerProduct(product.id, {
-      name,
+      name: name.trim(),
       color: '',
-      unit_cost: product.unit_cost,
+      unit_cost,
     });
+    setErrorMessage('');
     await onChanged();
   }
 
@@ -649,13 +689,23 @@ function MiscProductRow({
       <td className="min-w-[12rem] px-3 py-2">
         <input value={name} onChange={(event) => setName(event.target.value)} className="flower-input min-w-[10rem]" />
       </td>
-      <td className="px-3 py-2 whitespace-nowrap">{PRICE_FORMATTER.format(product.unit_cost)}</td>
+      <td className="px-3 py-2 whitespace-nowrap">
+        <input
+          type="number"
+          min="0"
+          step="0.01"
+          value={unitCost}
+          onChange={(event) => setUnitCost(event.target.value)}
+          className="flower-input w-28"
+        />
+      </td>
       <td className="px-3 py-2">
         <ProductStatusBadge isActive={product.is_active} />
       </td>
       <RequireFlowerAdmin silent>
         <td className="min-w-[14rem] px-3 py-2">
           <ProductActions product={product} onSave={save} onChanged={onChanged} />
+          {errorMessage ? <p className="mt-1 text-xs text-red-700">{errorMessage}</p> : null}
         </td>
       </RequireFlowerAdmin>
     </tr>

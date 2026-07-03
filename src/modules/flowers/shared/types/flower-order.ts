@@ -6,7 +6,28 @@ export type FlowerOrderStatus =
   | 'completed'
   | 'cancelled';
 
-export type FlowerClaimMode = 'pickup' | 'delivery';
+export type FlowerClaimMode = 'pickup' | 'delivery' | 'walk_in';
+
+export const FLOWER_CLAIM_MODE_LABELS: Record<FlowerClaimMode, string> = {
+  pickup: 'Pick up',
+  delivery: 'Delivery',
+  walk_in: 'Walk in',
+};
+
+export function formatFlowerClaimModeLabel(claimMode: FlowerClaimMode): string {
+  return FLOWER_CLAIM_MODE_LABELS[claimMode];
+}
+
+export function formatScheduledForFieldLabel(claimMode: FlowerClaimMode): string {
+  switch (claimMode) {
+    case 'delivery':
+      return 'Date & time of delivery';
+    case 'walk_in':
+      return 'Date & time of walk in';
+    default:
+      return 'Date & time of pick up';
+  }
+}
 
 import type { FlowerPaymentMode } from '../utils/flower-payment';
 
@@ -23,7 +44,7 @@ export function getFlowerOrderStatusSequenceForClaimMode(
   claimMode: FlowerClaimMode,
 ): FlowerOrderStatus[] {
   const terminalStatus: FlowerOrderStatus =
-    claimMode === 'delivery' ? 'delivered' : 'picked_up';
+    claimMode === 'delivery' ? 'delivered' : 'picked_up'; // pickup + walk_in
 
   return ['not_started', 'ready', terminalStatus, 'cancelled'];
 }

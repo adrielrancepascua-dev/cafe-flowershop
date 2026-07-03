@@ -5,6 +5,8 @@ import type { FlowerProduct } from '../../shared/types/flower-product';
 import type { FlowerBranchOption } from '../../shared/types/flower-inventory';
 import {
   FLOWER_ORDER_COMPLETE_STATUSES,
+  formatFlowerClaimModeLabel,
+  formatScheduledForFieldLabel,
   getFlowerOrderStatusSequenceForClaimMode,
   normalizeOrderStatusForPicker,
   type CreateFlowerOrderInput,
@@ -252,6 +254,7 @@ function OrderCatalogQuantityPicker({
   searchPlaceholder,
   emptySearchMessage,
   unitLabel,
+  showUnitCost = false,
   onSetQuantity,
   onAdjustQuantity,
 }: {
@@ -266,6 +269,7 @@ function OrderCatalogQuantityPicker({
   searchPlaceholder: string;
   emptySearchMessage: string;
   unitLabel: string;
+  showUnitCost?: boolean;
   onSetQuantity: (productId: string, rawValue: string) => void;
   onAdjustQuantity: (productId: string, delta: number) => void;
 }) {
@@ -314,6 +318,11 @@ function OrderCatalogQuantityPicker({
                   <div className="flex items-center gap-3">
                     <div className="min-w-0 flex-1">
                       <p className="text-sm font-medium text-brand-dark">{product.name}</p>
+                      {showUnitCost ? (
+                        <p className="text-xs text-brand-brown/70">
+                          {PRICE_FORMATTER.format(product.unit_cost)} unit cost
+                        </p>
+                      ) : null}
                       {onHand !== null ? (
                         <p
                           className={`text-xs ${
@@ -1166,7 +1175,9 @@ export default function FlowerOrderFormModal({
     existingOrder && existingOrder.balance > 0 && !existingOrder.balance_paid,
   );
   const showBalancePaidBanner = Boolean(existingOrder?.balance_paid);
-  const showReadyPhotoSection = Boolean(existingOrder && onReadyPhotoSubmit);
+  const showReadyPhotoSection = Boolean(
+    existingOrder && onReadyPhotoSubmit && form.claim_mode !== 'walk_in',
+  );
   const showTopPrepSection = showBalanceDue || showBalancePaidBanner || showReadyPhotoSection;
 
   if (!open) {
@@ -1434,7 +1445,7 @@ export default function FlowerOrderFormModal({
 
   const branchLabel =
     branches.find((branch) => branch.id === form.branch_id)?.name ?? form.branch_id;
-  const claimModeLabel = form.claim_mode === 'delivery' ? 'Delivery' : 'Pick up';
+  const claimModeLabel = formatFlowerClaimModeLabel(form.claim_mode);
 
   return (
     <div className="fixed inset-0 z-[100] flex items-end justify-center bg-brand-dark/40 p-0 sm:items-center sm:p-4">
@@ -1543,7 +1554,7 @@ export default function FlowerOrderFormModal({
               {showBalanceDue ? (
                 <div className="rounded-xl border border-amber-200 bg-amber-50 p-4">
                   <p className="text-sm font-semibold text-amber-950">
-                    Balance due at pick up / delivery
+                    Balance due at pick up, delivery, or walk in
                   </p>
                   <p className="mt-1 text-sm text-amber-900">
                     {PRICE_FORMATTER.format(existingOrder!.balance)} remaining — collect before
@@ -1762,7 +1773,7 @@ export default function FlowerOrderFormModal({
 
           <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
             <label className="block text-sm font-medium text-brand-brown md:col-span-2">
-              Date &amp; time of pick up
+              {formatScheduledForFieldLabel(form.claim_mode)}
               {isViewMode ? (
                 <p className={`flower-input mt-1.5 ${readOnlyFieldClass}`}>
                   {formatPickupDateTimeLocal(form.scheduled_for)}
@@ -1838,6 +1849,7 @@ export default function FlowerOrderFormModal({
                 >
                   <option value="pickup">Pick up</option>
                   <option value="delivery">Delivery</option>
+                  <option value="walk_in">Walk in</option>
                 </select>
               )}
             </label>
@@ -1916,6 +1928,7 @@ export default function FlowerOrderFormModal({
                 searchPlaceholder="Search wrappers, chocolates..."
                 emptySearchMessage="No miscellaneous items match your search."
                 unitLabel="Quantity"
+                showUnitCost
                 onSetQuantity={setProductQuantity}
                 onAdjustQuantity={adjustProductQuantity}
               />

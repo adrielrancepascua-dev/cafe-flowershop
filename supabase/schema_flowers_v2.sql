@@ -36,7 +36,7 @@ create table if not exists public.flower_orders (
   customer_social text not null,
   scheduled_for timestamptz not null,
   status text not null,
-  claim_mode text not null check (claim_mode in ('pickup', 'delivery')),
+  claim_mode text not null check (claim_mode in ('pickup', 'delivery', 'walk_in')),
   wrapper_color text not null default '',
   greeting_card text not null default '',
   special_instructions text not null default '',

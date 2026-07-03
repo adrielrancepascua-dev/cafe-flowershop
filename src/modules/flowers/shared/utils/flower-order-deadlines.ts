@@ -26,11 +26,19 @@ export interface OrderPrepDeadlineInfo {
 }
 
 function getPhotoLeadMs(claimMode: FlowerClaimMode): number {
-  return claimMode === 'delivery' ? DELIVERY_PHOTO_LEAD_MS : PICKUP_PHOTO_LEAD_MS;
+  if (claimMode === 'delivery') {
+    return DELIVERY_PHOTO_LEAD_MS;
+  }
+
+  return PICKUP_PHOTO_LEAD_MS;
 }
 
 function getPhotoLeadMinutes(claimMode: FlowerClaimMode): number {
-  return claimMode === 'delivery' ? 60 : 30;
+  if (claimMode === 'delivery') {
+    return 60;
+  }
+
+  return 30;
 }
 
 function formatMinutesRemaining(totalMinutes: number): string {
@@ -45,9 +53,15 @@ function formatMinutesRemaining(totalMinutes: number): string {
 }
 
 export function formatFinishedPhotoRequirementLabel(claimMode: FlowerClaimMode): string {
-  return claimMode === 'delivery'
-    ? 'Delivery — upload finished order photo 1 hour before delivery'
-    : 'Pick up — upload finished order photo 30 minutes before pick up';
+  if (claimMode === 'delivery') {
+    return 'Delivery — upload finished order photo 1 hour before delivery';
+  }
+
+  if (claimMode === 'walk_in') {
+    return 'Walk in — finished order photo is optional';
+  }
+
+  return 'Pick up — upload finished order photo 30 minutes before pick up';
 }
 
 export function formatPrepDeadlineTimePh(iso: string): string {
@@ -118,7 +132,7 @@ export function getOrderPrepDeadlineInfo(
   >,
   nowMs: number = Date.now(),
 ): OrderPrepDeadlineInfo | null {
-  if (order.ready_photo_data_url) {
+  if (order.claim_mode === 'walk_in' || order.ready_photo_data_url) {
     return null;
   }
 

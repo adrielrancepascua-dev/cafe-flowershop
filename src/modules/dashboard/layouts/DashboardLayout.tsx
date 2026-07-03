@@ -1,8 +1,10 @@
+import { useEffect } from 'react';
 import { NavLink, Outlet } from 'react-router-dom';
 import { useFlowerAuth } from '../../../lib/auth/FlowerAuthContext';
 import FlowerMobileNav, { FlowerDesktopSidebarHeader } from '../../flowers/shared/components/FlowerMobileNav';
 import FlowerBrandLogo from '../../flowers/shared/components/FlowerBrandLogo';
 import DemoModeBanner from '../../flowers/shared/components/DemoModeBanner';
+import { applyFlowerPrintSettings, readFlowerPrintSettings } from '../../flowers/shared/utils/flower-print-settings';
 
 const FLOWER_LINKS = [
   { label: 'Home', to: '/dashboard/flowers' },
@@ -17,6 +19,10 @@ const FLOWER_LINKS = [
 export default function DashboardLayout() {
   const { user, isAdmin, signOut } = useFlowerAuth();
   const dashboardLinks = FLOWER_LINKS.filter((link) => !link.adminOnly || isAdmin);
+
+  useEffect(() => {
+    applyFlowerPrintSettings(readFlowerPrintSettings());
+  }, []);
 
   return (
     <div className="flower-dashboard min-h-screen bg-gradient-to-b from-brand-cream via-brand-light to-brand-beige/30 font-sans text-brand-dark">

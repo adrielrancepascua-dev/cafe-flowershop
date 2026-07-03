@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Printer } from 'lucide-react';
+import FlowerPrintControls from '../../shared/components/FlowerPrintControls';
 import { getFlowerPrintableSalesReport } from '../../../../services/flowers/reports';
 import type {
   FlowerPrintableSalesReport,
@@ -58,10 +58,6 @@ export default function FlowerPrintableSalesReportPanel({
       });
   }, [anchorDate, branchId, disabled, effectivePeriod]);
 
-  function handlePrint() {
-    window.print();
-  }
-
   return (
     <>
       <section className="mt-6 print:hidden">
@@ -70,19 +66,15 @@ export default function FlowerPrintableSalesReportPanel({
             <div>
               <h3 className="text-sm font-semibold text-brand-dark">Printable sales report</h3>
               <p className="mt-1 text-sm text-brand-brown/70">
-                Thermal receipt layout for your label printer. Choose day, week, or month
-                {isAdmin ? '' : ' (today only)'}.
+                Coupon layout for orders, inventory, expenses, and reports. Choose day, week, or month
+                {isAdmin ? '' : ' (today only)'} — tap <span className="font-medium">Size</span> to match your
+                label paper.
               </p>
             </div>
-            <button
-              type="button"
-              onClick={handlePrint}
+            <FlowerPrintControls
               disabled={disabled || loading || !report}
-              className="flower-btn-primary inline-flex gap-2"
-            >
-              <Printer className="h-4 w-4" />
-              Print report
-            </button>
+              label="Print report"
+            />
           </div>
 
           {isAdmin ? (

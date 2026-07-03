@@ -11,7 +11,8 @@ import type { FlowerBranchOption, FlowerInventoryMovementRow, FlowerInventorySto
 import FlowerPageHeader from '../../shared/components/FlowerPageHeader';
 import { RequireFlowerAdmin } from '../components/RequireFlowerAuth';
 import FlowerInventoryStockPrint from '../components/FlowerPrintableInventoryStockPanel';
-import { Minus, Plus, ArrowLeftRight, Package, Printer, ChevronDown } from 'lucide-react';
+import FlowerPrintControls from '../../shared/components/FlowerPrintControls';
+import { Minus, Plus, ArrowLeftRight, Package, ChevronDown } from 'lucide-react';
 import { INVENTORY_MOVEMENT_TYPE_LABELS } from '../../shared/utils/flower-format';
 import {
   compareInventoryStockRows,
@@ -751,10 +752,6 @@ export default function FlowerInventoryPage() {
   const isStockView = activeTab === 'stock' || !isAdmin;
   const canPrintBranchStock = isStockView && !isAllBranchesView;
 
-  function handlePrintStock() {
-    window.print();
-  }
-
   return (
     <div className="animate-fade-in">
       <div className="print:hidden">
@@ -1067,14 +1064,7 @@ export default function FlowerInventoryPage() {
             )}
             {isAdmin && !isAllBranchesView && filteredDisplayStock.length > 0 ? (
               <div className="flex justify-end">
-                <button
-                  type="button"
-                  onClick={handlePrintStock}
-                  className="flower-btn-secondary inline-flex gap-2 text-sm"
-                >
-                  <Printer className="h-4 w-4" />
-                  Print stock
-                </button>
+                <FlowerPrintControls label="Print stock" showSizeHint={false} />
               </div>
             ) : null}
           </div>
@@ -1082,14 +1072,7 @@ export default function FlowerInventoryPage() {
           <div className="mt-5 hidden overflow-x-auto rounded-2xl border border-brand-muted/40 md:block">
             {isAdmin && !isAllBranchesView ? (
               <div className="flex items-center justify-end border-b border-brand-muted/30 bg-brand-beige/20 px-3 py-2">
-                <button
-                  type="button"
-                  onClick={handlePrintStock}
-                  className="flower-btn-secondary inline-flex gap-2 text-sm"
-                >
-                  <Printer className="h-4 w-4" />
-                  Print stock
-                </button>
+                <FlowerPrintControls label="Print stock" showSizeHint={false} />
               </div>
             ) : null}
             <table className="min-w-full text-left text-sm">

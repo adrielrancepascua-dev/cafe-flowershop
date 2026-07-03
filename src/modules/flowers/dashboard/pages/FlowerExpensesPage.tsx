@@ -1,5 +1,4 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Printer } from 'lucide-react';
 import {
   createFlowerStaffExpense,
   deleteFlowerStaffExpense,
@@ -12,6 +11,7 @@ import type { FlowerStaffExpense } from '../../shared/types/flower-expense';
 import type { FlowerBranchOption } from '../../shared/types/flower-inventory';
 import FlowerPageHeader from '../../shared/components/FlowerPageHeader';
 import FlowerMobileCardList from '../../shared/components/FlowerMobileCardList';
+import FlowerPrintControls from '../../shared/components/FlowerPrintControls';
 import {
   FlowerThermalExpensesDocument,
   type FlowerThermalExpenseSection,
@@ -104,18 +104,13 @@ export default function FlowerExpensesPage() {
   const canPrintExpenses = printableExpenseSections.some((section) => section.expenses.length > 0);
   const [expensesPrintTimestamp, setExpensesPrintTimestamp] = useState('');
 
-  function handlePrintExpenses() {
+  function preparePrintExpenses() {
     setExpensesPrintTimestamp(
       new Date().toLocaleString('en-PH', {
         dateStyle: 'medium',
         timeStyle: 'short',
       }),
     );
-    requestAnimationFrame(() => {
-      requestAnimationFrame(() => {
-        window.print();
-      });
-    });
   }
 
   async function loadData() {
@@ -283,14 +278,11 @@ export default function FlowerExpensesPage() {
             </p>
           ) : null}
           {canPrintExpenses ? (
-            <button
-              type="button"
-              onClick={handlePrintExpenses}
-              className="flower-btn-secondary inline-flex items-center gap-2 px-3 py-2 text-sm"
-            >
-              <Printer className="h-4 w-4" />
-              {branchFilter === 'all' ? 'Print all branches' : 'Print expenses'}
-            </button>
+            <FlowerPrintControls
+              onPrint={preparePrintExpenses}
+              label={branchFilter === 'all' ? 'Print all branches' : 'Print expenses'}
+              showSizeHint={false}
+            />
           ) : null}
         </div>
       ) : staffBranchName ? (
@@ -299,14 +291,11 @@ export default function FlowerExpensesPage() {
             {staffBranchName} branch
           </p>
           {canPrintExpenses ? (
-            <button
-              type="button"
-              onClick={handlePrintExpenses}
-              className="flower-btn-secondary inline-flex items-center gap-2 px-3 py-2 text-sm"
-            >
-              <Printer className="h-4 w-4" />
-              Print expenses
-            </button>
+            <FlowerPrintControls
+              onPrint={preparePrintExpenses}
+              label="Print expenses"
+              showSizeHint={false}
+            />
           ) : null}
         </div>
       ) : null}
