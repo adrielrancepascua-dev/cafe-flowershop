@@ -196,6 +196,47 @@
     border-bottom: 0;
   }
 
+  .flower-thermal-order-slip {
+    break-inside: avoid;
+    page-break-inside: avoid;
+    padding-top: calc(1mm * var(--flower-print-font-scale, 1));
+    padding-bottom: calc(2mm * var(--flower-print-font-scale, 1));
+    margin-bottom: calc(3mm * var(--flower-print-font-scale, 1));
+  }
+
+  .flower-thermal-order-slip:not(:last-child) {
+    break-after: page;
+    page-break-after: always;
+  }
+
+  .flower-thermal-order-slip .flower-thermal-divider {
+    margin: calc(2mm * var(--flower-print-font-scale, 1)) 0;
+  }
+
+  .flower-thermal-order-slip .flower-thermal-section-title {
+    margin-top: calc(2mm * var(--flower-print-font-scale, 1));
+  }
+
+  .flower-thermal-order-slip .flower-thermal-line {
+    margin-top: calc(1mm * var(--flower-print-font-scale, 1));
+    line-height: 1.25;
+  }
+
+  .flower-thermal-order-slip .flower-thermal-brand {
+    margin-bottom: calc(1mm * var(--flower-print-font-scale, 1));
+  }
+
+  .flower-thermal-schedule,
+  .flower-thermal-inline-label {
+    font-weight: 700;
+  }
+
+  .flower-thermal-schedule {
+    font-size: calc(14pt * var(--flower-print-font-scale, 1));
+    line-height: 1.25;
+    margin: 0;
+  }
+
   .flower-thermal-brand,
   .flower-thermal-order-ref,
   .flower-thermal-fulfillment,

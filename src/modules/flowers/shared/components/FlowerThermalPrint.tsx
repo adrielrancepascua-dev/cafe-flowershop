@@ -14,7 +14,6 @@ import {
   formatThermalTimeLine,
 } from '../utils/flower-thermal-format';
 import { ORDER_STATUS_LABELS, PRICE_FORMATTER } from '../utils/flower-format';
-import { formatFlowerPaymentModeLabel } from '../utils/flower-payment';
 
 type FlowerThermalPrintRootProps = {
   id?: string;
@@ -44,52 +43,32 @@ export function FlowerThermalOrderSlip({ order }: { order: FlowerOrder }) {
     .filter(Boolean);
 
   const items = order.items ?? [];
+  const scheduleLine = [
+    formatThermalDateLine(order.scheduled_for),
+    formatThermalTimeLine(order.scheduled_for),
+    order.branch_name.toUpperCase(),
+  ]
+    .filter(Boolean)
+    .join(' · ');
 
   return (
-    <section className="flower-thermal-slip">
+    <section className="flower-thermal-slip flower-thermal-order-slip">
       <p className="flower-thermal-brand">{THERMAL_BRAND_NAME.toUpperCase()}</p>
       <p className="flower-thermal-order-ref">{formatThermalOrderRef(order.id)}</p>
       <p className="flower-thermal-fulfillment">{formatThermalClaimMode(order.claim_mode)}</p>
-      <p className="flower-thermal-date">{formatThermalDateLine(order.scheduled_for)}</p>
-      <p className="flower-thermal-time">{formatThermalTimeLine(order.scheduled_for)}</p>
-      <p className="flower-thermal-branch">{order.branch_name.toUpperCase()}</p>
+      {scheduleLine ? <p className="flower-thermal-schedule">{scheduleLine}</p> : null}
 
       <FlowerThermalDivider />
 
-      <FlowerThermalSectionTitle>RECEIVER</FlowerThermalSectionTitle>
-      <p className="flower-thermal-line">{order.receiver.toUpperCase()}</p>
+      <p className="flower-thermal-line">
+        <span className="flower-thermal-inline-label">RECEIVER:</span> {order.receiver.toUpperCase()}
+      </p>
 
       {order.customer_social.trim() ? (
-        <>
-          <FlowerThermalSectionTitle>CUSTOMER</FlowerThermalSectionTitle>
-          <p className="flower-thermal-line">{order.customer_social.trim().toUpperCase()}</p>
-        </>
-      ) : null}
-
-      <FlowerThermalSectionTitle>STATUS</FlowerThermalSectionTitle>
-      <p className="flower-thermal-line">
-        {(ORDER_STATUS_LABELS[order.status] ?? order.status).toUpperCase()}
-      </p>
-
-      <FlowerThermalSectionTitle>PAYMENT</FlowerThermalSectionTitle>
-      <p className="flower-thermal-line">TOTAL: {PRICE_FORMATTER.format(order.total_amount)}</p>
-      <p className="flower-thermal-line">DOWN: {PRICE_FORMATTER.format(order.downpayment)}</p>
-      <p className="flower-thermal-line">BALANCE: {PRICE_FORMATTER.format(order.balance)}</p>
-      <p className="flower-thermal-line">
-        DP VIA: {formatFlowerPaymentModeLabel(order.payment_mode).toUpperCase()}
-      </p>
-      {order.balance_paid && order.balance_payment_mode ? (
         <p className="flower-thermal-line">
-          BAL VIA: {formatFlowerPaymentModeLabel(order.balance_payment_mode).toUpperCase()}
+          <span className="flower-thermal-inline-label">CUSTOMER:</span>{' '}
+          {order.customer_social.trim().toUpperCase()}
         </p>
-      ) : null}
-      {order.balance_payment_reference?.trim() ? (
-        <p className="flower-thermal-line">
-          BAL REF: {order.balance_payment_reference.trim().toUpperCase()}
-        </p>
-      ) : null}
-      {order.payment_reference.trim() ? (
-        <p className="flower-thermal-line">REF: {order.payment_reference.trim().toUpperCase()}</p>
       ) : null}
 
       <FlowerThermalSectionTitle>ORDER</FlowerThermalSectionTitle>
@@ -115,28 +94,23 @@ export function FlowerThermalOrderSlip({ order }: { order: FlowerOrder }) {
       ) : null}
 
       {order.greeting_card.trim() ? (
-        <>
-          <FlowerThermalSectionTitle>GREETING CARD</FlowerThermalSectionTitle>
-          <p className="flower-thermal-line flower-thermal-wrap">
-            {order.greeting_card.trim().toUpperCase()}
-          </p>
-        </>
+        <p className="flower-thermal-line flower-thermal-wrap">
+          <span className="flower-thermal-inline-label">GREETING CARD:</span>{' '}
+          {order.greeting_card.trim().toUpperCase()}
+        </p>
       ) : null}
 
       {order.special_instructions.trim() ? (
-        <>
-          <FlowerThermalSectionTitle>SPECIAL INSTRUCTIONS</FlowerThermalSectionTitle>
-          <p className="flower-thermal-line flower-thermal-wrap">
-            {order.special_instructions.trim().toUpperCase()}
-          </p>
-        </>
+        <p className="flower-thermal-line flower-thermal-wrap">
+          <span className="flower-thermal-inline-label">SPECIAL INSTRUCTIONS:</span>{' '}
+          {order.special_instructions.trim().toUpperCase()}
+        </p>
       ) : null}
 
       {order.notes.trim() ? (
-        <>
-          <FlowerThermalSectionTitle>NOTES</FlowerThermalSectionTitle>
-          <p className="flower-thermal-line flower-thermal-wrap">{order.notes.trim().toUpperCase()}</p>
-        </>
+        <p className="flower-thermal-line flower-thermal-wrap">
+          <span className="flower-thermal-inline-label">NOTES:</span> {order.notes.trim().toUpperCase()}
+        </p>
       ) : null}
     </section>
   );
