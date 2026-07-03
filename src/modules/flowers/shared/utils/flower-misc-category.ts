@@ -29,3 +29,14 @@ export function normalizeMiscCategory(value: string | null | undefined): MiscPro
 export function miscCategoryFromFlowerType(flowerType: string | null | undefined): MiscProductCategory {
   return normalizeMiscCategory(flowerType);
 }
+
+export function resolveMiscCategoryFromStored(
+  flowerType: string | null | undefined,
+  color: string | null | undefined,
+): MiscProductCategory {
+  return miscCategoryFromFlowerType(flowerType || color);
+}
+
+export function miscCategoryStorageLabel(category: MiscProductCategory): string {
+  return miscCategoryLabel(category);
+}

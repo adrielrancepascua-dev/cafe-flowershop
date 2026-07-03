@@ -98,7 +98,7 @@ export default function FlowerProductsPage() {
 
     await createFlowerProduct({
       name: newName.trim(),
-      flower_type: newName.trim(),
+      ...(catalogTab === 'flower' ? { flower_type: newName.trim() } : {}),
       product_kind: catalogTab,
       misc_category: catalogTab === 'misc' ? newMiscCategory : undefined,
       color: catalogTab === 'flower' ? newColor.trim() : '',

@@ -11,7 +11,7 @@ import { normalizeFlowerProductKind } from '../../../modules/flowers/shared/util
 import { getFlowerProductType } from '../../../modules/flowers/shared/utils/flower-product-type';
 import {
   miscCategoryFromFlowerType,
-  miscCategoryLabel,
+  miscCategoryStorageLabel,
 } from '../../../modules/flowers/shared/utils/flower-misc-category';
 
 const PRODUCTS_STORAGE_KEY = 'papers_petals_flower_stems_v2';
@@ -90,18 +90,21 @@ export async function listFlowerStemsLocal(): Promise<FlowerProduct[]> {
 export async function createFlowerStemLocal(input: CreateFlowerProductInput): Promise<FlowerProduct> {
   const products = readProductsFromStorage();
   const product_kind = normalizeFlowerProductKind(input.product_kind);
-  const color = product_kind === 'misc' ? '' : normalizeFlowerProductColor(input.color);
+  const miscCategory =
+    input.misc_category ?? miscCategoryFromFlowerType(input.flower_type ?? input.color);
+  const color =
+    product_kind === 'misc' ? miscCategoryStorageLabel(miscCategory) : normalizeFlowerProductColor(input.color);
   const flower_type =
     product_kind === 'flower'
       ? (input.flower_type?.trim() || input.name.trim())
-      : miscCategoryLabel(input.misc_category ?? miscCategoryFromFlowerType(input.flower_type));
+      : miscCategoryStorageLabel(miscCategory);
   const name = product_kind === 'flower' ? flower_type : input.name.trim();
   const created: FlowerProduct = {
     id: `${product_kind === 'misc' ? 'misc' : 'stem'}-${Date.now()}`,
     name,
     flower_type,
     product_kind,
-    color,
+    color: product_kind === 'misc' ? '' : color,
     unit_cost: input.unit_cost,
     is_active: input.is_active ?? true,
     created_at: new Date().toISOString(),
@@ -123,20 +126,24 @@ export async function updateFlowerStemLocal(
   }
 
   const product_kind = products[index].product_kind;
-  const color = normalizeFlowerProductColor(input.color);
+  const miscCategory =
+    input.misc_category ??
+    miscCategoryFromFlowerType(input.flower_type ?? products[index].flower_type ?? products[index].color);
+  const color =
+    product_kind === 'misc'
+      ? miscCategoryStorageLabel(miscCategory)
+      : normalizeFlowerProductColor(input.color);
   const flower_type =
     product_kind === 'flower'
       ? (input.flower_type?.trim() || input.name.trim())
-      : miscCategoryLabel(
-          input.misc_category ?? miscCategoryFromFlowerType(input.flower_type ?? products[index].flower_type),
-        );
+      : miscCategoryStorageLabel(miscCategory);
   const name = product_kind === 'flower' ? flower_type : input.name.trim();
 
   products[index] = {
     ...products[index],
     name,
     flower_type,
-    color,
+    color: product_kind === 'misc' ? '' : color,
     unit_cost: input.unit_cost,
   };
 
