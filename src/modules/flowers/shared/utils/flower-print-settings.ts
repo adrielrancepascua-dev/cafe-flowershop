@@ -22,10 +22,19 @@ export interface FlowerPrintPreset {
   pageHeight: FlowerPrintPageHeight;
 }
 
-export const FLOWER_PRINT_SETTINGS_STORAGE_KEY = 'papers_petals_flower_print_settings_v1';
+export const FLOWER_PRINT_SETTINGS_STORAGE_KEY = 'papers_petals_flower_print_settings_v2';
 export const FLOWER_PRINT_PAGE_STYLE_ID = 'flower-print-page-style';
 
 export const FLOWER_PRINT_PRESETS: FlowerPrintPreset[] = [
+  {
+    id: '4x6in',
+    label: '4 × 6 in coupon',
+    description: '100 × 150 mm label — recommended for order slips',
+    widthMm: 100,
+    marginMm: 3,
+    fontScale: 1.6,
+    pageHeight: 150,
+  },
   {
     id: '80mm',
     label: '80 mm receipt',
@@ -54,15 +63,6 @@ export const FLOWER_PRINT_PRESETS: FlowerPrintPreset[] = [
     pageHeight: 'auto',
   },
   {
-    id: '4x6in',
-    label: '4 × 6 in coupon',
-    description: 'Photo / coupon sheet (101.6 × 152.4 mm)',
-    widthMm: 101.6,
-    marginMm: 5,
-    fontScale: 1.25,
-    pageHeight: 152.4,
-  },
-  {
     id: 'a6',
     label: 'A6 sheet',
     description: '148 × 105 mm card',
@@ -83,9 +83,13 @@ export const FLOWER_PRINT_PRESETS: FlowerPrintPreset[] = [
 ];
 
 export const DEFAULT_FLOWER_PRINT_SETTINGS: FlowerPrintSettings = {
-  ...FLOWER_PRINT_PRESETS[0],
-  presetId: '80mm',
+  ...FLOWER_PRINT_PRESETS.find((preset) => preset.id === '4x6in')!,
+  presetId: '4x6in',
 };
+
+export function isCouponPrintSettings(settings: FlowerPrintSettings): boolean {
+  return settings.pageHeight !== 'auto' && settings.pageHeight >= 120;
+}
 
 function clampNumber(value: number, min: number, max: number): number {
   return Math.min(max, Math.max(min, value));
@@ -189,7 +193,17 @@ export function applyFlowerPrintSettings(settings: FlowerPrintSettings): FlowerP
   root.style.setProperty('--flower-print-width', `${normalized.widthMm}mm`);
   root.style.setProperty('--flower-print-margin', `${normalized.marginMm}mm`);
   root.style.setProperty('--flower-print-font-scale', String(normalized.fontScale));
+  root.style.setProperty(
+    '--flower-print-page-height',
+    normalized.pageHeight === 'auto' ? 'auto' : `${normalized.pageHeight}mm`,
+  );
   root.dataset.flowerPrintPreset = normalized.presetId;
+
+  if (isCouponPrintSettings(normalized)) {
+    root.dataset.flowerPrintCoupon = 'true';
+  } else {
+    delete root.dataset.flowerPrintCoupon;
+  }
 
   updateFlowerPrintPageStyle(normalized);
   return normalized;

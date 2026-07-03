@@ -4,6 +4,7 @@ import {
   DEFAULT_FLOWER_PRINT_SETTINGS,
   FLOWER_PRINT_PRESETS,
   describeFlowerPrintSettings,
+  isCouponPrintSettings,
   normalizeFlowerPrintSettings,
   readFlowerPrintSettings,
   saveFlowerPrintSettings,
@@ -41,6 +42,8 @@ export default function FlowerPrintSettingsModal({ open, onClose }: FlowerPrintS
   }, [open]);
 
   const previewDescription = useMemo(() => describeFlowerPrintSettings(draft), [draft]);
+  const couponPreview = isCouponPrintSettings(draft);
+  const previewScale = draft.fontScale;
 
   if (!open) {
     return null;
@@ -162,8 +165,8 @@ export default function FlowerPrintSettingsModal({ open, onClose }: FlowerPrintS
                 className="flower-input mt-1.5"
               />
               <span className="mt-1 block text-xs text-brand-brown/60">
-                Use <span className="font-medium">auto</span> for continuous roll paper, or a height in mm for
-                fixed coupons (e.g. 152.4 for 6 in).
+                Use <span className="font-medium">auto</span> for continuous roll paper, or{' '}
+                <span className="font-medium">150</span> for 4×6 in labels (100×150 mm).
               </span>
             </label>
           </div>
@@ -177,24 +180,36 @@ export default function FlowerPrintSettingsModal({ open, onClose }: FlowerPrintS
                 style={{
                   width: `${draft.widthMm}mm`,
                   maxWidth: '100%',
+                  minHeight: couponPreview && draft.pageHeight !== 'auto' ? `${draft.pageHeight}mm` : undefined,
                   fontFamily: 'Arial, Helvetica, sans-serif',
-                  fontSize: `calc(14pt * ${draft.fontScale})`,
-                  lineHeight: 1.4,
+                  fontSize: `calc(${couponPreview ? 17 : 14}pt * ${previewScale})`,
+                  lineHeight: 1.35,
                 }}
               >
-                <p style={{ fontWeight: 700, fontSize: `calc(18pt * ${draft.fontScale})` }}>PAPERS &amp; PETALS</p>
-                <p style={{ fontWeight: 700, fontSize: `calc(16pt * ${draft.fontScale})` }}>311-7814</p>
-                <p style={{ fontSize: `calc(15pt * ${draft.fontScale})` }}>STORE PICK UP</p>
-                <p style={{ fontSize: `calc(14pt * ${draft.fontScale})`, marginTop: '0.5rem' }}>RECEIVER: SAMPLE</p>
-                <p style={{ fontSize: `calc(14pt * ${draft.fontScale})` }}>3 X LOCAL ROSE (RED)</p>
+                <p style={{ fontWeight: 700, fontSize: `calc(${couponPreview ? 28 : 18}pt * ${previewScale})` }}>
+                  PAPERS &amp; PETALS
+                </p>
+                <p style={{ fontWeight: 700, fontSize: `calc(${couponPreview ? 22 : 16}pt * ${previewScale})` }}>
+                  311-7814
+                </p>
+                <p style={{ fontSize: `calc(${couponPreview ? 20 : 15}pt * ${previewScale})` }}>STORE PICK UP</p>
+                <p style={{ fontSize: `calc(${couponPreview ? 18 : 14}pt * ${previewScale})`, marginTop: '0.35rem' }}>
+                  JULY 10 · 10:00am · URDANETA
+                </p>
+                <p style={{ fontSize: `calc(${couponPreview ? 17 : 14}pt * ${previewScale})`, marginTop: '0.5rem' }}>
+                  RECEIVER: SAMPLE
+                </p>
+                <p style={{ fontSize: `calc(${couponPreview ? 17 : 14}pt * ${previewScale})` }}>
+                  3 X LOCAL ROSE (RED)
+                </p>
               </div>
             </div>
           </div>
 
           <p className="mt-4 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-950">
-            In the print dialog, choose paper that matches this width. If the slip still prints tiny, increase{' '}
-            <span className="font-semibold">Text size</span> or confirm the printer paper size — not &quot;Fit to
-            page&quot; or A4 scaling.
+            For 4×6 in printers, choose the <span className="font-semibold">4 × 6 in coupon</span> preset (100×150
+            mm) and match it in the printer app. If text is still small, raise <span className="font-semibold">Text
+            size</span>. Turn off &quot;Fit to page&quot; scaling.
           </p>
         </div>
 
