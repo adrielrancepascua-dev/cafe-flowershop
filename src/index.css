@@ -210,51 +210,75 @@
   }
 
   html[data-flower-print-coupon='true'] .flower-thermal-order-slip {
-    padding-top: calc(2.5mm * var(--flower-print-font-scale, 1));
-    padding-bottom: calc(2.5mm * var(--flower-print-font-scale, 1));
+    min-height: calc(var(--flower-print-page-height, 150mm) - (2 * var(--flower-print-margin, 3mm)));
+    padding-top: calc(3.5mm * var(--flower-print-font-scale, 1));
+    padding-bottom: calc(3.5mm * var(--flower-print-font-scale, 1));
     box-sizing: border-box;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-evenly;
   }
 
   html[data-flower-print-coupon='true'] .flower-thermal-order-slip .flower-thermal-brand {
-    font-size: calc(20pt * var(--flower-print-font-scale, 1));
-    line-height: 1.1;
-    margin-bottom: calc(1.5mm * var(--flower-print-font-scale, 1));
+    font-size: calc(21pt * var(--flower-print-font-scale, 1));
+    line-height: 1.12;
+    margin-bottom: 0;
   }
 
   html[data-flower-print-coupon='true'] .flower-thermal-order-slip .flower-thermal-order-ref {
-    font-size: calc(16pt * var(--flower-print-font-scale, 1));
+    font-size: calc(17pt * var(--flower-print-font-scale, 1));
     line-height: 1.15;
   }
 
   html[data-flower-print-coupon='true'] .flower-thermal-order-slip .flower-thermal-fulfillment {
-    font-size: calc(15pt * var(--flower-print-font-scale, 1));
-    line-height: 1.2;
+    font-size: calc(16pt * var(--flower-print-font-scale, 1));
+    line-height: 1.18;
   }
 
   html[data-flower-print-coupon='true'] .flower-thermal-order-slip .flower-thermal-schedule {
-    font-size: calc(14pt * var(--flower-print-font-scale, 1));
+    font-size: calc(15pt * var(--flower-print-font-scale, 1));
     line-height: 1.2;
-    margin-top: calc(1mm * var(--flower-print-font-scale, 1));
+    margin-top: 0;
   }
 
   html[data-flower-print-coupon='true'] .flower-thermal-order-slip .flower-thermal-divider {
-    margin: calc(2.5mm * var(--flower-print-font-scale, 1)) 0;
+    margin: 0;
     border-top-width: 1px;
+    flex-shrink: 0;
   }
 
   html[data-flower-print-coupon='true'] .flower-thermal-order-slip .flower-thermal-section-title {
-    font-size: calc(13.5pt * var(--flower-print-font-scale, 1));
-    margin-top: calc(2.5mm * var(--flower-print-font-scale, 1));
+    font-size: calc(15pt * var(--flower-print-font-scale, 1));
+    margin-top: 0;
   }
 
   html[data-flower-print-coupon='true'] .flower-thermal-order-slip .flower-thermal-line {
-    font-size: calc(13.5pt * var(--flower-print-font-scale, 1));
-    margin-top: calc(1.75mm * var(--flower-print-font-scale, 1));
-    line-height: 1.28;
+    font-size: calc(15pt * var(--flower-print-font-scale, 1));
+    margin-top: 0;
+    line-height: 1.3;
   }
 
   html[data-flower-print-coupon='true'] .flower-thermal-order-slip .flower-thermal-section-title + .flower-thermal-line {
-    margin-top: calc(1.25mm * var(--flower-print-font-scale, 1));
+    margin-top: 0;
+  }
+
+  html[data-flower-print-coupon='true'] .flower-thermal-order-slip > * {
+    flex-shrink: 0;
+  }
+
+  html[data-flower-print-coupon='true'] .flower-thermal-order-slip-block {
+    display: flex;
+    flex-direction: column;
+    gap: calc(1.5mm * var(--flower-print-font-scale, 1));
+  }
+
+  html[data-flower-print-coupon='true'] .flower-thermal-order-slip-block .flower-thermal-line,
+  html[data-flower-print-coupon='true'] .flower-thermal-order-slip-block .flower-thermal-section-title,
+  html[data-flower-print-coupon='true'] .flower-thermal-order-slip-block .flower-thermal-brand,
+  html[data-flower-print-coupon='true'] .flower-thermal-order-slip-block .flower-thermal-order-ref,
+  html[data-flower-print-coupon='true'] .flower-thermal-order-slip-block .flower-thermal-fulfillment,
+  html[data-flower-print-coupon='true'] .flower-thermal-order-slip-block .flower-thermal-schedule {
+    margin-top: 0;
   }
 
   .flower-thermal-order-slip .flower-thermal-divider {

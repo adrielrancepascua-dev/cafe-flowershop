@@ -53,64 +53,76 @@ export function FlowerThermalOrderSlip({ order }: { order: FlowerOrder }) {
 
   return (
     <section className="flower-thermal-slip flower-thermal-order-slip">
-      <p className="flower-thermal-brand">{THERMAL_BRAND_NAME.toUpperCase()}</p>
-      <p className="flower-thermal-order-ref">{formatThermalOrderRef(order.id)}</p>
-      <p className="flower-thermal-fulfillment">{formatThermalClaimMode(order.claim_mode)}</p>
-      {scheduleLine ? <p className="flower-thermal-schedule">{scheduleLine}</p> : null}
+      <div className="flower-thermal-order-slip-block">
+        <p className="flower-thermal-brand">{THERMAL_BRAND_NAME.toUpperCase()}</p>
+        <p className="flower-thermal-order-ref">{formatThermalOrderRef(order.id)}</p>
+        <p className="flower-thermal-fulfillment">{formatThermalClaimMode(order.claim_mode)}</p>
+        {scheduleLine ? <p className="flower-thermal-schedule">{scheduleLine}</p> : null}
+      </div>
 
       <FlowerThermalDivider />
 
-      <p className="flower-thermal-line">
-        <span className="flower-thermal-inline-label">RECEIVER:</span> {order.receiver.toUpperCase()}
-      </p>
-
-      {order.customer_social.trim() ? (
+      <div className="flower-thermal-order-slip-block">
         <p className="flower-thermal-line">
-          <span className="flower-thermal-inline-label">CUSTOMER:</span>{' '}
-          {order.customer_social.trim().toUpperCase()}
+          <span className="flower-thermal-inline-label">RECEIVER:</span> {order.receiver.toUpperCase()}
         </p>
-      ) : null}
 
-      <FlowerThermalSectionTitle>ORDER</FlowerThermalSectionTitle>
-      {items.length > 0 ? (
-        items.map((item) => (
-          <p key={`${order.id}-${item.product_id}-${item.item_name}`} className="flower-thermal-line">
-            {formatThermalItemLine(item.quantity, item.item_name)}
+        {order.customer_social.trim() ? (
+          <p className="flower-thermal-line">
+            <span className="flower-thermal-inline-label">CUSTOMER:</span>{' '}
+            {order.customer_social.trim().toUpperCase()}
           </p>
-        ))
-      ) : (
-        <p className="flower-thermal-line">NO FLOWERS LISTED</p>
-      )}
+        ) : null}
+      </div>
 
-      {wrapLines.length > 0 ? (
-        <>
-          <FlowerThermalSectionTitle>WRAP COLOR</FlowerThermalSectionTitle>
-          {wrapLines.map((line) => (
-            <p key={`${order.id}-${line}`} className="flower-thermal-line">
-              {line}
+      <div className="flower-thermal-order-slip-block">
+        <FlowerThermalSectionTitle>ORDER</FlowerThermalSectionTitle>
+        {items.length > 0 ? (
+          items.map((item) => (
+            <p key={`${order.id}-${item.product_id}-${item.item_name}`} className="flower-thermal-line">
+              {formatThermalItemLine(item.quantity, item.item_name)}
             </p>
-          ))}
-        </>
-      ) : null}
+          ))
+        ) : (
+          <p className="flower-thermal-line">NO FLOWERS LISTED</p>
+        )}
 
-      {order.greeting_card.trim() ? (
-        <p className="flower-thermal-line flower-thermal-wrap">
-          <span className="flower-thermal-inline-label">GREETING CARD:</span>{' '}
-          {order.greeting_card.trim().toUpperCase()}
-        </p>
-      ) : null}
+        {wrapLines.length > 0 ? (
+          <>
+            <FlowerThermalSectionTitle>WRAP COLOR</FlowerThermalSectionTitle>
+            {wrapLines.map((line) => (
+              <p key={`${order.id}-${line}`} className="flower-thermal-line">
+                {line}
+              </p>
+            ))}
+          </>
+        ) : null}
+      </div>
 
-      {order.special_instructions.trim() ? (
-        <p className="flower-thermal-line flower-thermal-wrap">
-          <span className="flower-thermal-inline-label">SPECIAL INSTRUCTIONS:</span>{' '}
-          {order.special_instructions.trim().toUpperCase()}
-        </p>
-      ) : null}
+      {order.greeting_card.trim() ||
+      order.special_instructions.trim() ||
+      order.notes.trim() ? (
+        <div className="flower-thermal-order-slip-block">
+          {order.greeting_card.trim() ? (
+            <p className="flower-thermal-line flower-thermal-wrap">
+              <span className="flower-thermal-inline-label">GREETING CARD:</span>{' '}
+              {order.greeting_card.trim().toUpperCase()}
+            </p>
+          ) : null}
 
-      {order.notes.trim() ? (
-        <p className="flower-thermal-line flower-thermal-wrap">
-          <span className="flower-thermal-inline-label">NOTES:</span> {order.notes.trim().toUpperCase()}
-        </p>
+          {order.special_instructions.trim() ? (
+            <p className="flower-thermal-line flower-thermal-wrap">
+              <span className="flower-thermal-inline-label">SPECIAL INSTRUCTIONS:</span>{' '}
+              {order.special_instructions.trim().toUpperCase()}
+            </p>
+          ) : null}
+
+          {order.notes.trim() ? (
+            <p className="flower-thermal-line flower-thermal-wrap">
+              <span className="flower-thermal-inline-label">NOTES:</span> {order.notes.trim().toUpperCase()}
+            </p>
+          ) : null}
+        </div>
       ) : null}
     </section>
   );
