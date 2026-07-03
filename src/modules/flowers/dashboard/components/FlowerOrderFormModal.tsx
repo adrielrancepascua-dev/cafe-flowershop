@@ -8,6 +8,7 @@ import {
   formatFlowerClaimModeLabel,
   formatScheduledForFieldLabel,
   getFlowerOrderStatusSequenceForClaimMode,
+  FLOWER_ORDER_TERMINAL_STATUSES,
   normalizeOrderStatusForPicker,
   type CreateFlowerOrderInput,
   type FlowerClaimMode,
@@ -1175,9 +1176,7 @@ export default function FlowerOrderFormModal({
     existingOrder && existingOrder.balance > 0 && !existingOrder.balance_paid,
   );
   const showBalancePaidBanner = Boolean(existingOrder?.balance_paid);
-  const showReadyPhotoSection = Boolean(
-    existingOrder && onReadyPhotoSubmit && form.claim_mode !== 'walk_in',
-  );
+  const showReadyPhotoSection = Boolean(existingOrder && onReadyPhotoSubmit);
   const showTopPrepSection = showBalanceDue || showBalancePaidBanner || showReadyPhotoSection;
 
   if (!open) {
@@ -1397,7 +1396,7 @@ export default function FlowerOrderFormModal({
     }
 
     if (
-      (nextStatus === 'picked_up' || nextStatus === 'delivered') &&
+      FLOWER_ORDER_TERMINAL_STATUSES.includes(nextStatus) &&
       existingOrder.balance > 0 &&
       !existingOrder.balance_paid
     ) {

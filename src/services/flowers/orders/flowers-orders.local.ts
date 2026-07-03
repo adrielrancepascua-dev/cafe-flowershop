@@ -9,6 +9,7 @@ import type {
   ListFlowerOrdersOptions,
   UpdateFlowerOrderInput,
 } from '../../../modules/flowers/shared/types/flower-order';
+import { FLOWER_ORDER_TERMINAL_STATUSES } from '../../../modules/flowers/shared/types/flower-order';
 import { normalizeFlowerPaymentMode } from '../../../modules/flowers/shared/utils/flower-payment';
 import { buildOrderId } from '../../orders/order-id';
 import {
@@ -330,7 +331,7 @@ export async function updateFlowerOrderStatusLocal(
   const current = orders[index];
 
   if (
-    (status === 'picked_up' || status === 'delivered') &&
+    FLOWER_ORDER_TERMINAL_STATUSES.includes(status) &&
     current.balance > 0 &&
     !current.balance_paid
   ) {

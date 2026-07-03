@@ -1,5 +1,10 @@
 import type { FlowerClaimMode, FlowerOrder, FlowerOrderStatus } from '../types/flower-order';
-import { parseFlowerTimestamp, scheduledForToDateKey, toDateKey } from './flower-format';
+import {
+  getLocalDayBoundsIso,
+  parseFlowerTimestamp,
+  scheduledForToDateKey,
+  toDateKey,
+} from './flower-format';
 
 const PICKUP_PHOTO_LEAD_MS = 30 * 60 * 1000;
 const DELIVERY_PHOTO_LEAD_MS = 60 * 60 * 1000;
@@ -58,7 +63,7 @@ export function formatFinishedPhotoRequirementLabel(claimMode: FlowerClaimMode):
   }
 
   if (claimMode === 'walk_in') {
-    return 'Walk in — finished order photo is optional';
+    return 'Walk in — optional now; upload finished order photo by end of day';
   }
 
   return 'Pick up — upload finished order photo 30 minutes before pick up';
@@ -125,6 +130,16 @@ function buildPhotoMessage(
   return `Submit photo (${timeLabel} remaining)`;
 }
 
+function buildWalkInPhotoMessage(minutesUntilDeadline: number): string {
+  const timeLabel = formatMinutesRemaining(minutesUntilDeadline);
+
+  if (minutesUntilDeadline < 0) {
+    return `Submit photo by end of day (${timeLabel} overdue)`;
+  }
+
+  return `Submit photo by end of day (${timeLabel} remaining)`;
+}
+
 export function getOrderPrepDeadlineInfo(
   order: Pick<
     FlowerOrder,
@@ -132,7 +147,7 @@ export function getOrderPrepDeadlineInfo(
   >,
   nowMs: number = Date.now(),
 ): OrderPrepDeadlineInfo | null {
-  if (order.claim_mode === 'walk_in' || order.ready_photo_data_url) {
+  if (order.ready_photo_data_url) {
     return null;
   }
 
@@ -145,14 +160,39 @@ export function getOrderPrepDeadlineInfo(
     return null;
   }
 
-  const scheduledMs = parseFlowerTimestamp(order.scheduled_for).getTime();
-  if (Number.isNaN(scheduledMs)) {
+  const pickupDayKey = scheduledForToDateKey(order.scheduled_for);
+  const todayKey = toDateKey(new Date());
+
+  if (order.claim_mode === 'walk_in') {
+    if (pickupDayKey > todayKey) {
+      return null;
+    }
+
+    const { endIso } = getLocalDayBoundsIso(pickupDayKey);
+    const prepDeadlineMs = new Date(endIso).getTime();
+    const minutesUntilDeadline = (prepDeadlineMs - nowMs) / 60_000;
+    const urgency = resolveUrgency(minutesUntilDeadline, order.status);
+
+    return {
+      orderId: order.id,
+      prepDeadlineIso: endIso,
+      scheduledForIso: order.scheduled_for,
+      claimMode: order.claim_mode,
+      leadMinutes: 0,
+      minutesUntilDeadline,
+      urgency,
+      message: buildWalkInPhotoMessage(minutesUntilDeadline),
+      detail:
+        'Upload a photo of the finished walk-in order before the shop closes for the day. You can change status without the photo earlier.',
+    };
+  }
+
+  if (pickupDayKey < todayKey) {
     return null;
   }
 
-  const pickupDayKey = scheduledForToDateKey(order.scheduled_for);
-  const todayKey = toDateKey(new Date());
-  if (pickupDayKey < todayKey) {
+  const scheduledMs = parseFlowerTimestamp(order.scheduled_for).getTime();
+  if (Number.isNaN(scheduledMs)) {
     return null;
   }
 
@@ -215,6 +255,10 @@ export function isReadyPhotoRequiredForStatusChange(
   nextStatus: FlowerOrderStatus,
   nowMs: number = Date.now(),
 ): boolean {
+  if (order.claim_mode === 'walk_in') {
+    return false;
+  }
+
   if (order.ready_photo_data_url || !PHOTO_BLOCK_STATUSES.includes(nextStatus)) {
     return false;
   }

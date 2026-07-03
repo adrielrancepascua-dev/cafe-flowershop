@@ -43,20 +43,36 @@ export const FLOWER_ORDER_TERMINAL_STATUSES: FlowerOrderStatus[] = [
 export function getFlowerOrderStatusSequenceForClaimMode(
   claimMode: FlowerClaimMode,
 ): FlowerOrderStatus[] {
+  if (claimMode === 'walk_in') {
+    return ['not_started', 'ready', 'completed', 'cancelled'];
+  }
+
   const terminalStatus: FlowerOrderStatus =
-    claimMode === 'delivery' ? 'delivered' : 'picked_up'; // pickup + walk_in
+    claimMode === 'delivery' ? 'delivered' : 'picked_up';
 
   return ['not_started', 'ready', terminalStatus, 'cancelled'];
 }
 
-export const FLOWER_ORDER_COMPLETE_STATUSES: FlowerOrderStatus[] = ['picked_up', 'delivered'];
+export const FLOWER_ORDER_COMPLETE_STATUSES: FlowerOrderStatus[] = [
+  'picked_up',
+  'delivered',
+  'completed',
+];
 
 export function normalizeOrderStatusForPicker(
   status: FlowerOrderStatus,
   claimMode: FlowerClaimMode,
 ): FlowerOrderStatus {
   if (status === 'completed') {
-    return claimMode === 'delivery' ? 'delivered' : 'picked_up';
+    if (claimMode === 'delivery') {
+      return 'delivered';
+    }
+
+    if (claimMode === 'walk_in') {
+      return 'completed';
+    }
+
+    return 'picked_up';
   }
 
   return status;

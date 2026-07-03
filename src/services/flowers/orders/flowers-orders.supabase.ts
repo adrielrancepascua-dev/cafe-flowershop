@@ -8,6 +8,7 @@ import type {
   ListFlowerOrdersOptions,
   UpdateFlowerOrderInput,
 } from '../../../modules/flowers/shared/types/flower-order';
+import { FLOWER_ORDER_TERMINAL_STATUSES } from '../../../modules/flowers/shared/types/flower-order';
 import { getLocalDayBoundsIso } from '../../../modules/flowers/shared/utils/flower-format';
 import { normalizeFlowerPaymentMode } from '../../../modules/flowers/shared/utils/flower-payment';
 import type { FlowerPaymentMode } from '../../../modules/flowers/shared/types/flower-order';
@@ -541,7 +542,7 @@ export async function updateFlowerOrderStatusSupabase(
   }
 
   if (
-    (status === 'picked_up' || status === 'delivered') &&
+    FLOWER_ORDER_TERMINAL_STATUSES.includes(status) &&
     existing.balance > 0 &&
     !existing.balance_paid
   ) {
