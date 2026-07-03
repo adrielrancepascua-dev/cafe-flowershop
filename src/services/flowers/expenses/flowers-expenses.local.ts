@@ -6,7 +6,8 @@ import type {
   UpdateFlowerStaffExpenseInput,
   UpdateFlowerSupplierCostInput,
 } from '../../../modules/flowers/shared/types/flower-expense';
-import { FLOWER_BRANCHES_MOCK, FLOWER_STEMS_MOCK } from '../../../modules/flowers/shared/data/flowers.mock';
+import { FLOWER_BRANCHES_MOCK } from '../../../modules/flowers/shared/data/flowers.mock';
+import { lookupFlowerProductNameLocal } from '../products/flowers-products.local';
 
 const EXPENSES_STORAGE_KEY = 'papers_petals_staff_expenses_v1';
 const SUPPLIER_COSTS_STORAGE_KEY = 'papers_petals_supplier_costs_v1';
@@ -141,7 +142,7 @@ export async function createFlowerSupplierCostLocal(
 ): Promise<FlowerSupplierCost> {
   const costs = readSupplierCosts();
   const product = input.product_id
-    ? FLOWER_STEMS_MOCK.find((stem) => stem.id === input.product_id)
+    ? { name: lookupFlowerProductNameLocal(input.product_id) }
     : null;
 
   const created: FlowerSupplierCost = {
@@ -173,7 +174,7 @@ export async function updateFlowerSupplierCostLocal(
   }
 
   const product = input.product_id
-    ? FLOWER_STEMS_MOCK.find((stem) => stem.id === input.product_id)
+    ? { name: lookupFlowerProductNameLocal(input.product_id) }
     : null;
 
   const updated: FlowerSupplierCost = {

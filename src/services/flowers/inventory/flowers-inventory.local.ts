@@ -1,7 +1,6 @@
 import {
   FLOWER_BRANCHES_MOCK,
   FLOWER_INVENTORY_SEED,
-  FLOWER_STEMS_MOCK,
 } from '../../../modules/flowers/shared/data/flowers.mock';
 import type {
   AdjustFlowerInventoryInput,
@@ -12,7 +11,7 @@ import type {
   ListFlowerInventoryOptions,
   TransferFlowerInventoryInput,
 } from '../../../modules/flowers/shared/types/flower-inventory';
-import { listFlowerStemsLocal } from '../products/flowers-products.local';
+import { listFlowerStemsLocal, lookupFlowerProductNameLocal } from '../products/flowers-products.local';
 import {
   compareInventoryStockRows,
   normalizeFlowerProductColor,
@@ -95,7 +94,7 @@ function getBranchName(branchId: string): string {
 }
 
 function getProductName(productId: string): string {
-  return FLOWER_STEMS_MOCK.find((product) => product.id === productId)?.name ?? productId;
+  return lookupFlowerProductNameLocal(productId);
 }
 
 function appendMovement(
@@ -254,7 +253,7 @@ export async function validateFlowerOrderStockLocal(
   return;
 }
 
-/** @deprecated use deductFlowerInventoryForOrderLocal */
+/** Inter-branch stock transfer between branches. */
 export async function transferFlowerInventoryLocal(
   input: TransferFlowerInventoryInput,
 ): Promise<void> {
@@ -295,19 +294,4 @@ export async function transferFlowerInventoryLocal(
 export async function getFlowerStockLevelLocal(branchId: string, productId: string): Promise<number> {
   const stock = readStockFromStorage();
   return stock[branchId]?.[productId] ?? 0;
-}
-
-/** @deprecated use deductFlowerInventoryForOrderLocal */
-export async function deductFlowerInventoryLocal(input: {
-  branchId: string;
-  productId: string;
-  quantity: number;
-}): Promise<void> {
-  await adjustFlowerInventoryLocal({
-    branchId: input.branchId,
-    productId: input.productId,
-    movementType: 'stock_out',
-    quantity: input.quantity,
-    note: 'Legacy deduction',
-  });
 }

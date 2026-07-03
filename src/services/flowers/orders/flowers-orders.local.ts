@@ -52,25 +52,27 @@ function readOrdersFromStorage(): FlowerOrder[] {
     }
 
     const parsed = JSON.parse(raw) as FlowerOrder[];
-    return Array.isArray(parsed)
-      ? parsed.map((order) => ({
-          ...order,
-          payment_mode: normalizeFlowerPaymentMode(
-            order.payment_mode,
+    if (!Array.isArray(parsed)) {
+      return [];
+    }
+
+    return parsed.map((order) => ({
+      ...order,
+      payment_mode: normalizeFlowerPaymentMode(
+        order.payment_mode,
+        order.branch_id,
+        order.branch_name,
+      ),
+      balance_paid: Boolean(order.balance_paid),
+      balance_payment_mode: order.balance_payment_mode
+        ? normalizeFlowerPaymentMode(
+            order.balance_payment_mode,
             order.branch_id,
             order.branch_name,
-          ),
-          balance_paid: Boolean(order.balance_paid),
-          balance_payment_mode: order.balance_payment_mode
-            ? normalizeFlowerPaymentMode(
-                order.balance_payment_mode,
-                order.branch_id,
-                order.branch_name,
-              )
-            : '',
-          balance_payment_reference: order.balance_payment_reference ?? '',
-        }))
-      : [];
+          )
+        : '',
+      balance_payment_reference: order.balance_payment_reference ?? '',
+    }));
   } catch {
     return cloneOrders(FLOWER_ORDERS_SEED);
   }

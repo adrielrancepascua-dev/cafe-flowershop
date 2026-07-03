@@ -30,12 +30,19 @@ function readProductsFromStorage(): FlowerProduct[] {
     }
 
     if (!raw) {
-      return [];
+      const seed = FLOWER_STEMS_MOCK.map((product) => ({ ...product }));
+      writeProductsToStorage(seed);
+      return seed;
     }
 
     const parsed = JSON.parse(raw) as FlowerProduct[];
-    return Array.isArray(parsed)
-      ? parsed.map((product) => {
+    if (!Array.isArray(parsed) || parsed.length === 0) {
+      const seed = FLOWER_STEMS_MOCK.map((product) => ({ ...product }));
+      writeProductsToStorage(seed);
+      return seed;
+    }
+
+    return parsed.map((product) => {
           const product_kind = normalizeFlowerProductKind(product.product_kind);
           const color = normalizeFlowerProductColor(product.color);
           return {
@@ -51,11 +58,15 @@ function readProductsFromStorage(): FlowerProduct[] {
                   })
                 : '',
           };
-        })
-      : [];
+        });
   } catch {
     return FLOWER_STEMS_MOCK.map((product) => ({ ...product }));
   }
+}
+
+export function lookupFlowerProductNameLocal(productId: string): string {
+  const product = readProductsFromStorage().find((entry) => entry.id === productId);
+  return product?.name ?? productId;
 }
 
 function writeProductsToStorage(products: FlowerProduct[]) {
@@ -144,16 +155,4 @@ export async function toggleFlowerStemActiveLocal(
 export async function deleteFlowerStemLocal(productId: string): Promise<void> {
   const products = readProductsFromStorage();
   writeProductsToStorage(products.filter((product) => product.id !== productId));
-}
-
-/** @deprecated use listFlowerStemsLocal */
-export async function listFlowerPosCatalogLocal() {
-  const stems = await listFlowerStemsLocal();
-  return stems.map((stem) => ({
-    ...stem,
-    base_price: stem.unit_cost,
-    category: 'Stems',
-    description: '',
-    image: '',
-  }));
 }

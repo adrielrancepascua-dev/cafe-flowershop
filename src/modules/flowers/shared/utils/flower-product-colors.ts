@@ -184,28 +184,6 @@ export function groupInventoryStockMisc(rows: FlowerInventoryStockRow[]): Flower
     .sort((left, right) => left.product_name.localeCompare(right.product_name));
 }
 
-/** @deprecated Use groupInventoryStockByFlowerType */
-export function groupInventoryStockByColor(rows: FlowerInventoryStockRow[]): Array<{
-  color: string;
-  rows: FlowerInventoryStockRow[];
-}> {
-  const buckets = new Map<string, FlowerInventoryStockRow[]>();
-
-  for (const row of rows) {
-    const color = normalizeFlowerProductColor(row.product_color);
-    const bucket = buckets.get(color) ?? [];
-    bucket.push(row);
-    buckets.set(color, bucket);
-  }
-
-  return [...buckets.entries()]
-    .sort(([left], [right]) => compareFlowerProductColorLabels(left, right))
-    .map(([color, colorRows]) => ({
-      color,
-      rows: [...colorRows].sort(compareInventoryStockRows),
-    }));
-}
-
 export function flowerProductColorSwatchClass(color: string): string {
   switch (normalizeFlowerProductColor(color)) {
     case 'Red':

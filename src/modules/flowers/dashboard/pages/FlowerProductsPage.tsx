@@ -1,7 +1,11 @@
 import { useEffect, useMemo, useState } from 'react';
 import { ChevronDown } from 'lucide-react';
 import { listFlowerProducts, createFlowerProduct, updateFlowerProduct, toggleFlowerProductActive, deleteFlowerProduct } from '../../../../services/flowers/products';
-import { productColorColumnSupported } from '../../../../services/flowers/products/flowers-products.supabase';
+import {
+  productColorColumnSupported,
+  productKindColumnSupported,
+} from '../../../../services/flowers/products/flowers-products.supabase';
+import { getFlowerStorageMode, shouldUseFlowerSupabase } from '../../../../services/flowers/storage-mode';
 import { useFlowerAuth } from '../../../../lib/auth/FlowerAuthContext';
 import type { FlowerProduct } from '../../shared/types/flower-product';
 import FlowerPageHeader from '../../shared/components/FlowerPageHeader';
@@ -26,6 +30,7 @@ export default function FlowerProductsPage() {
   const [newCost, setNewCost] = useState('');
   const [errorMessage, setErrorMessage] = useState('');
   const [colorMigrationNeeded, setColorMigrationNeeded] = useState(false);
+  const [kindMigrationNeeded, setKindMigrationNeeded] = useState(false);
 
   const flowerProducts = useMemo(
     () => products.filter((product) => product.product_kind === 'flower'),
@@ -45,7 +50,9 @@ export default function FlowerProductsPage() {
     try {
       const loaded = await listFlowerProducts();
       setProducts(loaded);
-      setColorMigrationNeeded(!productColorColumnSupported());
+      const usingSupabase = shouldUseFlowerSupabase(getFlowerStorageMode());
+      setColorMigrationNeeded(usingSupabase && !productColorColumnSupported());
+      setKindMigrationNeeded(usingSupabase && !productKindColumnSupported());
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Failed to load products.';
       setErrorMessage(message);
@@ -166,7 +173,13 @@ export default function FlowerProductsPage() {
         <p className="mt-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-950">
           Color categories are not saved yet — run{' '}
           <span className="font-semibold">supabase/add_flower_product_color.sql</span> in Supabase once.
-          Products still load; everything shows as Uncategorized until then.
+        </p>
+      ) : null}
+
+      {kindMigrationNeeded ? (
+        <p className="mt-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-950">
+          Miscellaneous products need the product kind column — run{' '}
+          <span className="font-semibold">supabase/add_flower_product_kind.sql</span> in Supabase once so wrappers and supplies appear separately from flowers.
         </p>
       ) : null}
 

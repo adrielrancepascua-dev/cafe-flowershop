@@ -1287,11 +1287,6 @@ export default function FlowerOrderFormModal({
       return null;
     }
 
-    if (miscItems.length === 0) {
-      setErrorMessage('Add at least one wrapper or miscellaneous item.');
-      return null;
-    }
-
     const trimmedDownpayment = downpaymentDraft.trim();
     const downpayment =
       trimmedDownpayment === '' ? 0 : Number(trimmedDownpayment);
@@ -1881,7 +1876,7 @@ export default function FlowerOrderFormModal({
                   {miscSelectionSummary.units} unit{miscSelectionSummary.units === 1 ? '' : 's'}
                 </p>
               ) : !isViewMode ? (
-                <p className="text-xs text-brand-brown/60">Tap + to add wrappers, chocolates, etc.</p>
+                <p className="text-xs text-brand-brown/60">Optional — tap + to add wrappers, chocolates, etc.</p>
               ) : null}
             </div>
 
@@ -1906,7 +1901,7 @@ export default function FlowerOrderFormModal({
               )
             ) : miscProducts.length === 0 ? (
               <p className="rounded-xl border border-brand-muted/30 px-3 py-4 text-center text-sm text-brand-brown/60">
-                Add wrappers and supplies under Products → Miscellaneous first.
+                No miscellaneous items in the catalog yet. Wrappers and supplies are optional — ask an admin to add them under Products.
               </p>
             ) : (
               <OrderCatalogQuantityPicker

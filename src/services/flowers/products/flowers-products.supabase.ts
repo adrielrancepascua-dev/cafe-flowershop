@@ -206,4 +206,4 @@ export async function deleteFlowerProductSupabase(productId: string): Promise<vo
   }
 }
 
-export { productColorColumnSupported } from './flowers-products-supabase.shared';
+export { productColorColumnSupported, productKindColumnSupported } from './flowers-products-supabase.shared';
