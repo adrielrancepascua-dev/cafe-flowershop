@@ -22,7 +22,7 @@ export interface FlowerPrintPreset {
   pageHeight: FlowerPrintPageHeight;
 }
 
-export const FLOWER_PRINT_SETTINGS_STORAGE_KEY = 'papers_petals_flower_print_settings_v2';
+export const FLOWER_PRINT_SETTINGS_STORAGE_KEY = 'papers_petals_flower_print_settings_v3';
 export const FLOWER_PRINT_PAGE_STYLE_ID = 'flower-print-page-style';
 
 export const FLOWER_PRINT_PRESETS: FlowerPrintPreset[] = [
@@ -32,7 +32,7 @@ export const FLOWER_PRINT_PRESETS: FlowerPrintPreset[] = [
     description: '100 × 150 mm label — recommended for order slips',
     widthMm: 100,
     marginMm: 3,
-    fontScale: 1.6,
+    fontScale: 1,
     pageHeight: 150,
   },
   {

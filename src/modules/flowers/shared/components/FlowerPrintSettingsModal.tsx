@@ -182,24 +182,24 @@ export default function FlowerPrintSettingsModal({ open, onClose }: FlowerPrintS
                   maxWidth: '100%',
                   minHeight: couponPreview && draft.pageHeight !== 'auto' ? `${draft.pageHeight}mm` : undefined,
                   fontFamily: 'Arial, Helvetica, sans-serif',
-                  fontSize: `calc(${couponPreview ? 17 : 14}pt * ${previewScale})`,
+                  fontSize: `calc(${couponPreview ? 13.5 : 14}pt * ${previewScale})`,
                   lineHeight: 1.35,
                 }}
               >
-                <p style={{ fontWeight: 700, fontSize: `calc(${couponPreview ? 28 : 18}pt * ${previewScale})` }}>
+                <p style={{ fontWeight: 700, fontSize: `calc(${couponPreview ? 20 : 18}pt * ${previewScale})` }}>
                   PAPERS &amp; PETALS
                 </p>
-                <p style={{ fontWeight: 700, fontSize: `calc(${couponPreview ? 22 : 16}pt * ${previewScale})` }}>
+                <p style={{ fontWeight: 700, fontSize: `calc(${couponPreview ? 16 : 16}pt * ${previewScale})` }}>
                   311-7814
                 </p>
-                <p style={{ fontSize: `calc(${couponPreview ? 20 : 15}pt * ${previewScale})` }}>STORE PICK UP</p>
-                <p style={{ fontSize: `calc(${couponPreview ? 18 : 14}pt * ${previewScale})`, marginTop: '0.35rem' }}>
+                <p style={{ fontSize: `calc(${couponPreview ? 15 : 15}pt * ${previewScale})` }}>STORE PICK UP</p>
+                <p style={{ fontSize: `calc(${couponPreview ? 14 : 14}pt * ${previewScale})`, marginTop: '0.35rem' }}>
                   JULY 10 · 10:00am · URDANETA
                 </p>
-                <p style={{ fontSize: `calc(${couponPreview ? 17 : 14}pt * ${previewScale})`, marginTop: '0.5rem' }}>
+                <p style={{ fontSize: `calc(${couponPreview ? 13.5 : 14}pt * ${previewScale})`, marginTop: '0.5rem' }}>
                   RECEIVER: SAMPLE
                 </p>
-                <p style={{ fontSize: `calc(${couponPreview ? 17 : 14}pt * ${previewScale})` }}>
+                <p style={{ fontSize: `calc(${couponPreview ? 13.5 : 14}pt * ${previewScale})` }}>
                   3 X LOCAL ROSE (RED)
                 </p>
               </div>
