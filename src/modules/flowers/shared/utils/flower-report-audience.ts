@@ -2,17 +2,13 @@ import type {
   FlowerPrintableSalesReport,
   FlowerReportsData,
 } from '../types/flower-report';
+import { buildStaffFlowerReportFinancialSummary } from './flower-report-financials';
 
-/** Staff reports hide supplier costs and net income (owner-only profit). */
+/** Staff reports hide COGS, supplier costs, and legacy net income. */
 export function sanitizeFlowerReportsForStaff(data: FlowerReportsData): FlowerReportsData {
   return {
     ...data,
-    financial: {
-      total_sales: data.financial.total_sales,
-      staff_expenses: data.financial.staff_expenses,
-      supplier_costs: 0,
-      net_income: 0,
-    },
+    financial: buildStaffFlowerReportFinancialSummary(data.financial),
   };
 }
 

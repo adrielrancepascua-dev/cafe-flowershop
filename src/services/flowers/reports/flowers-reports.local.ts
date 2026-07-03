@@ -8,6 +8,11 @@ import {
   sumStaffExpensesForPeriod,
   sumSupplierCostsForPeriod,
 } from '../expenses/flowers-expenses.service';
+import { listFlowerProducts } from '../products/flowers-products.service';
+import {
+  buildFlowerReportFinancialSummary,
+  isFlowerReportSalesIncluded,
+} from '../../../modules/flowers/shared/utils/flower-report-financials';
 
 function formatDateKeyUtc(date: Date): string {
   return date.toISOString().slice(0, 10);
@@ -15,10 +20,6 @@ function formatDateKeyUtc(date: Date): string {
 
 function formatMonthKeyUtc(date: Date): string {
   return date.toISOString().slice(0, 7);
-}
-
-function isSalesIncluded(status: string): boolean {
-  return status === 'completed' || status === 'picked_up' || status === 'delivered';
 }
 
 function buildDailySkeleton(days: number) {
@@ -54,6 +55,10 @@ function buildMonthlySkeleton(months: number) {
   return rows;
 }
 
+function isSalesIncluded(status: string): boolean {
+  return isFlowerReportSalesIncluded(status);
+}
+
 export async function getFlowerReportsLocal(
   options: FlowerReportsOptions = {},
 ): Promise<FlowerReportsData> {
@@ -75,7 +80,6 @@ export async function getFlowerReportsLocal(
 
   const now = Date.now();
   const advanceOrders = [];
-  let totalSales = 0;
 
   for (const order of orders) {
     if (!isSalesIncluded(order.status)) {
@@ -94,10 +98,6 @@ export async function getFlowerReportsLocal(
     if (monthlyRow) {
       monthlyRow.order_count += 1;
       monthlyRow.sales_total += order.total_amount;
-    }
-
-    if (pickupDate === reportDate) {
-      totalSales += order.total_amount;
     }
 
     if (
@@ -119,17 +119,21 @@ export async function getFlowerReportsLocal(
     }
   }
 
-  const staffExpenses = await sumStaffExpensesForPeriod({
-    branchId: options.branchId,
-    fromDate: reportDate,
-    toDate: reportDate,
-  });
+  const [staffExpenses, supplierCosts, products] = await Promise.all([
+    sumStaffExpensesForPeriod({
+      branchId: options.branchId,
+      fromDate: reportDate,
+      toDate: reportDate,
+    }),
+    sumSupplierCostsForPeriod({
+      branchId: options.branchId,
+      fromDate: reportDate,
+      toDate: reportDate,
+    }),
+    listFlowerProducts(),
+  ]);
 
-  const supplierCosts = await sumSupplierCostsForPeriod({
-    branchId: options.branchId,
-    fromDate: reportDate,
-    toDate: reportDate,
-  });
+  const unitCostByProductId = new Map(products.map((product) => [product.id, product.unit_cost]));
 
   return {
     daily_summary: [...dailyByKey.values()],
@@ -137,11 +141,12 @@ export async function getFlowerReportsLocal(
     advance_orders: advanceOrders.sort(
       (a, b) => new Date(a.scheduled_for).getTime() - new Date(b.scheduled_for).getTime(),
     ),
-    financial: {
-      total_sales: totalSales,
-      staff_expenses: staffExpenses,
-      supplier_costs: supplierCosts,
-      net_income: totalSales - staffExpenses - supplierCosts,
-    },
+    financial: buildFlowerReportFinancialSummary({
+      orders,
+      reportDate,
+      staffExpenses,
+      supplierCosts,
+      unitCostByProductId,
+    }),
   };
 }

@@ -8,9 +8,14 @@ import type {
 import type { FlowerOrderStatus } from '../../../modules/flowers/shared/types/flower-order';
 import { scheduledForToDateKey } from '../../../modules/flowers/shared/utils/flower-format';
 import {
+  buildFlowerReportFinancialSummary,
+  isFlowerReportSalesIncluded,
+} from '../../../modules/flowers/shared/utils/flower-report-financials';
+import {
   sumStaffExpensesForPeriodSupabase,
   sumSupplierCostsForPeriodSupabase,
 } from '../expenses/flowers-expenses.supabase';
+import { listFlowerProductsSupabase } from '../products/flowers-products.supabase';
 
 type BranchRow = {
   id: string;
@@ -24,8 +29,18 @@ type ReportOrderRow = {
   scheduled_for: string;
   status: FlowerOrderStatus;
   total_amount: number;
+  downpayment: number;
+  balance: number;
+  balance_paid: boolean;
+  payment_mode: string;
+  balance_payment_mode: string;
   created_at: string;
-  flower_order_items?: Array<{ id: number }>;
+  flower_order_items?: Array<{
+    id: number;
+    product_id: string;
+    item_name: string;
+    quantity: number;
+  }>;
 };
 
 function requireSupabaseClient() {
@@ -46,7 +61,7 @@ function formatMonthKeyUtc(date: Date): string {
 }
 
 function isSalesIncluded(status: FlowerOrderStatus): boolean {
-  return status === 'completed' || status === 'picked_up' || status === 'delivered';
+  return isFlowerReportSalesIncluded(status);
 }
 
 function buildDailySkeleton(days: number): FlowerDailySalesSummaryRow[] {
@@ -99,9 +114,17 @@ export async function getFlowerReportsSupabase(options: FlowerReportsOptions = {
       scheduled_for,
       status,
       total_amount,
+      downpayment,
+      balance,
+      balance_paid,
+      payment_mode,
+      balance_payment_mode,
       created_at,
       flower_order_items (
-        id
+        id,
+        product_id,
+        item_name,
+        quantity
       )
     `,
     )
@@ -137,8 +160,6 @@ export async function getFlowerReportsSupabase(options: FlowerReportsOptions = {
   const monthlySummary = buildMonthlySkeleton(monthlyMonths);
   const monthlyByMonth = new Map(monthlySummary.map((row) => [row.month, row]));
 
-  let totalSales = 0;
-
   for (const order of orderRows) {
     if (!isSalesIncluded(order.status)) {
       continue;
@@ -158,13 +179,27 @@ export async function getFlowerReportsSupabase(options: FlowerReportsOptions = {
       monthly.order_count += 1;
       monthly.sales_total += Number(order.total_amount);
     }
-
-    if (pickupDate === reportDate) {
-      totalSales += Number(order.total_amount);
-    }
   }
 
   const now = Date.now();
+  const reportOrders = orderRows.map((order) => ({
+    branch_id: order.branch_id,
+    branch_name: branchNameById.get(order.branch_id) ?? order.branch_id,
+    scheduled_for: order.scheduled_for,
+    status: order.status,
+    total_amount: Number(order.total_amount),
+    downpayment: Number(order.downpayment ?? 0),
+    balance: Number(order.balance ?? 0),
+    balance_paid: Boolean(order.balance_paid),
+    payment_mode: order.payment_mode ?? 'cash',
+    balance_payment_mode: order.balance_payment_mode ?? '',
+    items: (order.flower_order_items ?? []).map((item) => ({
+      product_id: item.product_id,
+      item_name: item.item_name,
+      quantity: item.quantity,
+    })),
+  }));
+
   const advanceOrders = orderRows
     .filter((order) => order.scheduled_for && new Date(order.scheduled_for).getTime() > now)
     .sort((a, b) => new Date(a.scheduled_for).getTime() - new Date(b.scheduled_for).getTime())
@@ -181,7 +216,7 @@ export async function getFlowerReportsSupabase(options: FlowerReportsOptions = {
       item_count: (order.flower_order_items ?? []).length,
     }));
 
-  const [staffExpenses, supplierCosts] = await Promise.all([
+  const [staffExpenses, supplierCosts, products] = await Promise.all([
     sumStaffExpensesForPeriodSupabase({
       branchId: options.branchId,
       fromDate: reportDate,
@@ -192,17 +227,21 @@ export async function getFlowerReportsSupabase(options: FlowerReportsOptions = {
       fromDate: reportDate,
       toDate: reportDate,
     }),
+    listFlowerProductsSupabase(),
   ]);
+
+  const unitCostByProductId = new Map(products.map((product) => [product.id, product.unit_cost]));
 
   return {
     daily_summary: dailySummary,
     monthly_summary: monthlySummary,
     advance_orders: advanceOrders,
-    financial: {
-      total_sales: totalSales,
-      staff_expenses: staffExpenses,
-      supplier_costs: supplierCosts,
-      net_income: totalSales - staffExpenses - supplierCosts,
-    },
+    financial: buildFlowerReportFinancialSummary({
+      orders: reportOrders,
+      reportDate,
+      staffExpenses,
+      supplierCosts,
+      unitCostByProductId,
+    }),
   };
 }

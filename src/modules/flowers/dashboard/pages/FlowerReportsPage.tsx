@@ -35,6 +35,9 @@ function emptyReports(): FlowerReportsData {
       total_sales: 0,
       staff_expenses: 0,
       supplier_costs: 0,
+      cogs: 0,
+      net_sales: 0,
+      sales_by_payment: [],
       net_income: 0,
     },
   };
@@ -285,16 +288,42 @@ export default function FlowerReportsPage() {
         <p className="mt-6 text-sm text-brand-brown/60">Loading reports...</p>
       ) : !blockedMessage ? (
         <>
-          <div className={`mt-5 grid grid-cols-2 gap-3 ${isAdmin ? 'lg:grid-cols-4' : ''}`}>
+          <div className={`mt-5 grid grid-cols-2 gap-3 ${isAdmin ? 'lg:grid-cols-4' : 'lg:grid-cols-3'}`}>
             <MetricCard label="Total sales" value={PRICE_FORMATTER.format(reportsData.financial.total_sales)} />
-            <MetricCard label="Staff expenses" value={PRICE_FORMATTER.format(reportsData.financial.staff_expenses)} />
+            <MetricCard label="Expenses" value={PRICE_FORMATTER.format(reportsData.financial.staff_expenses)} />
             {isAdmin ? (
-              <>
-                <MetricCard label="Supplier costs" value={PRICE_FORMATTER.format(reportsData.financial.supplier_costs)} />
-                <MetricCard label="Net income" value={PRICE_FORMATTER.format(reportsData.financial.net_income)} accent />
-              </>
+              <MetricCard label="COGS" value={PRICE_FORMATTER.format(reportsData.financial.cogs)} />
             ) : null}
+            <MetricCard
+              label="Net sales"
+              value={PRICE_FORMATTER.format(reportsData.financial.net_sales)}
+              accent
+            />
           </div>
+
+          {reportsData.financial.sales_by_payment.length > 0 ? (
+            <div className="mt-5 rounded-2xl border border-brand-muted/40 bg-white p-4">
+              <h3 className="text-sm font-semibold text-brand-dark">Sales by payment</h3>
+              <p className="mt-1 text-xs text-brand-brown/60">
+                Breakdown of completed sales for {formatReportDateLabel(effectiveReportDate)}.
+              </p>
+              <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
+                {reportsData.financial.sales_by_payment.map((row) => (
+                  <div
+                    key={row.payment_mode}
+                    className="rounded-xl border border-brand-muted/30 bg-brand-cream/20 px-3 py-2"
+                  >
+                    <p className="text-[10px] font-semibold uppercase tracking-wide text-brand-brown/60 sm:text-xs">
+                      {row.label}
+                    </p>
+                    <p className="mt-1 font-serif text-base font-semibold text-brand-dark sm:text-lg">
+                      {PRICE_FORMATTER.format(row.amount)}
+                    </p>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ) : null}
 
           {isAdmin ? (
             <div className="mt-6 rounded-2xl border border-brand-muted/40 bg-brand-cream/20 p-4">

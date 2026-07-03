@@ -1,4 +1,11 @@
 import type { FlowerOrderStatus } from './flower-order';
+import type { FlowerPaymentMode } from '../utils/flower-payment';
+
+export interface FlowerSalesByPaymentRow {
+  payment_mode: FlowerPaymentMode;
+  label: string;
+  amount: number;
+}
 
 export interface FlowerDailySalesSummaryRow {
   date: string;
@@ -28,6 +35,10 @@ export interface FlowerFinancialSummary {
   total_sales: number;
   staff_expenses: number;
   supplier_costs: number;
+  cogs: number;
+  net_sales: number;
+  sales_by_payment: FlowerSalesByPaymentRow[];
+  /** Legacy owner profit using logged supplier costs. */
   net_income: number;
 }
 
