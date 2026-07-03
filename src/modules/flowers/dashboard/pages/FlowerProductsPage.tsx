@@ -20,6 +20,12 @@ import {
   FLOWER_PRODUCT_KIND_LABELS,
   type FlowerProductKind,
 } from '../../shared/utils/flower-product-kind';
+import {
+  MISC_PRODUCT_CATEGORIES,
+  MISC_PRODUCT_CATEGORY_LABELS,
+  miscCategoryFromFlowerType,
+  type MiscProductCategory,
+} from '../../shared/utils/flower-misc-category';
 import { groupFlowerProductsByType, type FlowerProductTypeGroup } from '../../shared/utils/flower-product-type';
 export default function FlowerProductsPage() {
   const [products, setProducts] = useState<FlowerProduct[]>([]);
@@ -28,6 +34,7 @@ export default function FlowerProductsPage() {
   const [newName, setNewName] = useState('');
   const [newColor, setNewColor] = useState<string>(FLOWER_PRODUCT_COLOR_OPTIONS[0]);
   const [newCost, setNewCost] = useState('');
+  const [newMiscCategory, setNewMiscCategory] = useState<MiscProductCategory>('wrappers');
   const [errorMessage, setErrorMessage] = useState('');
   const [colorMigrationNeeded, setColorMigrationNeeded] = useState(false);
   const [kindMigrationNeeded, setKindMigrationNeeded] = useState(false);
@@ -93,11 +100,13 @@ export default function FlowerProductsPage() {
       name: newName.trim(),
       flower_type: newName.trim(),
       product_kind: catalogTab,
+      misc_category: catalogTab === 'misc' ? newMiscCategory : undefined,
       color: catalogTab === 'flower' ? newColor.trim() : '',
       unit_cost,
     });
     setNewName('');
     setNewColor(FLOWER_PRODUCT_COLOR_OPTIONS[0]);
+    setNewMiscCategory('wrappers');
     setNewCost('');
     setErrorMessage('');
     await loadProducts();
@@ -144,15 +153,29 @@ export default function FlowerProductsPage() {
           className={`mt-5 grid grid-cols-1 gap-3 rounded-2xl border border-brand-muted/40 bg-brand-cream/20 p-4 ${
             catalogTab === 'flower'
               ? 'sm:grid-cols-[1fr_minmax(140px,180px)_160px_auto]'
-              : 'sm:grid-cols-[1fr_160px_auto]'
+              : 'sm:grid-cols-[minmax(140px,180px)_1fr_160px_auto]'
           }`}
         >
+          {catalogTab === 'misc' ? (
+            <select
+              value={newMiscCategory}
+              onChange={(event) => setNewMiscCategory(event.target.value as MiscProductCategory)}
+              className="flower-input"
+              aria-label="Miscellaneous category"
+            >
+              {MISC_PRODUCT_CATEGORIES.map((category) => (
+                <option key={category} value={category}>
+                  {MISC_PRODUCT_CATEGORY_LABELS[category]}
+                </option>
+              ))}
+            </select>
+          ) : null}
           <input
             type="text"
             value={newName}
             onChange={(event) => setNewName(event.target.value)}
             placeholder={
-              catalogTab === 'flower' ? 'Flower type (e.g. Local Rose, Lily)' : 'Item name (e.g. Wrapper, Chocolate)'
+              catalogTab === 'flower' ? 'Flower type (e.g. Local Rose, Lily)' : 'Item name (e.g. Kraft wrapper, Chocolate)'
             }
             className="flower-input"
           />
@@ -243,6 +266,7 @@ export default function FlowerProductsPage() {
             <table className="min-w-full text-left text-sm">
               <thead className="bg-brand-beige/40 text-brand-brown">
                 <tr>
+                  <th className="min-w-[10rem] px-3 py-2">Category</th>
                   <th className="min-w-[12rem] px-3 py-2">Name</th>
                   <th className="px-3 py-2">Unit cost</th>
                   <th className="px-3 py-2">Status</th>
@@ -610,12 +634,16 @@ function MiscProductCard({
 }) {
   const [name, setName] = useState(product.name);
   const [unitCost, setUnitCost] = useState(String(product.unit_cost));
+  const [miscCategory, setMiscCategory] = useState<MiscProductCategory>(
+    miscCategoryFromFlowerType(product.flower_type),
+  );
   const [errorMessage, setErrorMessage] = useState('');
 
   useEffect(() => {
     setName(product.name);
     setUnitCost(String(product.unit_cost));
-  }, [product.id, product.name, product.unit_cost]);
+    setMiscCategory(miscCategoryFromFlowerType(product.flower_type));
+  }, [product.flower_type, product.id, product.name, product.unit_cost]);
 
   async function save() {
     const unit_cost = Number(unitCost);
@@ -631,6 +659,8 @@ function MiscProductCard({
 
     await updateFlowerProduct(product.id, {
       name: name.trim(),
+      product_kind: 'misc',
+      misc_category: miscCategory,
       color: '',
       unit_cost,
     });
@@ -641,6 +671,21 @@ function MiscProductCard({
   return (
     <div className="flower-card p-4">
       <label className="block text-xs font-medium uppercase tracking-wide text-brand-brown/60">
+        Category
+        <select
+          value={miscCategory}
+          onChange={(event) => setMiscCategory(event.target.value as MiscProductCategory)}
+          className="flower-input mt-1.5"
+        >
+          {MISC_PRODUCT_CATEGORIES.map((category) => (
+            <option key={category} value={category}>
+              {MISC_PRODUCT_CATEGORY_LABELS[category]}
+            </option>
+          ))}
+        </select>
+      </label>
+
+      <label className="mt-3 block text-xs font-medium uppercase tracking-wide text-brand-brown/60">
         Item name
         <input
           value={name}
@@ -687,12 +732,16 @@ function MiscProductRow({
 }) {
   const [name, setName] = useState(product.name);
   const [unitCost, setUnitCost] = useState(String(product.unit_cost));
+  const [miscCategory, setMiscCategory] = useState<MiscProductCategory>(
+    miscCategoryFromFlowerType(product.flower_type),
+  );
   const [errorMessage, setErrorMessage] = useState('');
 
   useEffect(() => {
     setName(product.name);
     setUnitCost(String(product.unit_cost));
-  }, [product.id, product.name, product.unit_cost]);
+    setMiscCategory(miscCategoryFromFlowerType(product.flower_type));
+  }, [product.flower_type, product.id, product.name, product.unit_cost]);
 
   async function save() {
     const unit_cost = Number(unitCost);
@@ -708,6 +757,8 @@ function MiscProductRow({
 
     await updateFlowerProduct(product.id, {
       name: name.trim(),
+      product_kind: 'misc',
+      misc_category: miscCategory,
       color: '',
       unit_cost,
     });
@@ -717,6 +768,19 @@ function MiscProductRow({
 
   return (
     <tr className="border-t border-brand-muted/30">
+      <td className="px-3 py-2">
+        <select
+          value={miscCategory}
+          onChange={(event) => setMiscCategory(event.target.value as MiscProductCategory)}
+          className="flower-input min-w-[9rem]"
+        >
+          {MISC_PRODUCT_CATEGORIES.map((category) => (
+            <option key={category} value={category}>
+              {MISC_PRODUCT_CATEGORY_LABELS[category]}
+            </option>
+          ))}
+        </select>
+      </td>
       <td className="min-w-[12rem] px-3 py-2">
         <input value={name} onChange={(event) => setName(event.target.value)} className="flower-input min-w-[10rem]" />
       </td>

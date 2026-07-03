@@ -134,6 +134,7 @@ export async function listFlowerInventoryStockLocal(
         product_name: product.name,
         product_kind: normalizeFlowerProductKind(product.product_kind),
         product_color: normalizeFlowerProductColor(product.color),
+        product_flower_type: product.flower_type,
         product_is_active: product.is_active,
         on_hand: onHand,
         last_updated: null,

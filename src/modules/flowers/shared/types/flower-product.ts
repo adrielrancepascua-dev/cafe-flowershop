@@ -1,4 +1,5 @@
 import type { FlowerProductKind } from '../utils/flower-product-kind';
+import type { MiscProductCategory } from '../utils/flower-misc-category';
 
 export interface FlowerProduct {
   id: string;
@@ -15,6 +16,7 @@ export interface CreateFlowerProductInput {
   name: string;
   flower_type?: string;
   product_kind?: FlowerProductKind;
+  misc_category?: MiscProductCategory;
   color: string;
   unit_cost: number;
   is_active?: boolean;
@@ -23,6 +25,8 @@ export interface CreateFlowerProductInput {
 export interface UpdateFlowerProductInput {
   name: string;
   flower_type?: string;
+  product_kind?: FlowerProductKind;
+  misc_category?: MiscProductCategory;
   color: string;
   unit_cost: number;
 }

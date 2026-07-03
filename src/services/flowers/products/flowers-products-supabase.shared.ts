@@ -6,6 +6,11 @@ import {
 } from '../../../modules/flowers/shared/utils/flower-product-colors';
 import { normalizeFlowerProductKind } from '../../../modules/flowers/shared/utils/flower-product-kind';
 import { normalizeFlowerProductType } from '../../../modules/flowers/shared/utils/flower-product-type';
+import {
+  miscCategoryFromFlowerType,
+  miscCategoryLabel,
+  type MiscProductCategory,
+} from '../../../modules/flowers/shared/utils/flower-misc-category';
 
 export type FlowerProductDbRow = {
   id: string;
@@ -126,7 +131,7 @@ export function mapFlowerProductRow(row: FlowerProductDbRow): FlowerProduct {
   const flower_type =
     product_kind === 'flower'
       ? row.flower_type?.trim() || deriveFlowerTypeFromProduct(row.name, color)
-      : '';
+      : row.flower_type?.trim() || miscCategoryLabel('wrappers');
 
   return {
     id: row.id,
@@ -141,11 +146,19 @@ export function mapFlowerProductRow(row: FlowerProductDbRow): FlowerProduct {
 }
 
 export function mapFlowerProductSummaryRow(row: FlowerProductSummaryDbRow): FlowerProductSummaryDbRow {
+  const product_kind = normalizeFlowerProductKind(row.product_kind);
+  const color = normalizeFlowerProductColor(row.color);
+  const flower_type =
+    product_kind === 'flower'
+      ? row.flower_type?.trim() || deriveFlowerTypeFromProduct(row.name, color)
+      : row.flower_type?.trim() || miscCategoryLabel('wrappers');
+
   return {
     id: row.id,
     name: row.name,
-    product_kind: normalizeFlowerProductKind(row.product_kind),
-    color: normalizeFlowerProductColor(row.color),
+    product_kind,
+    flower_type,
+    color,
     is_active: Boolean(row.is_active),
   };
 }
@@ -262,6 +275,7 @@ export function buildFlowerProductWritePayload(
     name: string;
     flower_type?: string;
     product_kind?: string;
+    misc_category?: MiscProductCategory;
     color: string;
     unit_cost: number;
     is_active?: boolean;
@@ -288,12 +302,18 @@ export function buildFlowerProductWritePayload(
     payload.color = normalizedColor;
   }
 
-  if (productTypeColumnSupported() && productKind === 'flower') {
-    payload.flower_type = normalizeFlowerProductType(
-      input.name,
-      normalizedColor,
-      input.flower_type,
-    );
+  if (productTypeColumnSupported()) {
+    if (productKind === 'flower') {
+      payload.flower_type = normalizeFlowerProductType(
+        input.name,
+        normalizedColor,
+        input.flower_type,
+      );
+    } else {
+      payload.flower_type = miscCategoryLabel(
+        input.misc_category ?? miscCategoryFromFlowerType(input.flower_type),
+      );
+    }
   }
 
   return payload;
@@ -301,10 +321,13 @@ export function buildFlowerProductWritePayload(
 
 export function buildFlowerProductUpdatePayload(input: {
   name: string;
+  product_kind?: string;
   flower_type?: string;
+  misc_category?: MiscProductCategory;
   color: string;
   unit_cost: number;
 }): Record<string, unknown> {
+  const productKind = normalizeFlowerProductKind(input.product_kind);
   const normalizedColor = normalizeFlowerProductColor(input.color);
   const payload: Record<string, unknown> = {
     name: input.name.trim(),
@@ -316,11 +339,17 @@ export function buildFlowerProductUpdatePayload(input: {
   }
 
   if (productTypeColumnSupported()) {
-    payload.flower_type = normalizeFlowerProductType(
-      input.name,
-      normalizedColor,
-      input.flower_type,
-    );
+    if (productKind === 'misc') {
+      if (input.misc_category) {
+        payload.flower_type = miscCategoryLabel(input.misc_category);
+      }
+    } else {
+      payload.flower_type = normalizeFlowerProductType(
+        input.name,
+        normalizedColor,
+        input.flower_type,
+      );
+    }
   }
 
   return payload;

@@ -9,6 +9,10 @@ import type {
 import { normalizeFlowerProductColor } from '../../../modules/flowers/shared/utils/flower-product-colors';
 import { normalizeFlowerProductKind } from '../../../modules/flowers/shared/utils/flower-product-kind';
 import { getFlowerProductType } from '../../../modules/flowers/shared/utils/flower-product-type';
+import {
+  miscCategoryFromFlowerType,
+  miscCategoryLabel,
+} from '../../../modules/flowers/shared/utils/flower-misc-category';
 
 const PRODUCTS_STORAGE_KEY = 'papers_petals_flower_stems_v2';
 const PRODUCTS_SEEDED_KEY = 'papers_petals_flower_stems_seeded_v2';
@@ -90,7 +94,7 @@ export async function createFlowerStemLocal(input: CreateFlowerProductInput): Pr
   const flower_type =
     product_kind === 'flower'
       ? (input.flower_type?.trim() || input.name.trim())
-      : '';
+      : miscCategoryLabel(input.misc_category ?? miscCategoryFromFlowerType(input.flower_type));
   const name = product_kind === 'flower' ? flower_type : input.name.trim();
   const created: FlowerProduct = {
     id: `${product_kind === 'misc' ? 'misc' : 'stem'}-${Date.now()}`,
@@ -123,7 +127,9 @@ export async function updateFlowerStemLocal(
   const flower_type =
     product_kind === 'flower'
       ? (input.flower_type?.trim() || input.name.trim())
-      : '';
+      : miscCategoryLabel(
+          input.misc_category ?? miscCategoryFromFlowerType(input.flower_type ?? products[index].flower_type),
+        );
   const name = product_kind === 'flower' ? flower_type : input.name.trim();
 
   products[index] = {

@@ -1,4 +1,5 @@
 import type { FlowerInventoryStockRow } from '../types/flower-inventory';
+import { miscCategoryFromFlowerType } from './flower-misc-category';
 import { normalizeFlowerProductKind } from './flower-product-kind';
 
 export const FLOWER_PRODUCT_COLOR_UNCategorized = 'Uncategorized';
@@ -99,6 +100,14 @@ export function compareInventoryStockRows(left: FlowerInventoryStockRow, right: 
   }
 
   if (leftKind === 'misc') {
+    const categoryCompare = miscCategoryFromFlowerType(left.product_flower_type).localeCompare(
+      miscCategoryFromFlowerType(right.product_flower_type),
+    );
+
+    if (categoryCompare !== 0) {
+      return categoryCompare;
+    }
+
     return left.product_name.localeCompare(right.product_name);
   }
 
@@ -133,6 +142,7 @@ export function compareFlowerProducts(
       product_name: left.name,
       product_color: left.color,
       product_kind: 'flower',
+      product_flower_type: '',
       branch_id: '',
       branch_name: '',
       on_hand: 0,
@@ -144,6 +154,7 @@ export function compareFlowerProducts(
       product_name: right.name,
       product_color: right.color,
       product_kind: 'flower',
+      product_flower_type: '',
       branch_id: '',
       branch_name: '',
       on_hand: 0,

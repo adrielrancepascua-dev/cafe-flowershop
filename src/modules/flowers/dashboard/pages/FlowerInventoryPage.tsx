@@ -25,6 +25,12 @@ import {
   FLOWER_PRODUCT_KIND_LABELS,
   type FlowerProductKind,
 } from '../../shared/utils/flower-product-kind';
+import {
+  MISC_PRODUCT_CATEGORIES,
+  MISC_PRODUCT_CATEGORY_LABELS,
+  miscCategoryFromFlowerType,
+  type MiscProductCategory,
+} from '../../shared/utils/flower-misc-category';
 
 function aggregateStockByProduct(rows: FlowerInventoryStockRow[]): FlowerInventoryStockRow[] {
   const totals = new Map<string, FlowerInventoryStockRow>();
@@ -536,6 +542,7 @@ export default function FlowerInventoryPage() {
   const [activeTab, setActiveTab] = useState<InventoryTab>('stock');
   const [stockKindTab, setStockKindTab] = useState<FlowerProductKind>('flower');
   const [colorFilter, setColorFilter] = useState('all');
+  const [miscCategoryFilter, setMiscCategoryFilter] = useState<MiscProductCategory>('wrappers');
   const [fromBranchStock, setFromBranchStock] = useState<FlowerInventoryStockRow[]>([]);
   const [fromBranchStockLoading, setFromBranchStockLoading] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
@@ -621,14 +628,20 @@ export default function FlowerInventoryPage() {
   }, [displayStock, stockKindTab]);
 
   const filteredDisplayStock = useMemo(() => {
-    if (stockKindTab === 'misc' || colorFilter === 'all') {
+    if (stockKindTab === 'misc') {
+      return kindFilteredDisplayStock.filter(
+        (row) => miscCategoryFromFlowerType(row.product_flower_type) === miscCategoryFilter,
+      );
+    }
+
+    if (colorFilter === 'all') {
       return kindFilteredDisplayStock;
     }
 
     return kindFilteredDisplayStock.filter(
       (row) => normalizeFlowerProductColor(row.product_color) === colorFilter,
     );
-  }, [colorFilter, kindFilteredDisplayStock, stockKindTab]);
+  }, [colorFilter, kindFilteredDisplayStock, miscCategoryFilter, stockKindTab]);
 
   const stockByFlowerType = useMemo(
     () => groupInventoryStockByFlowerType(filteredDisplayStock),
@@ -763,17 +776,17 @@ export default function FlowerInventoryPage() {
             ? isAllBranchesView
               ? stockKindTab === 'flower'
                 ? 'Flower totals across Dagupan, San Carlos, and Urdaneta. Select a branch to adjust stock.'
-                : 'Miscellaneous supply totals across all branches. Select a branch to adjust stock.'
+                : 'Miscellaneous totals by category. Select a branch to stock in wrappers or gift items.'
               : stockKindTab === 'flower'
                 ? 'Flower stock grouped by type with colors in order.'
-                : 'Wrappers, chocolates, and other supplies tracked separately from flowers.'
+                : 'Stock in or out wrappers and gift items for this branch.'
             : isAllBranchesView
               ? stockKindTab === 'flower'
                 ? 'Combined flower totals across all branches.'
-                : 'Combined miscellaneous supply totals across all branches.'
+                : 'Combined wrappers and gift item totals across all branches.'
               : stockKindTab === 'flower'
                 ? 'View-only flower stock for this branch.'
-                : 'View-only miscellaneous stock for this branch.'
+                : 'View-only wrappers and gift item stock for this branch.'
         }
       />
 
@@ -993,11 +1006,24 @@ export default function FlowerInventoryPage() {
                 ))}
               </select>
             ) : null}
+            {stockKindTab === 'misc' ? (
+              <select
+                value={miscCategoryFilter}
+                onChange={(event) => setMiscCategoryFilter(event.target.value as MiscProductCategory)}
+                className="flower-input max-w-[180px]"
+              >
+                {MISC_PRODUCT_CATEGORIES.map((category) => (
+                  <option key={category} value={category}>
+                    {MISC_PRODUCT_CATEGORY_LABELS[category]}
+                  </option>
+                ))}
+              </select>
+            ) : null}
           </div>
           <p className="mt-2 text-sm text-brand-brown/70">
             {isAllBranchesView
-              ? `Showing combined ${stockKindTab === 'flower' ? 'flower' : 'misc'} totals (${totalUnitsOnHand} units on hand).`
-              : `Showing ${stockKindTab === 'flower' ? 'flower' : 'misc'} stock for ${selectedBranchName} (${totalUnitsOnHand} units on hand)${
+              ? `Showing combined ${stockKindTab === 'flower' ? 'flower' : MISC_PRODUCT_CATEGORY_LABELS[miscCategoryFilter].toLowerCase()} totals (${totalUnitsOnHand} units on hand).`
+              : `Showing ${stockKindTab === 'flower' ? 'flower' : MISC_PRODUCT_CATEGORY_LABELS[miscCategoryFilter].toLowerCase()} stock for ${selectedBranchName} (${totalUnitsOnHand} units on hand)${
                   stockKindTab === 'flower' ? ', grouped by flower type' : ''
                 }.`}
             {isRefreshing ? ' · Updating…' : ''}
@@ -1057,7 +1083,7 @@ export default function FlowerInventoryPage() {
                 ))}
                 {miscStockRows.length === 0 ? (
                   <p className="rounded-xl border border-brand-muted/30 px-3 py-6 text-center text-sm text-brand-brown/60">
-                    No miscellaneous stock to show yet.
+                    No {MISC_PRODUCT_CATEGORY_LABELS[miscCategoryFilter].toLowerCase()} in the catalog yet.
                   </p>
                 ) : null}
               </>
@@ -1138,7 +1164,7 @@ export default function FlowerInventoryPage() {
                     {miscStockRows.length === 0 ? (
                       <tr>
                         <td colSpan={stockTableColSpan} className="px-3 py-8 text-center text-brand-brown/60">
-                          No miscellaneous stock to show yet.
+                          No {MISC_PRODUCT_CATEGORY_LABELS[miscCategoryFilter].toLowerCase()} in the catalog yet.
                         </td>
                       </tr>
                     ) : null}

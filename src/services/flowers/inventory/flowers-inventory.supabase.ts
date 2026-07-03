@@ -31,6 +31,7 @@ type ProductRow = {
   id: string;
   name: string;
   product_kind: string;
+  flower_type: string;
   color: string;
   is_active: boolean;
 };
@@ -186,6 +187,7 @@ export async function listFlowerInventoryStockSupabase(
         product_name: product.name,
         product_kind: normalizeFlowerProductKind(product.product_kind),
         product_color: normalizeFlowerProductColor(product.color),
+        product_flower_type: product.flower_type ?? '',
         product_is_active: Boolean(product.is_active),
         on_hand: Number(stock?.on_hand ?? 0),
         last_updated: stock?.updated_at ?? null,
