@@ -12,6 +12,8 @@ import { getFlowerProductType } from '../../../modules/flowers/shared/utils/flow
 
 const PRODUCTS_STORAGE_KEY = 'papers_petals_flower_stems_v2';
 const PRODUCTS_SEEDED_KEY = 'papers_petals_flower_stems_seeded_v2';
+const INVENTORY_STORAGE_KEY = 'papers_petals_flower_inventory_v2';
+const MOVEMENTS_STORAGE_KEY = 'papers_petals_flower_inventory_movements_v2';
 
 function readProductsFromStorage(): FlowerProduct[] {
   if (typeof window === 'undefined') {
@@ -155,4 +157,30 @@ export async function toggleFlowerStemActiveLocal(
 export async function deleteFlowerStemLocal(productId: string): Promise<void> {
   const products = readProductsFromStorage();
   writeProductsToStorage(products.filter((product) => product.id !== productId));
+
+  if (typeof window !== 'undefined') {
+    try {
+      const rawStock = window.localStorage.getItem(INVENTORY_STORAGE_KEY);
+      if (rawStock) {
+        const stock = JSON.parse(rawStock) as Record<string, Record<string, number>>;
+        for (const branchId of Object.keys(stock)) {
+          delete stock[branchId][productId];
+        }
+        window.localStorage.setItem(INVENTORY_STORAGE_KEY, JSON.stringify(stock));
+      }
+
+      const rawMovements = window.localStorage.getItem(MOVEMENTS_STORAGE_KEY);
+      if (rawMovements) {
+        const movements = JSON.parse(rawMovements) as Array<{ product_id?: string }>;
+        if (Array.isArray(movements)) {
+          window.localStorage.setItem(
+            MOVEMENTS_STORAGE_KEY,
+            JSON.stringify(movements.filter((movement) => movement.product_id !== productId)),
+          );
+        }
+      }
+    } catch {
+      // Product removal should still succeed even if inventory cleanup fails locally.
+    }
+  }
 }

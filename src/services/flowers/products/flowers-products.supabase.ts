@@ -193,12 +193,39 @@ export async function toggleFlowerProductActiveSupabase(
 export async function deleteFlowerProductSupabase(productId: string): Promise<void> {
   const supabase = await requireAuthenticatedSupabaseClient();
 
+  const { count: orderItemCount, error: orderItemError } = await supabase
+    .from('flower_order_items')
+    .select('id', { count: 'exact', head: true })
+    .eq('product_id', productId);
+
+  if (orderItemError) {
+    throw orderItemError;
+  }
+
+  if (orderItemCount && orderItemCount > 0) {
+    throw new Error(
+      `Cannot delete this product because it is on ${orderItemCount} order line(s). Remove those orders first, or deactivate the product instead.`,
+    );
+  }
+
+  const cleanupResults = await Promise.all([
+    supabase.from('flower_inventory_movements').delete().eq('product_id', productId),
+    supabase.from('flower_inventory_stock').delete().eq('product_id', productId),
+    supabase.from('flower_supplier_costs').update({ product_id: null }).eq('product_id', productId),
+  ]);
+
+  for (const result of cleanupResults) {
+    if (result.error) {
+      throw result.error;
+    }
+  }
+
   const { error } = await supabase.from('flower_products').delete().eq('id', productId);
 
   if (error) {
     if ('code' in error && error.code === '23503') {
       throw new Error(
-        'Cannot delete this product because it is linked to inventory or order history. Archive it instead.',
+        'Cannot delete this product because it is still linked to other records. Archive it instead.',
       );
     }
 

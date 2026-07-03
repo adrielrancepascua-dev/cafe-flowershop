@@ -103,6 +103,16 @@ export default function FlowerProductsPage() {
     await loadProducts();
   }
 
+  async function handleDeleteProduct(productId: string) {
+    try {
+      await deleteFlowerProduct(productId);
+      setErrorMessage('');
+      await loadProducts();
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : 'Failed to delete product.');
+    }
+  }
+
   return (
     <div className="animate-fade-in">
       <FlowerPageHeader
@@ -199,12 +209,14 @@ export default function FlowerProductsPage() {
                 key={section.flowerType}
                 section={section}
                 onChanged={loadProducts}
+                onDelete={handleDeleteProduct}
               />
             ) : section.variants[0] ? (
               <ProductStandaloneCard
                 key={section.flowerType}
                 product={section.variants[0]}
                 onChanged={loadProducts}
+                onDelete={handleDeleteProduct}
               />
             ) : null,
           )}
@@ -218,7 +230,7 @@ export default function FlowerProductsPage() {
         <>
           <div className="mt-5 space-y-3 md:hidden">
             {miscProducts.map((product) => (
-              <MiscProductCard key={product.id} product={product} onChanged={loadProducts} />
+              <MiscProductCard key={product.id} product={product} onChanged={loadProducts} onDelete={handleDeleteProduct} />
             ))}
             {miscProducts.length === 0 ? (
               <p className="rounded-xl border border-brand-muted/30 px-3 py-6 text-center text-sm text-brand-brown/60">
@@ -241,7 +253,7 @@ export default function FlowerProductsPage() {
               </thead>
               <tbody>
                 {miscProducts.map((product) => (
-                  <MiscProductRow key={product.id} product={product} onChanged={loadProducts} />
+                  <MiscProductRow key={product.id} product={product} onChanged={loadProducts} onDelete={handleDeleteProduct} />
                 ))}
                 {miscProducts.length === 0 ? (
                   <tr>
@@ -378,9 +390,11 @@ function ProductStatusBadge({ isActive }: { isActive: boolean }) {
 function ProductCategoryGroup({
   section,
   onChanged,
+  onDelete,
 }: {
   section: FlowerProductTypeGroup;
   onChanged: () => Promise<void>;
+  onDelete: (productId: string) => Promise<void>;
 }) {
   const existingColors = section.variants.map((product) => product.color);
   const [expanded, setExpanded] = useState(false);
@@ -440,7 +454,12 @@ function ProductCategoryGroup({
       {expanded ? (
         <div id={panelId} className="divide-y divide-brand-muted/15 bg-brand-cream/10">
           {section.variants.map((product) => (
-            <ProductCategoryVariantRow key={product.id} product={product} onChanged={onChanged} />
+            <ProductCategoryVariantRow
+              key={product.id}
+              product={product}
+              onChanged={onChanged}
+              onDelete={onDelete}
+            />
           ))}
         </div>
       ) : null}
@@ -451,9 +470,11 @@ function ProductCategoryGroup({
 function ProductCategoryVariantRow({
   product,
   onChanged,
+  onDelete,
 }: {
   product: FlowerProduct;
   onChanged: () => Promise<void>;
+  onDelete: (productId: string) => Promise<void>;
 }) {
   return (
     <div className="flex flex-col gap-3 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
@@ -466,7 +487,7 @@ function ProductCategoryVariantRow({
         <p className="text-sm font-semibold text-brand-dark">{PRICE_FORMATTER.format(product.unit_cost)}</p>
         <ProductStatusBadge isActive={product.is_active} />
         <RequireFlowerAdmin silent>
-          <ProductVariantActions product={product} onChanged={onChanged} />
+          <ProductVariantActions product={product} onChanged={onChanged} onDelete={onDelete} />
         </RequireFlowerAdmin>
       </div>
     </div>
@@ -476,9 +497,11 @@ function ProductCategoryVariantRow({
 function ProductStandaloneCard({
   product,
   onChanged,
+  onDelete,
 }: {
   product: FlowerProduct;
   onChanged: () => Promise<void>;
+  onDelete: (productId: string) => Promise<void>;
 }) {
   const { isAdmin } = useFlowerAuth();
   const fixedColor = normalizeFlowerProductColor(product.color);
@@ -505,7 +528,7 @@ function ProductStandaloneCard({
           <p className="text-sm font-semibold text-brand-dark">{PRICE_FORMATTER.format(product.unit_cost)}</p>
           <ProductStatusBadge isActive={product.is_active} />
           <RequireFlowerAdmin silent>
-            <ProductVariantActions product={product} onChanged={onChanged} />
+            <ProductVariantActions product={product} onChanged={onChanged} onDelete={onDelete} />
           </RequireFlowerAdmin>
         </div>
       </div>
@@ -516,9 +539,11 @@ function ProductStandaloneCard({
 function ProductVariantActions({
   product,
   onChanged,
+  onDelete,
 }: {
   product: FlowerProduct;
   onChanged: () => Promise<void>;
+  onDelete: (productId: string) => Promise<void>;
 }) {
   return (
     <div className="flex flex-wrap gap-2">
@@ -532,7 +557,7 @@ function ProductVariantActions({
       <button
         type="button"
         className="flower-btn-secondary px-3 py-1.5 text-xs text-red-700"
-        onClick={() => void deleteFlowerProduct(product.id).then(onChanged)}
+        onClick={() => void onDelete(product.id)}
       >
         Delete
       </button>
@@ -544,10 +569,12 @@ function ProductActions({
   product,
   onSave,
   onChanged,
+  onDelete,
 }: {
   product: FlowerProduct;
   onSave: () => Promise<void>;
   onChanged: () => Promise<void>;
+  onDelete: (productId: string) => Promise<void>;
 }) {
   return (
     <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap">
@@ -564,7 +591,7 @@ function ProductActions({
       <button
         type="button"
         className="flower-btn-secondary col-span-2 px-3 py-2 text-xs text-red-700 sm:col-span-1 sm:py-1.5"
-        onClick={() => void deleteFlowerProduct(product.id).then(onChanged)}
+        onClick={() => void onDelete(product.id)}
       >
         Delete
       </button>
@@ -575,9 +602,11 @@ function ProductActions({
 function MiscProductCard({
   product,
   onChanged,
+  onDelete,
 }: {
   product: FlowerProduct;
   onChanged: () => Promise<void>;
+  onDelete: (productId: string) => Promise<void>;
 }) {
   const [name, setName] = useState(product.name);
   const [unitCost, setUnitCost] = useState(String(product.unit_cost));
@@ -640,7 +669,7 @@ function MiscProductCard({
 
       <RequireFlowerAdmin silent>
         <div className="mt-4 border-t border-brand-muted/30 pt-4">
-          <ProductActions product={product} onSave={save} onChanged={onChanged} />
+          <ProductActions product={product} onSave={save} onChanged={onChanged} onDelete={onDelete} />
         </div>
       </RequireFlowerAdmin>
     </div>
@@ -650,9 +679,11 @@ function MiscProductCard({
 function MiscProductRow({
   product,
   onChanged,
+  onDelete,
 }: {
   product: FlowerProduct;
   onChanged: () => Promise<void>;
+  onDelete: (productId: string) => Promise<void>;
 }) {
   const [name, setName] = useState(product.name);
   const [unitCost, setUnitCost] = useState(String(product.unit_cost));
@@ -704,7 +735,7 @@ function MiscProductRow({
       </td>
       <RequireFlowerAdmin silent>
         <td className="min-w-[14rem] px-3 py-2">
-          <ProductActions product={product} onSave={save} onChanged={onChanged} />
+          <ProductActions product={product} onSave={save} onChanged={onChanged} onDelete={onDelete} />
           {errorMessage ? <p className="mt-1 text-xs text-red-700">{errorMessage}</p> : null}
         </td>
       </RequireFlowerAdmin>
