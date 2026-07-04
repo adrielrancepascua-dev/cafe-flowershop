@@ -195,6 +195,22 @@ export function groupInventoryStockMisc(rows: FlowerInventoryStockRow[]): Flower
     .sort((left, right) => left.product_name.localeCompare(right.product_name));
 }
 
+/** Human-readable label for inventory rows (includes color for flower variants). */
+export function formatInventoryStockLabel(row: FlowerInventoryStockRow): string {
+  if (normalizeFlowerProductKind(row.product_kind) !== 'flower') {
+    return row.product_name;
+  }
+
+  const flowerType = deriveFlowerTypeFromProduct(row.product_name, row.product_color);
+  const color = normalizeFlowerProductColor(row.product_color);
+
+  if (color === FLOWER_PRODUCT_COLOR_UNCategorized) {
+    return flowerType;
+  }
+
+  return `${flowerType} · ${color}`;
+}
+
 export function flowerProductColorSwatchClass(color: string): string {
   switch (normalizeFlowerProductColor(color)) {
     case 'Red':

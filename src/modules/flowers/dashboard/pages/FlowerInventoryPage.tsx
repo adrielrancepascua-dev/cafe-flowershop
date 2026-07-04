@@ -17,12 +17,14 @@ import { INVENTORY_MOVEMENT_TYPE_LABELS } from '../../shared/utils/flower-format
 import {
   compareInventoryStockRows,
   flowerProductColorSwatchClass,
+  formatInventoryStockLabel,
   groupInventoryStockByFlowerType,
   groupInventoryStockMisc,
   normalizeFlowerProductColor,
 } from '../../shared/utils/flower-product-colors';
 import {
   FLOWER_PRODUCT_KIND_LABELS,
+  normalizeFlowerProductKind,
   type FlowerProductKind,
 } from '../../shared/utils/flower-product-kind';
 import {
@@ -537,6 +539,8 @@ export default function FlowerInventoryPage() {
 
   const [fromBranchId, setFromBranchId] = useState('');
   const [toBranchId, setToBranchId] = useState('');
+  const [transferKind, setTransferKind] = useState<FlowerProductKind>('flower');
+  const [transferFlowerType, setTransferFlowerType] = useState('');
   const [transferProductId, setTransferProductId] = useState('');
   const [transferQty, setTransferQty] = useState('1');
   const [activeTab, setActiveTab] = useState<InventoryTab>('stock');
@@ -681,21 +685,48 @@ export default function FlowerInventoryPage() {
 
   const fromBranchName = branches.find((branch) => branch.id === fromBranchId)?.name ?? '';
 
-  const transferProducts = useMemo(
+  const transferFlowerSections = useMemo(
     () =>
-      fromBranchStock
-        .filter((row) => row.product_is_active)
-        .sort((left, right) => left.product_name.localeCompare(right.product_name)),
+      groupInventoryStockByFlowerType(
+        fromBranchStock.filter(
+          (row) =>
+            row.product_is_active && normalizeFlowerProductKind(row.product_kind) === 'flower',
+        ),
+      ),
     [fromBranchStock],
   );
 
-  const selectedTransferOnHand = useMemo(() => {
+  const transferMiscProducts = useMemo(
+    () =>
+      groupInventoryStockMisc(
+        fromBranchStock.filter(
+          (row) =>
+            row.product_is_active && normalizeFlowerProductKind(row.product_kind) === 'misc',
+        ),
+      ),
+    [fromBranchStock],
+  );
+
+  const transferColorOptions = useMemo(() => {
+    if (!transferFlowerType) {
+      return [];
+    }
+
+    return (
+      transferFlowerSections.find((section) => section.flowerType === transferFlowerType)?.rows ??
+      []
+    );
+  }, [transferFlowerSections, transferFlowerType]);
+
+  const selectedTransferRow = useMemo(() => {
     if (!transferProductId) {
       return null;
     }
 
-    return fromBranchStock.find((row) => row.product_id === transferProductId)?.on_hand ?? 0;
+    return fromBranchStock.find((row) => row.product_id === transferProductId) ?? null;
   }, [fromBranchStock, transferProductId]);
+
+  const selectedTransferOnHand = selectedTransferRow?.on_hand ?? null;
 
   const transferQtyNumber = Number(transferQty) || 0;
   const transferWillGoNegative =
@@ -755,6 +786,12 @@ export default function FlowerInventoryPage() {
       setTransferErrorMessage(error instanceof Error ? error.message : 'Transfer failed.');
       setTransferMessage('');
     }
+  }
+
+  function resetTransferSelection() {
+    setTransferFlowerType('');
+    setTransferProductId('');
+    setTransferQty('1');
   }
 
   function clearTransferFeedback() {
@@ -838,8 +875,7 @@ export default function FlowerInventoryPage() {
                     value={fromBranchId}
                     onChange={(e) => {
                       setFromBranchId(e.target.value);
-                      setTransferProductId('');
-                      setTransferQty('1');
+                      resetTransferSelection();
                       clearTransferFeedback();
                     }}
                     className="flower-input mt-1.5"
@@ -868,50 +904,130 @@ export default function FlowerInventoryPage() {
                     ))}
                   </select>
                 </label>
-                <label className="block text-sm font-medium text-brand-brown">
-                  Flower / item
-                  <select
-                    value={transferProductId}
-                    onChange={(e) => {
-                      const nextProductId = e.target.value;
-                      setTransferProductId(nextProductId);
-                      setTransferQty((current) => sanitizeTransferQty(current || '1'));
+              </div>
+              <div className="mt-4 inline-flex rounded-xl border border-brand-muted/50 bg-white p-1">
+                {(['flower', 'misc'] as const).map((kind) => (
+                  <button
+                    key={kind}
+                    type="button"
+                    onClick={() => {
+                      setTransferKind(kind);
+                      resetTransferSelection();
                       clearTransferFeedback();
                     }}
-                    className="flower-input mt-1.5"
-                    required
-                    disabled={!fromBranchId || fromBranchStockLoading}
+                    className={`flower-pill ${transferKind === kind ? 'flower-pill-active' : 'flower-pill-inactive'}`}
                   >
-                    <option value="">
-                      {!fromBranchId
-                        ? 'Select source branch first'
-                        : fromBranchStockLoading
-                          ? 'Loading stock...'
-                          : transferProducts.length === 0
-                            ? 'No active products at this branch'
-                            : 'Select product'}
-                    </option>
-                    {transferProducts.map((row) => (
-                      <option key={row.product_id} value={row.product_id}>
-                        {row.product_name} ({row.on_hand} on hand)
-                      </option>
-                    ))}
-                  </select>
-                  {transferProductId && selectedTransferOnHand !== null ? (
-                    <p
-                      className={`mt-1.5 text-xs ${
-                        transferWillGoNegative ? 'text-amber-800' : 'text-brand-brown/70'
-                      }`}
+                    {FLOWER_PRODUCT_KIND_LABELS[kind]}
+                  </button>
+                ))}
+              </div>
+              <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                {transferKind === 'flower' ? (
+                  <>
+                    <label className="block text-sm font-medium text-brand-brown">
+                      Flower type
+                      <select
+                        value={transferFlowerType}
+                        onChange={(e) => {
+                          setTransferFlowerType(e.target.value);
+                          setTransferProductId('');
+                          setTransferQty('1');
+                          clearTransferFeedback();
+                        }}
+                        className="flower-input mt-1.5"
+                        required
+                        disabled={!fromBranchId || fromBranchStockLoading}
+                      >
+                        <option value="">
+                          {!fromBranchId
+                            ? 'Select source branch first'
+                            : fromBranchStockLoading
+                              ? 'Loading stock...'
+                              : transferFlowerSections.length === 0
+                                ? 'No flowers at this branch'
+                                : 'Select flower type'}
+                        </option>
+                        {transferFlowerSections.map((section) => {
+                          const totalOnHand = section.rows.reduce((sum, row) => sum + row.on_hand, 0);
+
+                          return (
+                            <option key={section.flowerType} value={section.flowerType}>
+                              {section.flowerType} ({section.rows.length} colors · {totalOnHand} on hand)
+                            </option>
+                          );
+                        })}
+                      </select>
+                    </label>
+                    <label className="block text-sm font-medium text-brand-brown">
+                      Color
+                      <select
+                        value={transferProductId}
+                        onChange={(e) => {
+                          setTransferProductId(e.target.value);
+                          setTransferQty((current) => sanitizeTransferQty(current || '1'));
+                          clearTransferFeedback();
+                        }}
+                        className="flower-input mt-1.5"
+                        required
+                        disabled={!transferFlowerType || transferColorOptions.length === 0}
+                      >
+                        <option value="">
+                          {!transferFlowerType
+                            ? 'Select flower type first'
+                            : transferColorOptions.length === 0
+                              ? 'No colors available'
+                              : 'Select color'}
+                        </option>
+                        {transferColorOptions.map((row) => (
+                          <option key={row.product_id} value={row.product_id}>
+                            {normalizeFlowerProductColor(row.product_color)} ({row.on_hand} on hand)
+                          </option>
+                        ))}
+                      </select>
+                      {transferProductId && selectedTransferRow ? (
+                        <p className="mt-1.5 flex items-center gap-2 text-xs text-brand-brown/70">
+                          <span
+                            className={`h-3 w-3 rounded-full ${flowerProductColorSwatchClass(
+                              normalizeFlowerProductColor(selectedTransferRow.product_color),
+                            )}`}
+                            aria-hidden
+                          />
+                          Transferring {formatInventoryStockLabel(selectedTransferRow)}
+                        </p>
+                      ) : null}
+                    </label>
+                  </>
+                ) : (
+                  <label className="block text-sm font-medium text-brand-brown sm:col-span-2">
+                    Wrapper / gift item
+                    <select
+                      value={transferProductId}
+                      onChange={(e) => {
+                        setTransferProductId(e.target.value);
+                        setTransferQty((current) => sanitizeTransferQty(current || '1'));
+                        clearTransferFeedback();
+                      }}
+                      className="flower-input mt-1.5"
+                      required
+                      disabled={!fromBranchId || fromBranchStockLoading}
                     >
-                      {selectedTransferOnHand} on hand at {fromBranchName}
-                      {transferWillGoNegative ? ' — source branch will go negative' : ''}
-                    </p>
-                  ) : fromBranchId && !fromBranchStockLoading && transferProducts.length === 0 ? (
-                    <p className="mt-1.5 text-xs text-brand-brown/60">
-                      No active products at {fromBranchName}.
-                    </p>
-                  ) : null}
-                </label>
+                      <option value="">
+                        {!fromBranchId
+                          ? 'Select source branch first'
+                          : fromBranchStockLoading
+                            ? 'Loading stock...'
+                            : transferMiscProducts.length === 0
+                              ? 'No misc items at this branch'
+                              : 'Select item'}
+                      </option>
+                      {transferMiscProducts.map((row) => (
+                        <option key={row.product_id} value={row.product_id}>
+                          {row.product_name} ({row.on_hand} on hand)
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                )}
                 <label className="block text-sm font-medium text-brand-brown">
                   Quantity
                   <input
@@ -927,12 +1043,33 @@ export default function FlowerInventoryPage() {
                     disabled={!transferProductId}
                   />
                 </label>
-                <div className="flex items-end sm:col-span-2 lg:col-span-2">
+                <div className="flex items-end sm:col-span-2 lg:col-span-3">
                   <button type="submit" className="flower-btn-primary w-full sm:w-auto">
                     Transfer stock
                   </button>
                 </div>
               </div>
+              {transferProductId && selectedTransferOnHand !== null ? (
+                <p
+                  className={`mt-3 text-xs ${
+                    transferWillGoNegative ? 'text-amber-800' : 'text-brand-brown/70'
+                  }`}
+                >
+                  {selectedTransferOnHand} on hand at {fromBranchName}
+                  {selectedTransferRow ? ` for ${formatInventoryStockLabel(selectedTransferRow)}` : ''}
+                  {transferWillGoNegative ? ' — source branch will go negative' : ''}
+                </p>
+              ) : fromBranchId && !fromBranchStockLoading ? (
+                <p className="mt-3 text-xs text-brand-brown/60">
+                  {transferKind === 'flower'
+                    ? transferFlowerSections.length === 0
+                      ? `No active flowers at ${fromBranchName}.`
+                      : 'Choose a flower type, then pick the color variant to transfer.'
+                    : transferMiscProducts.length === 0
+                      ? `No wrappers or gift items at ${fromBranchName}.`
+                      : 'Choose the item to transfer.'}
+                </p>
+              ) : null}
               {transferErrorMessage ? (
                 <p className="mt-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
                   {transferErrorMessage}
