@@ -46,6 +46,10 @@ import {
   isReadyPhotoRequiredForStatusChange,
   urgencyBadgeClassName,
 } from '../../shared/utils/flower-order-deadlines';
+import {
+  buildFlowerProductIdSet,
+  orderSkipsReadyPhotoRequirement,
+} from '../../shared/utils/flower-order-items';
 import OrderAttachmentField from './OrderAttachmentField';
 import OrderAttachmentPreview from './OrderAttachmentPreview';
 
@@ -976,17 +980,6 @@ export default function FlowerOrderFormModal({
     return () => window.clearInterval(intervalId);
   }, [open, existingOrder, readyPhotoSaved]);
 
-  const prepDeadline = existingOrder
-    ? getOrderPrepDeadlineInfo(
-        {
-          ...existingOrder,
-          claim_mode: form.claim_mode,
-          ready_photo_data_url: readyPhotoSaved ? form.ready_photo_data_url : '',
-        },
-        deadlineNowMs,
-      )
-    : null;
-
   useEffect(() => {
     if (!open || !form.branch_id || isViewMode) {
       setStockByProductId({});
@@ -1093,6 +1086,33 @@ export default function FlowerOrderFormModal({
         .sort((left, right) => left.name.localeCompare(right.name)),
     [products],
   );
+  const flowerProductIds = useMemo(() => buildFlowerProductIdSet(products), [products]);
+  const currentOrderItems = useMemo(() => {
+    if (existingOrder && isViewMode) {
+      return existingOrder.items;
+    }
+
+    return [
+      ...buildFlowerCatalogOrderItems(activeProducts, productQuantities),
+      ...buildCatalogOrderItems(miscProducts, productQuantities),
+    ];
+  }, [existingOrder, isViewMode, activeProducts, miscProducts, productQuantities]);
+  const photoRulesUseWalkIn = useMemo(
+    () => orderSkipsReadyPhotoRequirement(currentOrderItems, form.claim_mode, flowerProductIds),
+    [currentOrderItems, form.claim_mode, flowerProductIds],
+  );
+  const prepDeadline = existingOrder
+    ? getOrderPrepDeadlineInfo(
+        {
+          ...existingOrder,
+          items: currentOrderItems,
+          claim_mode: form.claim_mode,
+          ready_photo_data_url: readyPhotoSaved ? form.ready_photo_data_url : '',
+        },
+        deadlineNowMs,
+        { flowerProductIds },
+      )
+    : null;
 
   const flowerTypeGroups = useMemo(
     () => groupFlowerProductsByType(activeProducts),
@@ -1292,8 +1312,8 @@ export default function FlowerOrderFormModal({
       return null;
     }
 
-    if (flowerItems.length === 0) {
-      setErrorMessage('Add at least one flower type with quantity.');
+    if (items.length === 0) {
+      setErrorMessage('Add at least one item — flowers or miscellaneous.');
       return null;
     }
 
@@ -1410,6 +1430,7 @@ export default function FlowerOrderFormModal({
         { ...existingOrder, ready_photo_data_url: form.ready_photo_data_url },
         nextStatus,
         deadlineNowMs,
+        { flowerProductIds },
       )
     ) {
       setStatusDraft(normalizeOrderStatusForPicker(existingOrder.status, existingOrder.claim_mode));
@@ -1655,7 +1676,9 @@ export default function FlowerOrderFormModal({
                   </p>
                   {showReadyPhotoRequirement ? (
                     <p className="mt-1 text-sm text-amber-900">
-                      {formatFinishedPhotoRequirementLabel(form.claim_mode)}
+                      {formatFinishedPhotoRequirementLabel(
+                        photoRulesUseWalkIn ? 'walk_in' : form.claim_mode,
+                      )}
                     </p>
                   ) : (
                     <p className="mt-1 text-sm font-medium text-emerald-800">Photo submitted</p>
@@ -1887,7 +1910,9 @@ export default function FlowerOrderFormModal({
                   {miscSelectionSummary.units} unit{miscSelectionSummary.units === 1 ? '' : 's'}
                 </p>
               ) : !isViewMode ? (
-                <p className="text-xs text-brand-brown/60">Optional — tap + to add wrappers, chocolates, etc.</p>
+                <p className="text-xs text-brand-brown/60">
+                  Optional — envelopes, wrappers, chocolates, etc. Misc-only orders are allowed.
+                </p>
               ) : null}
             </div>
 
@@ -1944,7 +1969,7 @@ export default function FlowerOrderFormModal({
                 </p>
               ) : !isViewMode ? (
                 <p className="text-xs text-brand-brown/60">
-                  Multi-color flowers collapse by default — tap the name to expand colors, tap again to collapse
+                  Optional — add flowers or fillers when the order includes stems
                 </p>
               ) : null}
             </div>

@@ -33,6 +33,7 @@ import {
   summarizeFlowerLines,
   toDateKey,
 } from '../../shared/utils/flower-format';
+import { buildFlowerProductIdSet } from '../../shared/utils/flower-order-items';
 
 type ViewMode = 'calendar' | 'list';
 
@@ -64,10 +65,12 @@ function DayOrderList({
   orders,
   onSelectOrder,
   nowMs,
+  flowerProductIds,
 }: {
   orders: FlowerOrder[];
   onSelectOrder: (order: FlowerOrder) => void;
   nowMs: number;
+  flowerProductIds: ReadonlySet<string>;
 }) {
   if (orders.length === 0) {
     return (
@@ -96,7 +99,7 @@ function DayOrderList({
               </p>
             </div>
             <div className="flex shrink-0 flex-col items-start gap-1.5 sm:items-end">
-              <OrderDeadlineBadge order={order} nowMs={nowMs} />
+              <OrderDeadlineBadge order={order} nowMs={nowMs} flowerProductIds={flowerProductIds} />
               <div className="flex items-center gap-3 sm:flex-col sm:items-end sm:gap-1">
               <span className="rounded-full bg-brand-beige px-2.5 py-1 text-xs font-semibold text-brand-brown">
                 {ORDER_STATUS_LABELS[order.status]}
@@ -192,6 +195,7 @@ function MobileDayOrdersSheet({
   selectedDayLabel,
   orders,
   nowMs,
+  flowerProductIds,
   onClose,
   onExpand,
   onCollapse,
@@ -203,6 +207,7 @@ function MobileDayOrdersSheet({
   selectedDayLabel: string;
   orders: FlowerOrder[];
   nowMs: number;
+  flowerProductIds: ReadonlySet<string>;
   onClose: () => void;
   onExpand: () => void;
   onCollapse: () => void;
@@ -447,7 +452,12 @@ function MobileDayOrdersSheet({
               onPrintOrder={onPrintOrder}
             />
             <div className="flower-scroll min-h-0 flex-1 touch-pan-y overflow-y-auto overscroll-contain pb-[calc(4.5rem+env(safe-area-inset-bottom))]">
-              <DayOrderList orders={orders} onSelectOrder={onSelectOrder} nowMs={nowMs} />
+              <DayOrderList
+                orders={orders}
+                onSelectOrder={onSelectOrder}
+                nowMs={nowMs}
+                flowerProductIds={flowerProductIds}
+              />
             </div>
           </>
         ) : null}
@@ -470,6 +480,7 @@ export default function FlowerOrdersPage() {
   const [orders, setOrders] = useState<FlowerOrder[]>([]);
   const [branches, setBranches] = useState<FlowerBranchOption[]>([]);
   const [products, setProducts] = useState<FlowerProduct[]>([]);
+  const flowerProductIds = useMemo(() => buildFlowerProductIdSet(products), [products]);
   const [branchFilter, setBranchFilter] = useState('all');
   const branchFilterInitializedRef = useRef(false);
   const [loading, setLoading] = useState(true);
@@ -886,7 +897,11 @@ export default function FlowerOrdersPage() {
       </div>
 
       {!loading ? (
-        <OrderDeadlineAlertsPanel orders={orders} onSelectOrder={openExistingOrder} />
+        <OrderDeadlineAlertsPanel
+          orders={orders}
+          onSelectOrder={openExistingOrder}
+          flowerProductIds={flowerProductIds}
+        />
       ) : null}
 
       {loading && orders.length === 0 ? (
@@ -1002,6 +1017,7 @@ export default function FlowerOrdersPage() {
                   orders={selectedDayOrders}
                   onSelectOrder={openExistingOrder}
                   nowMs={nowMs}
+                  flowerProductIds={flowerProductIds}
                 />
               </div>
 
@@ -1011,6 +1027,7 @@ export default function FlowerOrdersPage() {
                   selectedDayLabel={selectedDayLabel}
                   orders={selectedDayOrders}
                   nowMs={nowMs}
+                  flowerProductIds={flowerProductIds}
                   onClose={closeDaySheet}
                   onExpand={expandMobileDaySheet}
                   onCollapse={collapseMobileDaySheet}
@@ -1059,7 +1076,7 @@ export default function FlowerOrdersPage() {
                       <span className="rounded-full bg-brand-beige px-2.5 py-1 text-xs font-semibold text-brand-brown">
                         {ORDER_STATUS_LABELS[order.status]}
                       </span>
-                      <OrderDeadlineBadge order={order} nowMs={nowMs} />
+                      <OrderDeadlineBadge order={order} nowMs={nowMs} flowerProductIds={flowerProductIds} />
                       <span className="text-xs text-brand-brown/60">{order.created_by_name}</span>
                     </div>
                   </button>
@@ -1116,7 +1133,7 @@ export default function FlowerOrdersPage() {
                   </td>
                   <td className="px-3 py-2 whitespace-nowrap">{ORDER_STATUS_LABELS[order.status]}</td>
                   <td className="px-3 py-2 align-top">
-                    <OrderDeadlineBadge order={order} nowMs={nowMs} variant="table" />
+                    <OrderDeadlineBadge order={order} nowMs={nowMs} variant="table" flowerProductIds={flowerProductIds} />
                   </td>
                   <td className="px-3 py-2 whitespace-nowrap">
                     {PRICE_FORMATTER.format(order.total_amount)}

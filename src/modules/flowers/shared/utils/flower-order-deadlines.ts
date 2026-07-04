@@ -1,4 +1,5 @@
 import type { FlowerClaimMode, FlowerOrder, FlowerOrderStatus } from '../types/flower-order';
+import { orderSkipsReadyPhotoRequirement } from './flower-order-items';
 import {
   getLocalDayBoundsIso,
   parseFlowerTimestamp,
@@ -140,12 +141,18 @@ function buildWalkInPhotoMessage(minutesUntilDeadline: number): string {
   return `Submit photo by end of day (${timeLabel} remaining)`;
 }
 
+export interface OrderPrepDeadlineOptions {
+  flowerProductIds?: ReadonlySet<string>;
+  maxHoursAhead?: number;
+}
+
 export function getOrderPrepDeadlineInfo(
   order: Pick<
     FlowerOrder,
-    'id' | 'status' | 'scheduled_for' | 'claim_mode' | 'ready_photo_data_url'
+    'id' | 'status' | 'scheduled_for' | 'claim_mode' | 'ready_photo_data_url' | 'items'
   >,
   nowMs: number = Date.now(),
+  options: OrderPrepDeadlineOptions = {},
 ): OrderPrepDeadlineInfo | null {
   if (order.ready_photo_data_url) {
     return null;
@@ -162,8 +169,13 @@ export function getOrderPrepDeadlineInfo(
 
   const pickupDayKey = scheduledForToDateKey(order.scheduled_for);
   const todayKey = toDateKey(new Date());
+  const usesWalkInPhotoRules = orderSkipsReadyPhotoRequirement(
+    order.items,
+    order.claim_mode,
+    options.flowerProductIds,
+  );
 
-  if (order.claim_mode === 'walk_in') {
+  if (usesWalkInPhotoRules) {
     if (pickupDayKey > todayKey) {
       return null;
     }
@@ -229,13 +241,13 @@ export function getOrderPrepDeadlineInfo(
 export function listActiveOrderPrepDeadlines(
   orders: FlowerOrder[],
   nowMs: number = Date.now(),
-  options: { maxHoursAhead?: number } = {},
+  options: OrderPrepDeadlineOptions = {},
 ): OrderPrepDeadlineInfo[] {
   const maxHoursAhead = options.maxHoursAhead ?? 24;
   const maxMinutesAhead = maxHoursAhead * 60;
 
   return orders
-    .map((order) => getOrderPrepDeadlineInfo(order, nowMs))
+    .map((order) => getOrderPrepDeadlineInfo(order, nowMs, options))
     .filter((info): info is OrderPrepDeadlineInfo => {
       if (!info) {
         return false;
@@ -254,8 +266,9 @@ export function isReadyPhotoRequiredForStatusChange(
   order: FlowerOrder,
   nextStatus: FlowerOrderStatus,
   nowMs: number = Date.now(),
+  options: OrderPrepDeadlineOptions = {},
 ): boolean {
-  if (order.claim_mode === 'walk_in') {
+  if (orderSkipsReadyPhotoRequirement(order.items, order.claim_mode, options.flowerProductIds)) {
     return false;
   }
 
@@ -263,7 +276,7 @@ export function isReadyPhotoRequiredForStatusChange(
     return false;
   }
 
-  const info = getOrderPrepDeadlineInfo(order, nowMs);
+  const info = getOrderPrepDeadlineInfo(order, nowMs, options);
   return Boolean(info && info.minutesUntilDeadline <= 0);
 }
 

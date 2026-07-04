@@ -10,13 +10,15 @@ export default function OrderDeadlineBadge({
   nowMs,
   compact = false,
   variant = 'inline',
+  flowerProductIds,
 }: {
   order: FlowerOrder;
   nowMs?: number;
   compact?: boolean;
   variant?: 'inline' | 'table';
+  flowerProductIds?: ReadonlySet<string>;
 }) {
-  const info = getOrderPrepDeadlineInfo(order, nowMs);
+  const info = getOrderPrepDeadlineInfo(order, nowMs, { flowerProductIds });
 
   if (!info || info.urgency === 'none') {
     return null;

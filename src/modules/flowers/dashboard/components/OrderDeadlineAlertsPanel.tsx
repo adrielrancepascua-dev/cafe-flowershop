@@ -26,9 +26,11 @@ function buildCollapsedSummary(alerts: OrderPrepDeadlineInfo[]): string {
 export default function OrderDeadlineAlertsPanel({
   orders,
   onSelectOrder,
+  flowerProductIds,
 }: {
   orders: FlowerOrder[];
   onSelectOrder: (order: FlowerOrder) => void;
+  flowerProductIds?: ReadonlySet<string>;
 }) {
   const [nowMs, setNowMs] = useState(() => Date.now());
   const [expanded, setExpanded] = useState(false);
@@ -42,8 +44,8 @@ export default function OrderDeadlineAlertsPanel({
   }, []);
 
   const alerts = useMemo(
-    () => listActiveOrderPrepDeadlines(orders, nowMs),
-    [orders, nowMs],
+    () => listActiveOrderPrepDeadlines(orders, nowMs, { flowerProductIds }),
+    [orders, nowMs, flowerProductIds],
   );
 
   const hasUrgent = alerts.some(
