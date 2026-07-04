@@ -1,5 +1,5 @@
 import { Link } from 'react-router-dom';
-import { CalendarDays, Package, Receipt, ShoppingBag, Sprout, BarChart3 } from 'lucide-react';
+import { CalendarDays, ClipboardList, Package, Receipt, ShoppingBag, Sprout, BarChart3 } from 'lucide-react';
 import { isFlowerDemoMode } from '../../../../app/app-mode';
 import { isSupabaseConfigured } from '../../../../lib/supabase/client';
 import { useFlowerAuth } from '../../../../lib/auth/FlowerAuthContext';
@@ -29,6 +29,7 @@ const STAFF_LINKS = [
 
 const ADMIN_LINKS = [
   { label: 'Products', to: '/dashboard/flowers/products', icon: Sprout, description: 'Manage flower types & costs' },
+  { label: 'Supplies', to: '/dashboard/flowers/supplies', icon: ClipboardList, description: 'Branch supply transfers & liability vouchers' },
 ];
 
 export default function FlowersAdminHome() {

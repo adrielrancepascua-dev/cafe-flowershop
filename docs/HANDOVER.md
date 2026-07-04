@@ -16,7 +16,9 @@ Use this before collecting the ₱30k balance. Run on the **production** deploy 
 - [ ] `supabase/seed_admin_aleajcq.sql` applied after creating Auth user **aleajcq@gmail.com** (temp password `1234`; owner sets personal password on first login — no branch step)
 - [ ] `SUPABASE_SERVICE_ROLE_KEY` set on Vercel (server only — enables **Team** page to create staff)
 - [ ] `VITE_STAFF_EMAIL_DOMAIN` set if staff emails should not use `papersandpetals.ph`
-- [ ] Admin account exists in Supabase Auth + `flower_profiles` with `role = 'admin'`
+- [ ] `supabase/add_inventory_transfer_requests.sql` applied (inter-branch transfer requests)
+- [ ] `supabase/add_inventory_transfer_items.sql` applied (multi-product transfer lines)
+- [ ] `supabase/add_flower_supply_transfers.sql` applied (admin Supplies tab vouchers)
 
 ### Create the first admin (one-time)
 
@@ -87,7 +89,13 @@ Pick a test day with 2+ orders (or create them for today).
 - [ ] Rejecting (receiver) or cancelling (sender) a pending request returns the stock to the source branch
 - [ ] Both branches show updated on-hand on both devices
 
-### 6. Production login
+### 6. Supplies (admin)
+
+- [ ] Admin opens **Supplies** → New arrivals voucher saves and updates inventory
+- [ ] Total liability = flower cost + supplies + transpo (new arrivals) or flower cost only (old stock)
+- [ ] History list shows vouchers; print voucher works
+
+### 7. Production login
 
 - [ ] Demo one-tap Admin/Staff buttons **not** shown on login page
 - [ ] Real email/password login works for admin and staff

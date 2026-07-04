@@ -342,3 +342,78 @@ export function FlowerThermalSalesReportDocument({
     </FlowerThermalPrintRoot>
   );
 }
+
+export function FlowerSupplyTransferPrintDocument({
+  transfer,
+}: {
+  transfer: import('../types/flower-supply-transfer').FlowerSupplyTransfer;
+}) {
+  const title =
+    transfer.transfer_type === 'new_arrival'
+      ? 'BRANCH TRANSFER FOR NEW ARRIVALS'
+      : 'BRANCH TRANSFER FOR OLD STOCKS';
+
+  return (
+    <FlowerThermalPrintRoot id="flower-supply-transfer-print">
+      <section className="flower-thermal-slip">
+        <p className="flower-thermal-brand">{THERMAL_BRAND_NAME.toUpperCase()}</p>
+        <p className="flower-thermal-section-title">{title}</p>
+        <p className="flower-thermal-line">{formatThermalDateKey(transfer.created_at.slice(0, 10))}</p>
+
+        <FlowerThermalDivider />
+
+        {transfer.transfer_type === 'new_arrival' ? (
+          <>
+            <p className="flower-thermal-line">
+              ARRIVED AT: {(transfer.arrived_at_branch_name ?? '—').toUpperCase()}
+            </p>
+            <p className="flower-thermal-line">SUPPLIER: {transfer.supplier.toUpperCase()}</p>
+            <p className="flower-thermal-line">
+              AMOUNT PAID (SUPPLIES): {PRICE_FORMATTER.format(transfer.amount_paid_supplies)}
+            </p>
+            <p className="flower-thermal-line">
+              AMOUNT PAID (TRANSPO): {PRICE_FORMATTER.format(transfer.amount_paid_transpo)}
+            </p>
+          </>
+        ) : (
+          <p className="flower-thermal-line">
+            ORIGINAL ARRIVAL:{' '}
+            {transfer.original_arrival_date
+              ? formatThermalDateKey(transfer.original_arrival_date)
+              : '—'}
+          </p>
+        )}
+
+        <FlowerThermalDivider />
+
+        <p className="flower-thermal-line">FROM: {transfer.from_branch_name.toUpperCase()}</p>
+        <p className="flower-thermal-line">PREPARED BY: {transfer.prepared_by.toUpperCase()}</p>
+        <p className="flower-thermal-line">TO: {transfer.to_branch_name.toUpperCase()}</p>
+        <p className="flower-thermal-line">RECEIVED BY: {transfer.received_by.toUpperCase()}</p>
+
+        <FlowerThermalDivider />
+
+        <FlowerThermalSectionTitle>FLOWERS</FlowerThermalSectionTitle>
+        {transfer.items.map((item) => (
+          <p key={item.id} className="flower-thermal-line">
+            {formatThermalItemLine(
+              item.quantity,
+              `${item.product_name} · ${item.product_color}`,
+            )}{' '}
+            ({PRICE_FORMATTER.format(item.line_liability)})
+          </p>
+        ))}
+
+        <FlowerThermalDivider />
+
+        <p className="flower-thermal-line">
+          FLOWER COST: {PRICE_FORMATTER.format(transfer.flower_liability)}
+        </p>
+        <p className="flower-thermal-line flower-thermal-bold">
+          TOTAL LIABILITY: {PRICE_FORMATTER.format(transfer.total_liability)}
+        </p>
+        <p className="flower-thermal-line">REF: {transfer.id.slice(0, 8).toUpperCase()}</p>
+      </section>
+    </FlowerThermalPrintRoot>
+  );
+}
