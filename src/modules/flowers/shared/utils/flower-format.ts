@@ -202,6 +202,59 @@ export const INVENTORY_MOVEMENT_TYPE_LABELS: Record<string, string> = {
   order_deduct: 'Order deduct',
 };
 
+export const INVENTORY_MOVEMENT_TYPE_BADGES: Record<string, string> = {
+  stock_in: 'border-emerald-200 bg-emerald-50 text-emerald-800',
+  stock_out: 'border-red-200 bg-red-50 text-red-700',
+  transfer_in: 'border-sky-200 bg-sky-50 text-sky-800',
+  transfer_out: 'border-amber-200 bg-amber-50 text-amber-900',
+  order_deduct: 'border-brand-muted/50 bg-brand-beige/60 text-brand-brown',
+};
+
+export function parseInventoryMovementOrderId(note: string): string | null {
+  const match = note.match(/Order\s+(\S+)/i);
+  return match?.[1] ?? null;
+}
+
+export function formatInventoryMovementTimestamp(iso: string): string {
+  return parseFlowerTimestamp(iso).toLocaleString('en-PH', {
+    timeZone: 'Asia/Manila',
+    month: 'short',
+    day: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+    hour12: true,
+  });
+}
+
+/** Collapse duplicate day-close order deductions already stored before the deduct guard fix. */
+export function dedupeInventoryMovementRows<T extends {
+  movement_type: string;
+  product_id: string;
+  quantity: number;
+  branch_id: string;
+  note: string;
+}>(rows: T[]): T[] {
+  const seenOrderProduct = new Set<string>();
+  const result: T[] = [];
+
+  for (const row of rows) {
+    if (row.movement_type === 'order_deduct') {
+      const orderId = parseInventoryMovementOrderId(row.note);
+      if (orderId) {
+        const key = `${orderId}|${row.product_id}|${row.quantity}|${row.branch_id}`;
+        if (seenOrderProduct.has(key)) {
+          continue;
+        }
+        seenOrderProduct.add(key);
+      }
+    }
+
+    result.push(row);
+  }
+
+  return result;
+}
+
 export const ORDER_STATUS_LABELS: Record<string, string> = {
   not_started: 'Not started',
   ready: 'Ready',

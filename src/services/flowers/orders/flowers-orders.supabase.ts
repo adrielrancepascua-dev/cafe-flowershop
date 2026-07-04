@@ -241,14 +241,29 @@ async function maybeBatchDeductInventoryForClosedDay(dateKey: string): Promise<v
   const supabase = await requireAuthenticatedSupabaseClient();
 
   for (const order of pending) {
-    await deductInventoryForOrder(order);
-
-    const { error } = await supabase
+    const { data: claimed, error: claimError } = await supabase
       .from('flower_orders')
       .update({ inventory_deducted: true })
-      .eq('id', order.id);
+      .eq('id', order.id)
+      .eq('inventory_deducted', false)
+      .select('id')
+      .maybeSingle();
 
-    if (error) {
+    if (claimError) {
+      throw claimError;
+    }
+
+    if (!claimed) {
+      continue;
+    }
+
+    try {
+      await deductInventoryForOrder(order);
+    } catch (error) {
+      await supabase
+        .from('flower_orders')
+        .update({ inventory_deducted: false })
+        .eq('id', order.id);
       throw error;
     }
   }

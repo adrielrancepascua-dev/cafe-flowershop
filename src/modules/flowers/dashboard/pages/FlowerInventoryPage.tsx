@@ -21,8 +21,14 @@ import type {
 import FlowerPageHeader from '../../shared/components/FlowerPageHeader';
 import FlowerInventoryStockPrint from '../components/FlowerPrintableInventoryStockPanel';
 import FlowerPrintControls from '../../shared/components/FlowerPrintControls';
-import { Minus, Plus, ArrowLeftRight, Package, ChevronDown, Check, X, Trash2 } from 'lucide-react';
-import { INVENTORY_MOVEMENT_TYPE_LABELS } from '../../shared/utils/flower-format';
+import { Minus, Plus, ArrowLeftRight, Package, ChevronDown, Check, X, Trash2, Search } from 'lucide-react';
+import {
+  dedupeInventoryMovementRows,
+  formatInventoryMovementTimestamp,
+  INVENTORY_MOVEMENT_TYPE_BADGES,
+  INVENTORY_MOVEMENT_TYPE_LABELS,
+  parseInventoryMovementOrderId,
+} from '../../shared/utils/flower-format';
 import {
   compareInventoryStockRows,
   flowerProductColorSwatchClass,
@@ -790,6 +796,158 @@ function TransferRequestInbox({
 
 type InventoryTab = 'stock' | 'transfer';
 
+function InventoryMovementCard({
+  movement,
+  showBranch,
+}: {
+  movement: FlowerInventoryMovementRow;
+  showBranch: boolean;
+}) {
+  const typeLabel = INVENTORY_MOVEMENT_TYPE_LABELS[movement.movement_type] ?? movement.movement_type;
+  const typeBadgeClass =
+    INVENTORY_MOVEMENT_TYPE_BADGES[movement.movement_type] ??
+    'border-brand-muted/40 bg-white text-brand-brown';
+  const orderId = parseInventoryMovementOrderId(movement.note);
+  const detailNote =
+    movement.note && !orderId
+      ? movement.note
+      : movement.note && orderId
+        ? movement.note.replace(new RegExp(`Order\\s+${orderId}`, 'i'), '').trim()
+        : '';
+
+  return (
+    <li className="rounded-xl border border-brand-muted/35 bg-white px-3 py-3 shadow-sm sm:px-4">
+      <div className="flex flex-wrap items-start justify-between gap-2">
+        <div className="min-w-0 flex-1">
+          <p className="font-semibold text-brand-dark">{movement.product_name}</p>
+          {showBranch ? (
+            <p className="mt-0.5 text-xs text-brand-brown/65">{movement.branch_name}</p>
+          ) : null}
+        </div>
+        <span
+          className={`inline-flex shrink-0 rounded-full border px-2.5 py-0.5 text-[11px] font-semibold uppercase tracking-wide ${typeBadgeClass}`}
+        >
+          {typeLabel}
+        </span>
+      </div>
+
+      <div className="mt-2 flex flex-wrap items-center gap-2 text-sm">
+        <span className="rounded-lg border border-brand-muted/40 bg-brand-cream/30 px-2.5 py-1 text-sm font-bold text-brand-dark">
+          {movement.movement_type === 'stock_out' || movement.movement_type === 'transfer_out'
+            ? '−'
+            : movement.movement_type === 'order_deduct'
+              ? '−'
+              : '+'}
+          {movement.quantity}
+        </span>
+        <span className="text-xs text-brand-brown/70">
+          {movement.previous_on_hand} → {movement.new_on_hand} on hand
+        </span>
+      </div>
+
+      <div className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-brand-brown/65">
+        <span>{formatInventoryMovementTimestamp(movement.created_at)}</span>
+        {orderId ? (
+          <>
+            <span aria-hidden>·</span>
+            <span className="font-medium text-brand-brown/80">Order {orderId}</span>
+          </>
+        ) : null}
+        {detailNote ? (
+          <>
+            <span aria-hidden>·</span>
+            <span>{detailNote}</span>
+          </>
+        ) : null}
+      </div>
+    </li>
+  );
+}
+
+function InventoryRecentMovementsPanel({
+  movements,
+  branchLabel,
+  showBranch,
+}: {
+  movements: FlowerInventoryMovementRow[];
+  branchLabel: string;
+  showBranch: boolean;
+}) {
+  const [search, setSearch] = useState('');
+  const dedupedMovements = useMemo(() => dedupeInventoryMovementRows(movements), [movements]);
+
+  const filteredMovements = useMemo(() => {
+    const query = search.trim().toLowerCase();
+    if (!query) {
+      return dedupedMovements;
+    }
+
+    return dedupedMovements.filter((movement) => {
+      const orderId = parseInventoryMovementOrderId(movement.note);
+      const haystack = [
+        movement.product_name,
+        movement.branch_name,
+        INVENTORY_MOVEMENT_TYPE_LABELS[movement.movement_type] ?? movement.movement_type,
+        movement.note,
+        orderId,
+        String(movement.quantity),
+      ]
+        .filter(Boolean)
+        .join(' ')
+        .toLowerCase();
+
+      return haystack.includes(query);
+    });
+  }, [dedupedMovements, search]);
+
+  return (
+    <div className="mt-6">
+      <div className="flex flex-wrap items-end justify-between gap-3">
+        <div>
+          <h3 className="text-sm font-semibold text-brand-dark">Recent movements</h3>
+          <p className="mt-1 text-xs text-brand-brown/60">{branchLabel}</p>
+        </div>
+        <p className="text-xs text-brand-brown/60">
+          {filteredMovements.length} of {dedupedMovements.length} shown
+        </p>
+      </div>
+
+      <label className="relative mt-3 block">
+        <span className="sr-only">Search movements</span>
+        <Search
+          className="pointer-events-none absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2 text-brand-brown/45"
+          aria-hidden
+        />
+        <input
+          type="search"
+          value={search}
+          onChange={(event) => setSearch(event.target.value)}
+          placeholder="Search product, order ID, or movement type..."
+          className="flower-input w-full pl-9"
+        />
+      </label>
+
+      <ul className="mt-3 space-y-2">
+        {filteredMovements.length > 0 ? (
+          filteredMovements.map((movement) => (
+            <InventoryMovementCard
+              key={movement.id}
+              movement={movement}
+              showBranch={showBranch}
+            />
+          ))
+        ) : (
+          <li className="rounded-xl border border-dashed border-brand-muted/40 px-3 py-6 text-center text-sm text-brand-brown/60">
+            {dedupedMovements.length === 0
+              ? 'No movements recorded yet.'
+              : 'No movements match your search.'}
+          </li>
+        )}
+      </ul>
+    </div>
+  );
+}
+
 export default function FlowerInventoryPage() {
   const { user, isAdmin, isLoading: authLoading } = useFlowerAuth();
   const staffBranchId = !isAdmin ? user?.branch_id ?? null : null;
@@ -839,7 +997,7 @@ export default function FlowerInventoryPage() {
       const [branchList, stocks, movements] = await Promise.all([
         listFlowerBranches(),
         listFlowerInventoryStock({ branchId: stockBranchId }),
-        listFlowerInventoryMovements({ branchId: movementBranchId, limit: 30 }),
+        listFlowerInventoryMovements({ branchId: movementBranchId, limit: 60 }),
       ]);
       setBranches(branchList);
       setStockRows(stocks);
@@ -1847,27 +2005,11 @@ export default function FlowerInventoryPage() {
             </p>
           ) : null}
 
-          <div className="mt-6">
-            <h3 className="text-sm font-semibold text-brand-dark">Recent movements</h3>
-            <p className="mt-1 text-xs text-brand-brown/60">
-              {isAllBranchesView ? 'All branches' : selectedBranchName}
-            </p>
-            <ul className="mt-2 space-y-2 text-sm text-brand-brown/80">
-              {movementRows.length > 0 ? (
-                movementRows.map((movement) => (
-                  <li key={movement.id} className="rounded-lg border border-brand-muted/30 px-3 py-2">
-                    {movement.branch_name} · {movement.product_name} ·{' '}
-                    {INVENTORY_MOVEMENT_TYPE_LABELS[movement.movement_type] ?? movement.movement_type} ·{' '}
-                    {movement.quantity} · {movement.note}
-                  </li>
-                ))
-              ) : (
-                <li className="rounded-lg border border-brand-muted/30 px-3 py-2 text-brand-brown/60">
-                  No movements recorded yet.
-                </li>
-              )}
-            </ul>
-          </div>
+          <InventoryRecentMovementsPanel
+            movements={movementRows}
+            branchLabel={isAllBranchesView ? 'All branches' : selectedBranchName}
+            showBranch={isAllBranchesView}
+          />
         </>
       )}
       </div>

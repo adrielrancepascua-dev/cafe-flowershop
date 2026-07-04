@@ -119,28 +119,42 @@ async function maybeBatchDeductInventoryForClosedDay(dateKey: string): Promise<v
   const pending = getOrdersPendingInventoryDeduction(dayOrders, dateKey);
 
   for (const order of pending) {
-    await validateFlowerOrderStockLocal(order.branch_id, order.items);
+    const freshOrders = readOrdersFromStorage();
+    const index = freshOrders.findIndex((entry) => entry.id === order.id);
 
-    for (const item of order.items) {
-      await deductFlowerInventoryForOrderLocal({
-        branchId: order.branch_id,
-        productId: item.product_id,
-        quantity: item.quantity,
-        orderId: order.id,
-      });
+    if (index === -1 || freshOrders[index].inventory_deducted) {
+      continue;
     }
 
-    const index = orders.findIndex((entry) => entry.id === order.id);
-    if (index !== -1) {
-      orders[index] = {
-        ...orders[index],
-        inventory_deducted: true,
-      };
-    }
-  }
+    freshOrders[index] = {
+      ...freshOrders[index],
+      inventory_deducted: true,
+    };
+    writeOrdersToStorage(freshOrders);
 
-  if (pending.length > 0) {
-    writeOrdersToStorage(orders);
+    try {
+      await validateFlowerOrderStockLocal(order.branch_id, order.items);
+
+      for (const item of order.items) {
+        await deductFlowerInventoryForOrderLocal({
+          branchId: order.branch_id,
+          productId: item.product_id,
+          quantity: item.quantity,
+          orderId: order.id,
+        });
+      }
+    } catch (error) {
+      const rollbackOrders = readOrdersFromStorage();
+      const rollbackIndex = rollbackOrders.findIndex((entry) => entry.id === order.id);
+      if (rollbackIndex !== -1) {
+        rollbackOrders[rollbackIndex] = {
+          ...rollbackOrders[rollbackIndex],
+          inventory_deducted: false,
+        };
+        writeOrdersToStorage(rollbackOrders);
+      }
+      throw error;
+    }
   }
 }
 
