@@ -10,6 +10,7 @@ import {
   listFlowerTransferRequests,
   rejectFlowerTransferRequest,
 } from '../../../../services/flowers/inventory';
+import { getFlowerOrder } from '../../../../services/flowers/orders';
 import { useFlowerAuth } from '../../../../lib/auth/FlowerAuthContext';
 import type {
   FlowerBranchOption,
@@ -28,6 +29,8 @@ import {
   INVENTORY_MOVEMENT_TYPE_BADGES,
   INVENTORY_MOVEMENT_TYPE_LABELS,
   parseInventoryMovementOrderId,
+  parseInventoryMovementReceiver,
+  resolveInventoryMovementReceiver,
 } from '../../shared/utils/flower-format';
 import {
   compareInventoryStockRows,
@@ -796,30 +799,69 @@ function TransferRequestInbox({
 
 type InventoryTab = 'stock' | 'transfer';
 
+async function loadOrderReceiverLookup(
+  movements: FlowerInventoryMovementRow[],
+): Promise<Map<string, string>> {
+  const orderIds = new Set<string>();
+
+  for (const movement of movements) {
+    if (movement.movement_type !== 'order_deduct') {
+      continue;
+    }
+
+    if (parseInventoryMovementReceiver(movement.note)) {
+      continue;
+    }
+
+    const orderId = parseInventoryMovementOrderId(movement.note);
+    if (orderId) {
+      orderIds.add(orderId);
+    }
+  }
+
+  const lookup = new Map<string, string>();
+
+  await Promise.all(
+    [...orderIds].map(async (orderId) => {
+      const order = await getFlowerOrder(orderId);
+      if (order?.receiver.trim()) {
+        lookup.set(orderId, order.receiver.trim());
+      }
+    }),
+  );
+
+  return lookup;
+}
+
 function InventoryMovementCard({
   movement,
   showBranch,
+  orderReceiverById,
 }: {
   movement: FlowerInventoryMovementRow;
   showBranch: boolean;
+  orderReceiverById: ReadonlyMap<string, string>;
 }) {
   const typeLabel = INVENTORY_MOVEMENT_TYPE_LABELS[movement.movement_type] ?? movement.movement_type;
   const typeBadgeClass =
     INVENTORY_MOVEMENT_TYPE_BADGES[movement.movement_type] ??
     'border-brand-muted/40 bg-white text-brand-brown';
   const orderId = parseInventoryMovementOrderId(movement.note);
+  const receiver =
+    movement.movement_type === 'order_deduct'
+      ? resolveInventoryMovementReceiver(movement.note, orderReceiverById)
+      : null;
   const detailNote =
-    movement.note && !orderId
-      ? movement.note
-      : movement.note && orderId
-        ? movement.note.replace(new RegExp(`Order\\s+${orderId}`, 'i'), '').trim()
-        : '';
+    movement.movement_type === 'order_deduct' || !movement.note.trim() ? '' : movement.note;
 
   return (
     <li className="rounded-xl border border-brand-muted/35 bg-white px-3 py-3 shadow-sm sm:px-4">
       <div className="flex flex-wrap items-start justify-between gap-2">
         <div className="min-w-0 flex-1">
           <p className="font-semibold text-brand-dark">{movement.product_name}</p>
+          {receiver ? (
+            <p className="mt-0.5 text-sm font-medium text-brand-brown/85">For {receiver}</p>
+          ) : null}
           {showBranch ? (
             <p className="mt-0.5 text-xs text-brand-brown/65">{movement.branch_name}</p>
           ) : null}
@@ -868,10 +910,12 @@ function InventoryRecentMovementsPanel({
   movements,
   branchLabel,
   showBranch,
+  orderReceiverById,
 }: {
   movements: FlowerInventoryMovementRow[];
   branchLabel: string;
   showBranch: boolean;
+  orderReceiverById: ReadonlyMap<string, string>;
 }) {
   const [search, setSearch] = useState('');
   const dedupedMovements = useMemo(() => dedupeInventoryMovementRows(movements), [movements]);
@@ -884,12 +928,14 @@ function InventoryRecentMovementsPanel({
 
     return dedupedMovements.filter((movement) => {
       const orderId = parseInventoryMovementOrderId(movement.note);
+      const receiver = resolveInventoryMovementReceiver(movement.note, orderReceiverById);
       const haystack = [
         movement.product_name,
         movement.branch_name,
         INVENTORY_MOVEMENT_TYPE_LABELS[movement.movement_type] ?? movement.movement_type,
         movement.note,
         orderId,
+        receiver,
         String(movement.quantity),
       ]
         .filter(Boolean)
@@ -898,7 +944,7 @@ function InventoryRecentMovementsPanel({
 
       return haystack.includes(query);
     });
-  }, [dedupedMovements, search]);
+  }, [dedupedMovements, orderReceiverById, search]);
 
   return (
     <div className="mt-6">
@@ -922,7 +968,7 @@ function InventoryRecentMovementsPanel({
           type="search"
           value={search}
           onChange={(event) => setSearch(event.target.value)}
-          placeholder="Search product, order ID, or movement type..."
+          placeholder="Search product, recipient, order ID, or movement type..."
           className="flower-input w-full pl-9"
         />
       </label>
@@ -934,6 +980,7 @@ function InventoryRecentMovementsPanel({
               key={movement.id}
               movement={movement}
               showBranch={showBranch}
+              orderReceiverById={orderReceiverById}
             />
           ))
         ) : (
@@ -956,6 +1003,7 @@ export default function FlowerInventoryPage() {
   const branchFilterInitializedRef = useRef(false);
   const [stockRows, setStockRows] = useState<FlowerInventoryStockRow[]>([]);
   const [movementRows, setMovementRows] = useState<FlowerInventoryMovementRow[]>([]);
+  const [orderReceiverById, setOrderReceiverById] = useState<Map<string, string>>(() => new Map());
   const [loading, setLoading] = useState(true);
   const [message, setMessage] = useState('');
   const [errorMessage, setErrorMessage] = useState('');
@@ -1002,6 +1050,8 @@ export default function FlowerInventoryPage() {
       setBranches(branchList);
       setStockRows(stocks);
       setMovementRows(movements);
+      const receiverLookup = await loadOrderReceiverLookup(movements);
+      setOrderReceiverById(receiverLookup);
     } catch (error) {
       setErrorMessage(error instanceof Error ? error.message : 'Failed to load inventory.');
     } finally {
@@ -2009,6 +2059,7 @@ export default function FlowerInventoryPage() {
             movements={movementRows}
             branchLabel={isAllBranchesView ? 'All branches' : selectedBranchName}
             showBranch={isAllBranchesView}
+            orderReceiverById={orderReceiverById}
           />
         </>
       )}

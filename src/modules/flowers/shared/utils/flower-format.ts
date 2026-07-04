@@ -215,6 +215,33 @@ export function parseInventoryMovementOrderId(note: string): string | null {
   return match?.[1] ?? null;
 }
 
+export function parseInventoryMovementReceiver(note: string): string | null {
+  const match = note.match(/Order\s+\S+\s+·\s+(.+?)\s+·\s+day-close/i);
+  return match?.[1]?.trim() || null;
+}
+
+export function formatInventoryOrderDeductNote(orderId: string, receiver: string): string {
+  const trimmedReceiver = receiver.trim() || 'Unknown';
+  return `Order ${orderId} · ${trimmedReceiver} · day-close deduct`;
+}
+
+export function resolveInventoryMovementReceiver(
+  note: string,
+  orderReceiverById?: ReadonlyMap<string, string>,
+): string | null {
+  const fromNote = parseInventoryMovementReceiver(note);
+  if (fromNote) {
+    return fromNote;
+  }
+
+  const orderId = parseInventoryMovementOrderId(note);
+  if (orderId && orderReceiverById?.has(orderId)) {
+    return orderReceiverById.get(orderId) ?? null;
+  }
+
+  return null;
+}
+
 export function formatInventoryMovementTimestamp(iso: string): string {
   return parseFlowerTimestamp(iso).toLocaleString('en-PH', {
     timeZone: 'Asia/Manila',

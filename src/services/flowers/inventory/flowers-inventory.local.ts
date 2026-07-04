@@ -22,6 +22,7 @@ import {
   normalizeFlowerProductColor,
 } from '../../../modules/flowers/shared/utils/flower-product-colors';
 import { normalizeFlowerProductKind } from '../../../modules/flowers/shared/utils/flower-product-kind';
+import { formatInventoryOrderDeductNote } from '../../../modules/flowers/shared/utils/flower-format';
 
 const INVENTORY_STORAGE_KEY = 'papers_petals_flower_inventory_v2';
 const MOVEMENTS_STORAGE_KEY = 'papers_petals_flower_inventory_movements_v2';
@@ -240,13 +241,14 @@ export async function deductFlowerInventoryForOrderLocal(input: {
   productId: string;
   quantity: number;
   orderId: string;
+  receiver: string;
 }): Promise<void> {
   await applyStockChange({
     branchId: input.branchId,
     productId: input.productId,
     delta: -input.quantity,
     movementType: 'order_deduct',
-    note: `Order ${input.orderId} day-close deduct`,
+    note: formatInventoryOrderDeductNote(input.orderId, input.receiver),
     allowNegative: true,
   });
 }

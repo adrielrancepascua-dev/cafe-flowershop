@@ -221,6 +221,7 @@ async function deductInventoryForOrder(order: FlowerOrder): Promise<void> {
       productId: item.product_id,
       quantity: item.quantity,
       orderId: order.id,
+      receiver: order.receiver,
     });
   }
 }

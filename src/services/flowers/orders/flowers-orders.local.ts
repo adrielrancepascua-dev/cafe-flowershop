@@ -141,6 +141,7 @@ async function maybeBatchDeductInventoryForClosedDay(dateKey: string): Promise<v
           productId: item.product_id,
           quantity: item.quantity,
           orderId: order.id,
+          receiver: order.receiver,
         });
       }
     } catch (error) {
