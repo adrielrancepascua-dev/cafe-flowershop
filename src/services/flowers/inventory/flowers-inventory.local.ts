@@ -9,6 +9,7 @@ import type {
   FlowerInventoryMovementRow,
   FlowerInventoryStockRow,
   FlowerTransferRequest,
+  FlowerTransferRequestItem,
   ListFlowerInventoryMovementsOptions,
   ListFlowerInventoryOptions,
   ListFlowerTransferRequestsOptions,
@@ -24,7 +25,7 @@ import { normalizeFlowerProductKind } from '../../../modules/flowers/shared/util
 
 const INVENTORY_STORAGE_KEY = 'papers_petals_flower_inventory_v2';
 const MOVEMENTS_STORAGE_KEY = 'papers_petals_flower_inventory_movements_v2';
-const TRANSFER_REQUESTS_STORAGE_KEY = 'papers_petals_flower_transfer_requests_v1';
+const TRANSFER_REQUESTS_STORAGE_KEY = 'papers_petals_flower_transfer_requests_v2';
 
 type StockMap = Record<string, Record<string, number>>;
 
@@ -302,6 +303,38 @@ export async function getFlowerStockLevelLocal(branchId: string, productId: stri
   return stock[branchId]?.[productId] ?? 0;
 }
 
+function normalizeTransferRequest(raw: FlowerTransferRequest & {
+  product_id?: string;
+  product_name?: string;
+  product_kind?: string;
+  product_color?: string;
+  product_flower_type?: string;
+  quantity?: number;
+}): FlowerTransferRequest {
+  if (Array.isArray(raw.items) && raw.items.length > 0) {
+    return raw;
+  }
+
+  if (raw.product_id) {
+    return {
+      ...raw,
+      items: [
+        {
+          id: `${raw.id}-item-0`,
+          product_id: raw.product_id,
+          product_name: raw.product_name ?? raw.product_id,
+          product_kind: normalizeFlowerProductKind(raw.product_kind),
+          product_color: normalizeFlowerProductColor(raw.product_color ?? ''),
+          product_flower_type: raw.product_flower_type ?? '',
+          quantity: Number(raw.quantity ?? 0),
+        },
+      ],
+    };
+  }
+
+  return { ...raw, items: [] };
+}
+
 function readTransferRequestsFromStorage(): FlowerTransferRequest[] {
   if (typeof window === 'undefined') {
     return [];
@@ -310,11 +343,39 @@ function readTransferRequestsFromStorage(): FlowerTransferRequest[] {
   try {
     const raw = window.localStorage.getItem(TRANSFER_REQUESTS_STORAGE_KEY);
     if (!raw) {
-      return [];
+      const legacyRaw = window.localStorage.getItem('papers_petals_flower_transfer_requests_v1');
+      if (!legacyRaw) {
+        return [];
+      }
+
+      const legacyParsed = JSON.parse(legacyRaw) as Array<
+        FlowerTransferRequest & {
+          product_id?: string;
+          product_name?: string;
+          product_kind?: string;
+          product_color?: string;
+          product_flower_type?: string;
+          quantity?: number;
+        }
+      >;
+      const normalized = Array.isArray(legacyParsed)
+        ? legacyParsed.map((entry) => normalizeTransferRequest(entry))
+        : [];
+      writeTransferRequestsToStorage(normalized);
+      return normalized;
     }
 
-    const parsed = JSON.parse(raw) as FlowerTransferRequest[];
-    return Array.isArray(parsed) ? parsed : [];
+    const parsed = JSON.parse(raw) as Array<
+      FlowerTransferRequest & {
+        product_id?: string;
+        product_name?: string;
+        product_kind?: string;
+        product_color?: string;
+        product_flower_type?: string;
+        quantity?: number;
+      }
+    >;
+    return Array.isArray(parsed) ? parsed.map((entry) => normalizeTransferRequest(entry)) : [];
   } catch {
     return [];
   }
@@ -345,6 +406,27 @@ async function getProductDetailsLocal(productId: string): Promise<{
   };
 }
 
+async function buildTransferRequestItems(
+  items: CreateFlowerTransferRequestInput['items'],
+): Promise<FlowerTransferRequestItem[]> {
+  const built: FlowerTransferRequestItem[] = [];
+
+  for (const item of items) {
+    const details = await getProductDetailsLocal(item.productId);
+    built.push({
+      id: `item-${item.productId}-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+      product_id: item.productId,
+      product_name: details.name,
+      product_kind: details.kind,
+      product_color: details.color,
+      product_flower_type: details.flowerType,
+      quantity: item.quantity,
+    });
+  }
+
+  return built;
+}
+
 /** Staff/admin file a transfer request. Stock leaves the source branch immediately (in transit). */
 export async function createFlowerTransferRequestLocal(
   input: CreateFlowerTransferRequestInput,
@@ -353,23 +435,38 @@ export async function createFlowerTransferRequestLocal(
     throw new Error('Source and destination branches must be different.');
   }
 
-  const quantity = Number(input.quantity);
-  if (!Number.isInteger(quantity) || quantity <= 0) {
-    throw new Error('Quantity must be a whole number greater than 0.');
+  if (input.items.length === 0) {
+    throw new Error('Add at least one product to transfer.');
   }
 
-  const details = await getProductDetailsLocal(input.productId);
+  const mergedItems = new Map<string, number>();
+  for (const item of input.items) {
+    const quantity = Number(item.quantity);
+    if (!Number.isInteger(quantity) || quantity <= 0) {
+      throw new Error('Each quantity must be a whole number greater than 0.');
+    }
+
+    mergedItems.set(item.productId, (mergedItems.get(item.productId) ?? 0) + quantity);
+  }
+
+  const normalizedItems = [...mergedItems.entries()].map(([productId, quantity]) => ({
+    productId,
+    quantity,
+  }));
+
   const toBranchName = getBranchName(input.toBranchId);
   const fromBranchName = getBranchName(input.fromBranchId);
 
-  await applyStockChange({
-    branchId: input.fromBranchId,
-    productId: input.productId,
-    delta: -quantity,
-    movementType: 'transfer_out',
-    note: `Transfer request to ${toBranchName}`,
-    allowNegative: true,
-  });
+  for (const item of normalizedItems) {
+    await applyStockChange({
+      branchId: input.fromBranchId,
+      productId: item.productId,
+      delta: -item.quantity,
+      movementType: 'transfer_out',
+      note: `Transfer request to ${toBranchName}`,
+      allowNegative: true,
+    });
+  }
 
   const request: FlowerTransferRequest = {
     id: `transfer-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
@@ -377,12 +474,7 @@ export async function createFlowerTransferRequestLocal(
     from_branch_name: fromBranchName,
     to_branch_id: input.toBranchId,
     to_branch_name: toBranchName,
-    product_id: input.productId,
-    product_name: details.name,
-    product_kind: details.kind,
-    product_color: details.color,
-    product_flower_type: details.flowerType,
-    quantity,
+    items: await buildTransferRequestItems(normalizedItems),
     status: 'pending',
     note: input.note?.trim() ?? '',
     requested_by_id: input.requestedById,
@@ -451,13 +543,15 @@ export async function confirmFlowerTransferRequestLocal(
 ): Promise<FlowerTransferRequest> {
   const { requests, index, request } = findPendingRequest(input.requestId);
 
-  await applyStockChange({
-    branchId: request.to_branch_id,
-    productId: request.product_id,
-    delta: request.quantity,
-    movementType: 'transfer_in',
-    note: `Transfer received from ${request.from_branch_name}`,
-  });
+  for (const item of request.items) {
+    await applyStockChange({
+      branchId: request.to_branch_id,
+      productId: item.product_id,
+      delta: item.quantity,
+      movementType: 'transfer_in',
+      note: `Transfer received from ${request.from_branch_name}`,
+    });
+  }
 
   const resolved: FlowerTransferRequest = {
     ...request,
@@ -473,14 +567,16 @@ export async function confirmFlowerTransferRequestLocal(
 }
 
 async function returnTransferRequestStock(request: FlowerTransferRequest, reason: string) {
-  await applyStockChange({
-    branchId: request.from_branch_id,
-    productId: request.product_id,
-    delta: request.quantity,
-    movementType: 'transfer_in',
-    note: reason,
-    allowNegative: true,
-  });
+  for (const item of request.items) {
+    await applyStockChange({
+      branchId: request.from_branch_id,
+      productId: item.product_id,
+      delta: item.quantity,
+      movementType: 'transfer_in',
+      note: reason,
+      allowNegative: true,
+    });
+  }
 }
 
 /** Receiving branch rejects the request — stock is returned to the source branch. */

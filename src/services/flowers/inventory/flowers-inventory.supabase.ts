@@ -515,8 +515,6 @@ type TransferRequestDbRow = {
   id: string;
   from_branch_id: string;
   to_branch_id: string;
-  product_id: string;
-  quantity: number;
   status: FlowerTransferRequestStatus;
   note: string;
   requested_by_id: string;
@@ -527,8 +525,37 @@ type TransferRequestDbRow = {
   created_at: string;
 };
 
+type TransferRequestItemDbRow = {
+  id: number;
+  transfer_id: string;
+  product_id: string;
+  quantity: number;
+};
+
 const TRANSFER_REQUEST_COLUMNS =
-  'id, from_branch_id, to_branch_id, product_id, quantity, status, note, requested_by_id, requested_by_name, resolved_by_id, resolved_by_name, resolved_at, created_at';
+  'id, from_branch_id, to_branch_id, status, note, requested_by_id, requested_by_name, resolved_by_id, resolved_by_name, resolved_at, created_at';
+
+const TRANSFER_REQUEST_ITEM_COLUMNS = 'id, transfer_id, product_id, quantity';
+
+async function listTransferRequestItems(
+  supabase: ReturnType<typeof requireSupabaseClient>,
+  transferIds: string[],
+): Promise<TransferRequestItemDbRow[]> {
+  if (transferIds.length === 0) {
+    return [];
+  }
+
+  const { data, error } = await supabase
+    .from('flower_inventory_transfer_items')
+    .select(TRANSFER_REQUEST_ITEM_COLUMNS)
+    .in('transfer_id', transferIds);
+
+  if (error) {
+    throw error;
+  }
+
+  return (data as TransferRequestItemDbRow[] | null) ?? [];
+}
 
 async function mapTransferRequestRows(
   supabase: ReturnType<typeof requireSupabaseClient>,
@@ -541,14 +568,18 @@ async function mapTransferRequestRows(
   const branchIds = [
     ...new Set(rows.flatMap((row) => [row.from_branch_id, row.to_branch_id])),
   ];
-  const productIds = [...new Set(rows.map((row) => row.product_id))];
+  const transferIds = rows.map((row) => row.id);
+  const itemRows = await listTransferRequestItems(supabase, transferIds);
+  const productIds = [...new Set(itemRows.map((row) => row.product_id))];
 
   const [branchesResult, productsData] = await Promise.all([
     supabase.from('flower_branches').select('id, name, is_active').in('id', branchIds),
-    queryFlowerProductSummariesWithColorFallback(async (columns) => {
-      const result = await supabase.from('flower_products').select(columns).in('id', productIds);
-      return { data: result.data as FlowerProductSummaryDbRow[] | null, error: result.error };
-    }),
+    productIds.length > 0
+      ? queryFlowerProductSummariesWithColorFallback(async (columns) => {
+          const result = await supabase.from('flower_products').select(columns).in('id', productIds);
+          return { data: result.data as FlowerProductSummaryDbRow[] | null, error: result.error };
+        })
+      : Promise.resolve([] as FlowerProductSummaryDbRow[]),
   ]);
 
   if (branchesResult.error) {
@@ -565,8 +596,15 @@ async function mapTransferRequestRows(
     productMap.set(product.id, product);
   }
 
+  const itemsByTransfer = new Map<string, TransferRequestItemDbRow[]>();
+  for (const item of itemRows) {
+    const existing = itemsByTransfer.get(item.transfer_id) ?? [];
+    existing.push(item);
+    itemsByTransfer.set(item.transfer_id, existing);
+  }
+
   return rows.map((row) => {
-    const product = productMap.get(row.product_id);
+    const lineItems = itemsByTransfer.get(row.id) ?? [];
 
     return {
       id: row.id,
@@ -574,12 +612,19 @@ async function mapTransferRequestRows(
       from_branch_name: branchMap.get(row.from_branch_id) ?? row.from_branch_id,
       to_branch_id: row.to_branch_id,
       to_branch_name: branchMap.get(row.to_branch_id) ?? row.to_branch_id,
-      product_id: row.product_id,
-      product_name: product?.name ?? row.product_id,
-      product_kind: normalizeFlowerProductKind(product?.product_kind),
-      product_color: normalizeFlowerProductColor(product?.color ?? ''),
-      product_flower_type: product?.flower_type ?? '',
-      quantity: Number(row.quantity),
+      items: lineItems.map((item) => {
+        const product = productMap.get(item.product_id);
+
+        return {
+          id: String(item.id),
+          product_id: item.product_id,
+          product_name: product?.name ?? item.product_id,
+          product_kind: normalizeFlowerProductKind(product?.product_kind),
+          product_color: normalizeFlowerProductColor(product?.color ?? ''),
+          product_flower_type: product?.flower_type ?? '',
+          quantity: Number(item.quantity),
+        };
+      }),
       status: row.status,
       note: row.note ?? '',
       requested_by_id: row.requested_by_id,
@@ -592,6 +637,21 @@ async function mapTransferRequestRows(
   });
 }
 
+function mergeTransferItems(items: CreateFlowerTransferRequestInput['items']) {
+  const merged = new Map<string, number>();
+
+  for (const item of items) {
+    const quantity = Number(item.quantity);
+    if (!Number.isInteger(quantity) || quantity <= 0) {
+      throw new Error('Each quantity must be a whole number greater than 0.');
+    }
+
+    merged.set(item.productId, (merged.get(item.productId) ?? 0) + quantity);
+  }
+
+  return [...merged.entries()].map(([productId, quantity]) => ({ productId, quantity }));
+}
+
 export async function createFlowerTransferRequestSupabase(
   input: CreateFlowerTransferRequestInput,
 ): Promise<FlowerTransferRequest> {
@@ -599,31 +659,31 @@ export async function createFlowerTransferRequestSupabase(
     throw new Error('Source and destination branches must be different.');
   }
 
-  const quantity = Number(input.quantity);
-  if (!Number.isInteger(quantity) || quantity <= 0) {
-    throw new Error('Quantity must be a whole number greater than 0.');
+  if (input.items.length === 0) {
+    throw new Error('Add at least one product to transfer.');
   }
 
+  const normalizedItems = mergeTransferItems(input.items);
   const supabase = await requireAuthenticatedSupabaseClient();
   const branches = await listFlowerBranchesSupabase();
   const toBranchName = branches.find((branch) => branch.id === input.toBranchId)?.name ?? input.toBranchId;
 
-  await applyFlowerStockChangeSupabase({
-    branchId: input.fromBranchId,
-    productId: input.productId,
-    delta: -quantity,
-    movementType: 'transfer_out',
-    note: `Transfer request to ${toBranchName}`,
-    allowNegative: true,
-  });
+  for (const item of normalizedItems) {
+    await applyFlowerStockChangeSupabase({
+      branchId: input.fromBranchId,
+      productId: item.productId,
+      delta: -item.quantity,
+      movementType: 'transfer_out',
+      note: `Transfer request to ${toBranchName}`,
+      allowNegative: true,
+    });
+  }
 
   const { data, error } = await supabase
     .from('flower_inventory_transfers')
     .insert({
       from_branch_id: input.fromBranchId,
       to_branch_id: input.toBranchId,
-      product_id: input.productId,
-      quantity,
       status: 'pending',
       note: input.note?.trim() ?? '',
       requested_by_id: input.requestedById,
@@ -632,16 +692,42 @@ export async function createFlowerTransferRequestSupabase(
     .select(TRANSFER_REQUEST_COLUMNS)
     .single();
 
-  if (error) {
-    await applyFlowerStockChangeSupabase({
-      branchId: input.fromBranchId,
-      productId: input.productId,
-      delta: quantity,
-      movementType: 'transfer_in',
-      note: 'Transfer request failed — reverted',
-      allowNegative: true,
-    });
-    throw error;
+  if (error || !data) {
+    for (const item of normalizedItems) {
+      await applyFlowerStockChangeSupabase({
+        branchId: input.fromBranchId,
+        productId: item.productId,
+        delta: item.quantity,
+        movementType: 'transfer_in',
+        note: 'Transfer request failed — reverted',
+        allowNegative: true,
+      });
+    }
+    throw error ?? new Error('Failed to create transfer request.');
+  }
+
+  const transferId = (data as TransferRequestDbRow).id;
+  const { error: itemsError } = await supabase.from('flower_inventory_transfer_items').insert(
+    normalizedItems.map((item) => ({
+      transfer_id: transferId,
+      product_id: item.productId,
+      quantity: item.quantity,
+    })),
+  );
+
+  if (itemsError) {
+    await supabase.from('flower_inventory_transfers').delete().eq('id', transferId);
+    for (const item of normalizedItems) {
+      await applyFlowerStockChangeSupabase({
+        branchId: input.fromBranchId,
+        productId: item.productId,
+        delta: item.quantity,
+        movementType: 'transfer_in',
+        note: 'Transfer request failed — reverted',
+        allowNegative: true,
+      });
+    }
+    throw itemsError;
   }
 
   const [mapped] = await mapTransferRequestRows(supabase, [data as TransferRequestDbRow]);
@@ -679,7 +765,7 @@ export async function listFlowerTransferRequestsSupabase(
 async function loadPendingTransferRequest(
   supabase: ReturnType<typeof requireSupabaseClient>,
   requestId: string,
-): Promise<TransferRequestDbRow> {
+): Promise<FlowerTransferRequest> {
   const { data, error } = await supabase
     .from('flower_inventory_transfers')
     .select(TRANSFER_REQUEST_COLUMNS)
@@ -694,12 +780,16 @@ async function loadPendingTransferRequest(
     throw new Error('Transfer request not found.');
   }
 
-  const row = data as TransferRequestDbRow;
-  if (row.status !== 'pending') {
+  const [mapped] = await mapTransferRequestRows(supabase, [data as TransferRequestDbRow]);
+  if (mapped.status !== 'pending') {
     throw new Error('This transfer request has already been resolved.');
   }
 
-  return row;
+  if (mapped.items.length === 0) {
+    throw new Error('Transfer request has no line items.');
+  }
+
+  return mapped;
 }
 
 async function resolveTransferRequest(
@@ -707,35 +797,34 @@ async function resolveTransferRequest(
   status: Exclude<FlowerTransferRequestStatus, 'pending'>,
 ): Promise<FlowerTransferRequest> {
   const supabase = await requireAuthenticatedSupabaseClient();
-  const row = await loadPendingTransferRequest(supabase, input.requestId);
-  const branches = await listFlowerBranchesSupabase();
-  const fromBranchName =
-    branches.find((branch) => branch.id === row.from_branch_id)?.name ?? row.from_branch_id;
-  const toBranchName =
-    branches.find((branch) => branch.id === row.to_branch_id)?.name ?? row.to_branch_id;
+  const request = await loadPendingTransferRequest(supabase, input.requestId);
 
   if (status === 'confirmed') {
-    await applyFlowerStockChangeSupabase({
-      branchId: row.to_branch_id,
-      productId: row.product_id,
-      delta: row.quantity,
-      movementType: 'transfer_in',
-      note: `Transfer received from ${fromBranchName}`,
-    });
+    for (const item of request.items) {
+      await applyFlowerStockChangeSupabase({
+        branchId: request.to_branch_id,
+        productId: item.product_id,
+        delta: item.quantity,
+        movementType: 'transfer_in',
+        note: `Transfer received from ${request.from_branch_name}`,
+      });
+    }
   } else {
     const reason =
       status === 'rejected'
-        ? `Transfer request rejected by ${toBranchName}`
-        : `Transfer request cancelled by ${fromBranchName}`;
+        ? `Transfer request rejected by ${request.to_branch_name}`
+        : `Transfer request cancelled by ${request.from_branch_name}`;
 
-    await applyFlowerStockChangeSupabase({
-      branchId: row.from_branch_id,
-      productId: row.product_id,
-      delta: row.quantity,
-      movementType: 'transfer_in',
-      note: reason,
-      allowNegative: true,
-    });
+    for (const item of request.items) {
+      await applyFlowerStockChangeSupabase({
+        branchId: request.from_branch_id,
+        productId: item.product_id,
+        delta: item.quantity,
+        movementType: 'transfer_in',
+        note: reason,
+        allowNegative: true,
+      });
+    }
   }
 
   const { data, error } = await supabase

@@ -16,11 +16,12 @@ import type {
   FlowerInventoryMovementRow,
   FlowerInventoryStockRow,
   FlowerTransferRequest,
+  FlowerTransferRequestItem,
 } from '../../shared/types/flower-inventory';
 import FlowerPageHeader from '../../shared/components/FlowerPageHeader';
 import FlowerInventoryStockPrint from '../components/FlowerPrintableInventoryStockPanel';
 import FlowerPrintControls from '../../shared/components/FlowerPrintControls';
-import { Minus, Plus, ArrowLeftRight, Package, ChevronDown, Check, X } from 'lucide-react';
+import { Minus, Plus, ArrowLeftRight, Package, ChevronDown, Check, X, Trash2 } from 'lucide-react';
 import { INVENTORY_MOVEMENT_TYPE_LABELS } from '../../shared/utils/flower-format';
 import {
   compareInventoryStockRows,
@@ -539,6 +540,33 @@ const TRANSFER_STATUS_BADGES: Record<
   cancelled: { label: 'Cancelled', className: 'border-brand-muted/50 bg-brand-beige/40 text-brand-brown/70' },
 };
 
+type TransferCartLine = {
+  productId: string;
+  quantity: number;
+  productName: string;
+  productKind: string;
+  productColor: string;
+  productFlowerType: string;
+  onHand: number;
+};
+
+function transferRequestTotalUnits(request: FlowerTransferRequest): number {
+  return request.items.reduce((sum, item) => sum + item.quantity, 0);
+}
+
+function transferRequestSummary(request: FlowerTransferRequest): string {
+  if (request.items.length === 0) {
+    return 'No items';
+  }
+
+  if (request.items.length === 1) {
+    const item = request.items[0];
+    return `${item.quantity} × ${item.product_name}`;
+  }
+
+  return `${request.items.length} products · ${transferRequestTotalUnits(request)} units`;
+}
+
 function TransferStatusBadge({ status }: { status: FlowerTransferRequest['status'] }) {
   const badge = TRANSFER_STATUS_BADGES[status];
 
@@ -551,9 +579,9 @@ function TransferStatusBadge({ status }: { status: FlowerTransferRequest['status
   );
 }
 
-function TransferRequestProductLabel({ request }: { request: FlowerTransferRequest }) {
-  const isFlower = normalizeFlowerProductKind(request.product_kind) === 'flower';
-  const color = normalizeFlowerProductColor(request.product_color);
+function TransferRequestItemLabel({ item }: { item: FlowerTransferRequestItem }) {
+  const isFlower = normalizeFlowerProductKind(item.product_kind) === 'flower';
+  const color = normalizeFlowerProductColor(item.product_color);
 
   return (
     <span className="inline-flex items-center gap-1.5 font-medium text-brand-dark">
@@ -563,7 +591,25 @@ function TransferRequestProductLabel({ request }: { request: FlowerTransferReque
           aria-hidden
         />
       ) : null}
-      {request.product_name}
+      {item.product_name}
+      {isFlower ? <span className="font-normal text-brand-brown/70">· {color}</span> : null}
+    </span>
+  );
+}
+
+function TransferCartLineLabel({ line }: { line: TransferCartLine }) {
+  const isFlower = normalizeFlowerProductKind(line.productKind) === 'flower';
+  const color = normalizeFlowerProductColor(line.productColor);
+
+  return (
+    <span className="inline-flex items-center gap-1.5 font-medium text-brand-dark">
+      {isFlower ? (
+        <span
+          className={`h-3 w-3 shrink-0 rounded-full ${flowerProductColorSwatchClass(color)}`}
+          aria-hidden
+        />
+      ) : null}
+      {line.productName}
       {isFlower ? <span className="font-normal text-brand-brown/70">· {color}</span> : null}
     </span>
   );
@@ -591,11 +637,21 @@ function TransferRequestCard({
             <ArrowLeftRight className="h-3.5 w-3.5 text-brand-brown/60" aria-hidden />
             <span className="font-semibold text-brand-dark">{request.to_branch_name}</span>
           </div>
-          <p className="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-sm">
-            <TransferRequestProductLabel request={request} />
-            <span className="rounded-full border border-brand-muted/40 bg-brand-beige/30 px-2 py-0.5 text-xs font-semibold text-brand-dark">
-              {request.quantity} units
-            </span>
+          <p className="mt-1.5 space-y-1.5 text-sm">
+            {request.items.map((item) => (
+              <span
+                key={item.id}
+                className="flex flex-wrap items-center gap-x-2 gap-y-1 rounded-lg border border-brand-muted/30 bg-brand-cream/20 px-2.5 py-1.5"
+              >
+                <TransferRequestItemLabel item={item} />
+                <span className="rounded-full border border-brand-muted/40 bg-white px-2 py-0.5 text-xs font-semibold text-brand-dark">
+                  {item.quantity} units
+                </span>
+              </span>
+            ))}
+          </p>
+          <p className="mt-1.5 text-xs text-brand-brown/60">
+            {request.items.length} products · {transferRequestTotalUnits(request)} units total
           </p>
           <p className="mt-1 text-xs text-brand-brown/60">
             Filed by {request.requested_by_name}
@@ -754,6 +810,7 @@ export default function FlowerInventoryPage() {
   const [transferFlowerType, setTransferFlowerType] = useState('');
   const [transferProductId, setTransferProductId] = useState('');
   const [transferQty, setTransferQty] = useState('1');
+  const [transferCart, setTransferCart] = useState<TransferCartLine[]>([]);
   const [activeTab, setActiveTab] = useState<InventoryTab>('stock');
   const [stockKindTab, setStockKindTab] = useState<FlowerProductKind>('flower');
   const [colorFilter, setColorFilter] = useState('all');
@@ -1029,10 +1086,15 @@ export default function FlowerInventoryPage() {
 
   async function handleCreateTransferRequest(event: React.FormEvent) {
     event.preventDefault();
-    const quantity = Number(transferQty);
 
-    if (!fromBranchId || !toBranchId || !transferProductId || quantity <= 0) {
-      setTransferErrorMessage('Complete all transfer fields.');
+    if (!fromBranchId || !toBranchId) {
+      setTransferErrorMessage('Select source and destination branches.');
+      setTransferMessage('');
+      return;
+    }
+
+    if (transferCart.length === 0) {
+      setTransferErrorMessage('Add at least one product to the transfer.');
       setTransferMessage('');
       return;
     }
@@ -1046,20 +1108,72 @@ export default function FlowerInventoryPage() {
       await createFlowerTransferRequest({
         fromBranchId,
         toBranchId,
-        productId: transferProductId,
-        quantity,
+        items: transferCart.map((line) => ({
+          productId: line.productId,
+          quantity: line.quantity,
+        })),
         requestedById: user.id,
         requestedByName: user.display_name,
       });
-      setTransferMessage('Transfer request filed. The receiving branch will confirm once received.');
+      setTransferMessage(
+        `Transfer request filed with ${transferCart.length} product(s). The receiving branch will confirm once received.`,
+      );
       setTransferErrorMessage('');
       setMessage('');
       resetTransferSelection();
+      setTransferCart([]);
       await refreshTransferData();
     } catch (error) {
       setTransferErrorMessage(error instanceof Error ? error.message : 'Transfer request failed.');
       setTransferMessage('');
     }
+  }
+
+  function handleAddToTransferCart() {
+    const quantity = Number(transferQty);
+
+    if (!fromBranchId || !transferProductId || quantity <= 0) {
+      setTransferErrorMessage('Choose a product and quantity before adding.');
+      setTransferMessage('');
+      return;
+    }
+
+    if (!selectedTransferRow) {
+      setTransferErrorMessage('Selected product is no longer available.');
+      return;
+    }
+
+    setTransferCart((current) => {
+      const existing = current.find((line) => line.productId === transferProductId);
+      if (existing) {
+        return current.map((line) =>
+          line.productId === transferProductId
+            ? { ...line, quantity: line.quantity + quantity }
+            : line,
+        );
+      }
+
+      return [
+        ...current,
+        {
+          productId: transferProductId,
+          quantity,
+          productName: selectedTransferRow.product_name,
+          productKind: selectedTransferRow.product_kind,
+          productColor: selectedTransferRow.product_color,
+          productFlowerType: selectedTransferRow.product_flower_type,
+          onHand: selectedTransferRow.on_hand,
+        },
+      ];
+    });
+
+    setTransferErrorMessage('');
+    setTransferMessage('');
+    resetTransferSelection();
+  }
+
+  function handleRemoveFromTransferCart(productId: string) {
+    setTransferCart((current) => current.filter((line) => line.productId !== productId));
   }
 
   async function handleResolveTransferRequest(
@@ -1085,7 +1199,7 @@ export default function FlowerInventoryPage() {
       if (action === 'confirm') {
         await confirmFlowerTransferRequest(payload);
         setTransferMessage(
-          `Confirmed ${request.quantity} × ${request.product_name} into ${request.to_branch_name}.`,
+          `Confirmed ${transferRequestSummary(request)} into ${request.to_branch_name}.`,
         );
       } else if (action === 'reject') {
         await rejectFlowerTransferRequest(payload);
@@ -1107,6 +1221,11 @@ export default function FlowerInventoryPage() {
     setTransferFlowerType('');
     setTransferProductId('');
     setTransferQty('1');
+  }
+
+  function clearTransferCart() {
+    setTransferCart([]);
+    clearTransferFeedback();
   }
 
   function clearTransferFeedback() {
@@ -1198,8 +1317,8 @@ export default function FlowerInventoryPage() {
           >
             <h3 className="text-sm font-semibold text-brand-dark">File a transfer request</h3>
             <p className="mt-1 text-sm text-brand-brown/70">
-              Stock leaves the source branch right away and is held in transit. It is only added to the
-              receiving branch once they confirm it arrived.
+              Add one or more products, then file the request. Stock leaves the source branch right away
+              and is only added to the receiving branch once they confirm it arrived.
             </p>
             <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
                 <label className="block text-sm font-medium text-brand-brown">
@@ -1209,6 +1328,7 @@ export default function FlowerInventoryPage() {
                     onChange={(e) => {
                       setFromBranchId(e.target.value);
                       resetTransferSelection();
+                      setTransferCart([]);
                       clearTransferFeedback();
                     }}
                     className="flower-input mt-1.5"
@@ -1246,23 +1366,27 @@ export default function FlowerInventoryPage() {
                   </select>
                 </label>
               </div>
-              <div className="mt-4 inline-flex rounded-xl border border-brand-muted/50 bg-white p-1">
-                {(['flower', 'misc'] as const).map((kind) => (
-                  <button
-                    key={kind}
-                    type="button"
-                    onClick={() => {
-                      setTransferKind(kind);
-                      resetTransferSelection();
-                      clearTransferFeedback();
-                    }}
-                    className={`flower-pill ${transferKind === kind ? 'flower-pill-active' : 'flower-pill-inactive'}`}
-                  >
-                    {FLOWER_PRODUCT_KIND_LABELS[kind]}
-                  </button>
-                ))}
-              </div>
-              <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+              <div className="mt-4 rounded-2xl border border-brand-muted/35 bg-white/80 p-4">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <h4 className="text-sm font-semibold text-brand-dark">Add products</h4>
+                  <div className="inline-flex rounded-xl border border-brand-muted/50 bg-white p-1">
+                    {(['flower', 'misc'] as const).map((kind) => (
+                      <button
+                        key={kind}
+                        type="button"
+                        onClick={() => {
+                          setTransferKind(kind);
+                          resetTransferSelection();
+                          clearTransferFeedback();
+                        }}
+                        className={`flower-pill ${transferKind === kind ? 'flower-pill-active' : 'flower-pill-inactive'}`}
+                      >
+                        {FLOWER_PRODUCT_KIND_LABELS[kind]}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
                 {transferKind === 'flower' ? (
                   <>
                     <label className="block text-sm font-medium text-brand-brown">
@@ -1276,7 +1400,6 @@ export default function FlowerInventoryPage() {
                           clearTransferFeedback();
                         }}
                         className="flower-input mt-1.5"
-                        required
                         disabled={!fromBranchId || fromBranchStockLoading}
                       >
                         <option value="">
@@ -1309,7 +1432,6 @@ export default function FlowerInventoryPage() {
                           clearTransferFeedback();
                         }}
                         className="flower-input mt-1.5"
-                        required
                         disabled={!transferFlowerType || transferColorOptions.length === 0}
                       >
                         <option value="">
@@ -1349,7 +1471,6 @@ export default function FlowerInventoryPage() {
                         clearTransferFeedback();
                       }}
                       className="flower-input mt-1.5"
-                      required
                       disabled={!fromBranchId || fromBranchStockLoading}
                     >
                       <option value="">
@@ -1380,13 +1501,17 @@ export default function FlowerInventoryPage() {
                       clearTransferFeedback();
                     }}
                     className="flower-input mt-1.5"
-                    required
                     disabled={!transferProductId}
                   />
                 </label>
-                <div className="flex items-end sm:col-span-2 lg:col-span-3">
-                  <button type="submit" className="flower-btn-primary w-full sm:w-auto">
-                    File transfer request
+                <div className="flex items-end">
+                  <button
+                    type="button"
+                    onClick={handleAddToTransferCart}
+                    disabled={!transferProductId}
+                    className="flower-btn-secondary w-full"
+                  >
+                    Add to transfer
                   </button>
                 </div>
               </div>
@@ -1405,12 +1530,79 @@ export default function FlowerInventoryPage() {
                   {transferKind === 'flower'
                     ? transferFlowerSections.length === 0
                       ? `No active flowers at ${fromBranchName}.`
-                      : 'Choose a flower type, then pick the color variant to transfer.'
+                      : 'Choose a flower type and color, then add it to the transfer.'
                     : transferMiscProducts.length === 0
                       ? `No wrappers or gift items at ${fromBranchName}.`
-                      : 'Choose the item to transfer.'}
+                      : 'Choose an item, then add it to the transfer.'}
                 </p>
               ) : null}
+              </div>
+
+              <div className="mt-4 rounded-2xl border border-brand-muted/35 bg-white p-4">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <h4 className="text-sm font-semibold text-brand-dark">
+                    Products in this transfer
+                    {transferCart.length > 0 ? (
+                      <span className="ml-2 text-xs font-normal text-brand-brown/60">
+                        {transferCart.length} item{transferCart.length === 1 ? '' : 's'} ·{' '}
+                        {transferCart.reduce((sum, line) => sum + line.quantity, 0)} units
+                      </span>
+                    ) : null}
+                  </h4>
+                  {transferCart.length > 0 ? (
+                    <button
+                      type="button"
+                      onClick={clearTransferCart}
+                      className="text-xs font-semibold text-brand-brown/70 transition hover:text-brand-dark"
+                    >
+                      Clear all
+                    </button>
+                  ) : null}
+                </div>
+                {transferCart.length > 0 ? (
+                  <ul className="mt-3 space-y-2">
+                    {transferCart.map((line) => (
+                      <li
+                        key={line.productId}
+                        className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-brand-muted/30 bg-brand-cream/15 px-3 py-2.5"
+                      >
+                        <div className="min-w-0">
+                          <TransferCartLineLabel line={line} />
+                          <p className="mt-0.5 text-xs text-brand-brown/60">
+                            {line.onHand} on hand at {fromBranchName}
+                          </p>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <span className="rounded-full border border-brand-muted/40 bg-white px-2.5 py-0.5 text-xs font-semibold text-brand-dark">
+                            {line.quantity} units
+                          </span>
+                          <button
+                            type="button"
+                            aria-label="Remove from transfer"
+                            onClick={() => handleRemoveFromTransferCart(line.productId)}
+                            className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-brand-muted/50 text-brand-brown/70 transition hover:bg-red-50 hover:text-red-700"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </button>
+                        </div>
+                      </li>
+                    ))}
+                  </ul>
+                ) : (
+                  <p className="mt-3 rounded-lg border border-dashed border-brand-muted/40 px-3 py-4 text-center text-sm text-brand-brown/60">
+                    No products added yet. Pick a flower or misc item above, then tap Add to transfer.
+                  </p>
+                )}
+                <div className="mt-4 flex justify-end">
+                  <button
+                    type="submit"
+                    disabled={transferCart.length === 0 || !toBranchId}
+                    className="flower-btn-primary w-full sm:w-auto disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    File transfer request
+                  </button>
+                </div>
+              </div>
           </form>
 
           <div className="mt-6">
@@ -1424,8 +1616,7 @@ export default function FlowerInventoryPage() {
                   >
                     <TransferStatusBadge status={request.status} />
                     <span>
-                      {request.from_branch_name} → {request.to_branch_name} · {request.product_name} ·{' '}
-                      {request.quantity}
+                      {request.from_branch_name} → {request.to_branch_name} · {transferRequestSummary(request)}
                     </span>
                     {request.resolved_by_name ? (
                       <span className="text-xs text-brand-brown/60">by {request.resolved_by_name}</span>

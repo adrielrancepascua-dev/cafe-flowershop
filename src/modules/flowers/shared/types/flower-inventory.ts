@@ -86,18 +86,23 @@ export interface TransferFlowerInventoryInput {
 
 export type FlowerTransferRequestStatus = 'pending' | 'confirmed' | 'rejected' | 'cancelled';
 
-export interface FlowerTransferRequest {
+export interface FlowerTransferRequestItem {
   id: string;
-  from_branch_id: string;
-  from_branch_name: string;
-  to_branch_id: string;
-  to_branch_name: string;
   product_id: string;
   product_name: string;
   product_kind: string;
   product_color: string;
   product_flower_type: string;
   quantity: number;
+}
+
+export interface FlowerTransferRequest {
+  id: string;
+  from_branch_id: string;
+  from_branch_name: string;
+  to_branch_id: string;
+  to_branch_name: string;
+  items: FlowerTransferRequestItem[];
   status: FlowerTransferRequestStatus;
   note: string;
   requested_by_id: string;
@@ -111,8 +116,7 @@ export interface FlowerTransferRequest {
 export interface CreateFlowerTransferRequestInput {
   fromBranchId: string;
   toBranchId: string;
-  productId: string;
-  quantity: number;
+  items: { productId: string; quantity: number }[];
   note?: string;
   requestedById: string;
   requestedByName: string;
