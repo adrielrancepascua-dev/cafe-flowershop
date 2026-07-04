@@ -83,3 +83,50 @@ export interface TransferFlowerInventoryInput {
   items: { productId: string; quantity: number }[];
   note?: string;
 }
+
+export type FlowerTransferRequestStatus = 'pending' | 'confirmed' | 'rejected' | 'cancelled';
+
+export interface FlowerTransferRequest {
+  id: string;
+  from_branch_id: string;
+  from_branch_name: string;
+  to_branch_id: string;
+  to_branch_name: string;
+  product_id: string;
+  product_name: string;
+  product_kind: string;
+  product_color: string;
+  product_flower_type: string;
+  quantity: number;
+  status: FlowerTransferRequestStatus;
+  note: string;
+  requested_by_id: string;
+  requested_by_name: string;
+  resolved_by_id: string | null;
+  resolved_by_name: string | null;
+  resolved_at: string | null;
+  created_at: string;
+}
+
+export interface CreateFlowerTransferRequestInput {
+  fromBranchId: string;
+  toBranchId: string;
+  productId: string;
+  quantity: number;
+  note?: string;
+  requestedById: string;
+  requestedByName: string;
+}
+
+export interface ResolveFlowerTransferRequestInput {
+  requestId: string;
+  resolvedById: string;
+  resolvedByName: string;
+}
+
+export interface ListFlowerTransferRequestsOptions {
+  /** Only include requests where this branch is the sender or receiver. */
+  branchId?: string;
+  status?: FlowerTransferRequestStatus;
+  limit?: number;
+}

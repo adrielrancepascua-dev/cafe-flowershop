@@ -4,11 +4,15 @@ import {
 } from '../../../modules/flowers/shared/data/flowers.mock';
 import type {
   AdjustFlowerInventoryInput,
+  CreateFlowerTransferRequestInput,
   FlowerBranchOption,
   FlowerInventoryMovementRow,
   FlowerInventoryStockRow,
+  FlowerTransferRequest,
   ListFlowerInventoryMovementsOptions,
   ListFlowerInventoryOptions,
+  ListFlowerTransferRequestsOptions,
+  ResolveFlowerTransferRequestInput,
   TransferFlowerInventoryInput,
 } from '../../../modules/flowers/shared/types/flower-inventory';
 import { listFlowerStemsLocal, lookupFlowerProductNameLocal } from '../products/flowers-products.local';
@@ -20,6 +24,7 @@ import { normalizeFlowerProductKind } from '../../../modules/flowers/shared/util
 
 const INVENTORY_STORAGE_KEY = 'papers_petals_flower_inventory_v2';
 const MOVEMENTS_STORAGE_KEY = 'papers_petals_flower_inventory_movements_v2';
+const TRANSFER_REQUESTS_STORAGE_KEY = 'papers_petals_flower_transfer_requests_v1';
 
 type StockMap = Record<string, Record<string, number>>;
 
@@ -295,4 +300,227 @@ export async function transferFlowerInventoryLocal(
 export async function getFlowerStockLevelLocal(branchId: string, productId: string): Promise<number> {
   const stock = readStockFromStorage();
   return stock[branchId]?.[productId] ?? 0;
+}
+
+function readTransferRequestsFromStorage(): FlowerTransferRequest[] {
+  if (typeof window === 'undefined') {
+    return [];
+  }
+
+  try {
+    const raw = window.localStorage.getItem(TRANSFER_REQUESTS_STORAGE_KEY);
+    if (!raw) {
+      return [];
+    }
+
+    const parsed = JSON.parse(raw) as FlowerTransferRequest[];
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
+function writeTransferRequestsToStorage(requests: FlowerTransferRequest[]) {
+  if (typeof window === 'undefined') {
+    return;
+  }
+
+  window.localStorage.setItem(TRANSFER_REQUESTS_STORAGE_KEY, JSON.stringify(requests));
+}
+
+async function getProductDetailsLocal(productId: string): Promise<{
+  name: string;
+  kind: string;
+  color: string;
+  flowerType: string;
+}> {
+  const catalog = await listFlowerStemsLocal();
+  const product = catalog.find((entry) => entry.id === productId);
+
+  return {
+    name: product?.name ?? getProductName(productId),
+    kind: normalizeFlowerProductKind(product?.product_kind),
+    color: normalizeFlowerProductColor(product?.color ?? ''),
+    flowerType: product?.flower_type ?? '',
+  };
+}
+
+/** Staff/admin file a transfer request. Stock leaves the source branch immediately (in transit). */
+export async function createFlowerTransferRequestLocal(
+  input: CreateFlowerTransferRequestInput,
+): Promise<FlowerTransferRequest> {
+  if (input.fromBranchId === input.toBranchId) {
+    throw new Error('Source and destination branches must be different.');
+  }
+
+  const quantity = Number(input.quantity);
+  if (!Number.isInteger(quantity) || quantity <= 0) {
+    throw new Error('Quantity must be a whole number greater than 0.');
+  }
+
+  const details = await getProductDetailsLocal(input.productId);
+  const toBranchName = getBranchName(input.toBranchId);
+  const fromBranchName = getBranchName(input.fromBranchId);
+
+  await applyStockChange({
+    branchId: input.fromBranchId,
+    productId: input.productId,
+    delta: -quantity,
+    movementType: 'transfer_out',
+    note: `Transfer request to ${toBranchName}`,
+    allowNegative: true,
+  });
+
+  const request: FlowerTransferRequest = {
+    id: `transfer-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+    from_branch_id: input.fromBranchId,
+    from_branch_name: fromBranchName,
+    to_branch_id: input.toBranchId,
+    to_branch_name: toBranchName,
+    product_id: input.productId,
+    product_name: details.name,
+    product_kind: details.kind,
+    product_color: details.color,
+    product_flower_type: details.flowerType,
+    quantity,
+    status: 'pending',
+    note: input.note?.trim() ?? '',
+    requested_by_id: input.requestedById,
+    requested_by_name: input.requestedByName,
+    resolved_by_id: null,
+    resolved_by_name: null,
+    resolved_at: null,
+    created_at: new Date().toISOString(),
+  };
+
+  writeTransferRequestsToStorage([request, ...readTransferRequestsFromStorage()]);
+  return request;
+}
+
+export async function listFlowerTransferRequestsLocal(
+  options: ListFlowerTransferRequestsOptions = {},
+): Promise<FlowerTransferRequest[]> {
+  const requests = readTransferRequestsFromStorage();
+
+  const filtered = requests.filter((request) => {
+    if (
+      options.branchId &&
+      request.from_branch_id !== options.branchId &&
+      request.to_branch_id !== options.branchId
+    ) {
+      return false;
+    }
+
+    if (options.status && request.status !== options.status) {
+      return false;
+    }
+
+    return true;
+  });
+
+  const sorted = filtered.sort(
+    (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime(),
+  );
+
+  return typeof options.limit === 'number' ? sorted.slice(0, options.limit) : sorted;
+}
+
+function findPendingRequest(requestId: string): {
+  requests: FlowerTransferRequest[];
+  index: number;
+  request: FlowerTransferRequest;
+} {
+  const requests = readTransferRequestsFromStorage();
+  const index = requests.findIndex((entry) => entry.id === requestId);
+
+  if (index === -1) {
+    throw new Error('Transfer request not found.');
+  }
+
+  const request = requests[index];
+  if (request.status !== 'pending') {
+    throw new Error('This transfer request has already been resolved.');
+  }
+
+  return { requests, index, request };
+}
+
+/** Receiving branch confirms delivery — stock is added to their inventory. */
+export async function confirmFlowerTransferRequestLocal(
+  input: ResolveFlowerTransferRequestInput,
+): Promise<FlowerTransferRequest> {
+  const { requests, index, request } = findPendingRequest(input.requestId);
+
+  await applyStockChange({
+    branchId: request.to_branch_id,
+    productId: request.product_id,
+    delta: request.quantity,
+    movementType: 'transfer_in',
+    note: `Transfer received from ${request.from_branch_name}`,
+  });
+
+  const resolved: FlowerTransferRequest = {
+    ...request,
+    status: 'confirmed',
+    resolved_by_id: input.resolvedById,
+    resolved_by_name: input.resolvedByName,
+    resolved_at: new Date().toISOString(),
+  };
+
+  requests[index] = resolved;
+  writeTransferRequestsToStorage(requests);
+  return resolved;
+}
+
+async function returnTransferRequestStock(request: FlowerTransferRequest, reason: string) {
+  await applyStockChange({
+    branchId: request.from_branch_id,
+    productId: request.product_id,
+    delta: request.quantity,
+    movementType: 'transfer_in',
+    note: reason,
+    allowNegative: true,
+  });
+}
+
+/** Receiving branch rejects the request — stock is returned to the source branch. */
+export async function rejectFlowerTransferRequestLocal(
+  input: ResolveFlowerTransferRequestInput,
+): Promise<FlowerTransferRequest> {
+  const { requests, index, request } = findPendingRequest(input.requestId);
+
+  await returnTransferRequestStock(request, `Transfer request rejected by ${request.to_branch_name}`);
+
+  const resolved: FlowerTransferRequest = {
+    ...request,
+    status: 'rejected',
+    resolved_by_id: input.resolvedById,
+    resolved_by_name: input.resolvedByName,
+    resolved_at: new Date().toISOString(),
+  };
+
+  requests[index] = resolved;
+  writeTransferRequestsToStorage(requests);
+  return resolved;
+}
+
+/** Sending branch cancels its own pending request — stock is returned to the source branch. */
+export async function cancelFlowerTransferRequestLocal(
+  input: ResolveFlowerTransferRequestInput,
+): Promise<FlowerTransferRequest> {
+  const { requests, index, request } = findPendingRequest(input.requestId);
+
+  await returnTransferRequestStock(request, `Transfer request cancelled by ${request.from_branch_name}`);
+
+  const resolved: FlowerTransferRequest = {
+    ...request,
+    status: 'cancelled',
+    resolved_by_id: input.resolvedById,
+    resolved_by_name: input.resolvedByName,
+    resolved_at: new Date().toISOString(),
+  };
+
+  requests[index] = resolved;
+  writeTransferRequestsToStorage(requests);
+  return resolved;
 }

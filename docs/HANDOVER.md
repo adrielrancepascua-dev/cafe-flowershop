@@ -79,9 +79,12 @@ Pick a test day with 2+ orders (or create them for today).
 - [ ] Admin adds supplier cost; net income on Reports matches: sales − staff expenses − supplier costs
 - [ ] Printable day/week/month report totals match Reports page
 
-### 5. Inter-branch transfer
+### 5. Inter-branch transfer (with receiving-branch approval)
 
-- [ ] Transfer stock from Dagupan → Urdaneta
+- [ ] Staff/admin file a transfer request (e.g. Dagupan → Urdaneta); stock leaves the source branch immediately
+- [ ] Receiving branch sees the incoming request and taps **Confirm received**
+- [ ] Only after confirmation does the stock appear in the receiving branch's on-hand
+- [ ] Rejecting (receiver) or cancelling (sender) a pending request returns the stock to the source branch
 - [ ] Both branches show updated on-hand on both devices
 
 ### 6. Production login
@@ -94,7 +97,7 @@ Pick a test day with 2+ orders (or create them for today).
 ## Staff training (15 minutes)
 
 1. **Orders** — calendar vs list; create order; upload photos; status workflow (not started → ready → picked up/delivered)
-2. **Inventory** — view stock; stock in/out; transfers tab
+2. **Inventory** — view stock; stock in/out; inter-branch transfer requests (file a request; receiving branch confirms before stock is added)
 3. **Expenses** — log petty cash; admin can fix typos
 4. **Reports** — locked until all today’s orders are done; screenshot printable report for Messenger
 5. **Team** (admin) — add staff, copy login details, deactivate leavers

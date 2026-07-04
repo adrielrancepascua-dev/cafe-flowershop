@@ -1,13 +1,22 @@
 import type {
   AdjustFlowerInventoryInput,
+  CreateFlowerTransferRequestInput,
+  FlowerTransferRequest,
+  ListFlowerTransferRequestsOptions,
+  ResolveFlowerTransferRequestInput,
   TransferFlowerInventoryInput,
 } from '../../../modules/flowers/shared/types/flower-inventory';
 import { getFlowerStorageMode, shouldUseFlowerSupabase } from '../storage-mode';
 import {
   adjustFlowerInventoryLocal,
+  cancelFlowerTransferRequestLocal,
+  confirmFlowerTransferRequestLocal,
+  createFlowerTransferRequestLocal,
   listFlowerBranchesLocal,
   listFlowerInventoryMovementsLocal,
   listFlowerInventoryStockLocal,
+  listFlowerTransferRequestsLocal,
+  rejectFlowerTransferRequestLocal,
   transferFlowerInventoryLocal,
 } from './flowers-inventory.local';
 
@@ -99,4 +108,99 @@ export async function transferFlowerInventory(input: TransferFlowerInventoryInpu
   }
 
   return transferFlowerInventoryLocal(input);
+}
+
+export async function createFlowerTransferRequest(
+  input: CreateFlowerTransferRequestInput,
+): Promise<FlowerTransferRequest> {
+  const mode = getFlowerStorageMode();
+
+  if (shouldUseFlowerSupabase(mode)) {
+    try {
+      const { createFlowerTransferRequestSupabase } = await import('./flowers-inventory.supabase');
+      return await createFlowerTransferRequestSupabase(input);
+    } catch (error) {
+      if (mode === 'supabase') {
+        throw error;
+      }
+    }
+  }
+
+  return createFlowerTransferRequestLocal(input);
+}
+
+export async function listFlowerTransferRequests(
+  options: ListFlowerTransferRequestsOptions = {},
+): Promise<FlowerTransferRequest[]> {
+  const mode = getFlowerStorageMode();
+
+  if (shouldUseFlowerSupabase(mode)) {
+    try {
+      const { listFlowerTransferRequestsSupabase } = await import('./flowers-inventory.supabase');
+      return await listFlowerTransferRequestsSupabase(options);
+    } catch (error) {
+      if (mode === 'supabase') {
+        throw error;
+      }
+    }
+  }
+
+  return listFlowerTransferRequestsLocal(options);
+}
+
+export async function confirmFlowerTransferRequest(
+  input: ResolveFlowerTransferRequestInput,
+): Promise<FlowerTransferRequest> {
+  const mode = getFlowerStorageMode();
+
+  if (shouldUseFlowerSupabase(mode)) {
+    try {
+      const { confirmFlowerTransferRequestSupabase } = await import('./flowers-inventory.supabase');
+      return await confirmFlowerTransferRequestSupabase(input);
+    } catch (error) {
+      if (mode === 'supabase') {
+        throw error;
+      }
+    }
+  }
+
+  return confirmFlowerTransferRequestLocal(input);
+}
+
+export async function rejectFlowerTransferRequest(
+  input: ResolveFlowerTransferRequestInput,
+): Promise<FlowerTransferRequest> {
+  const mode = getFlowerStorageMode();
+
+  if (shouldUseFlowerSupabase(mode)) {
+    try {
+      const { rejectFlowerTransferRequestSupabase } = await import('./flowers-inventory.supabase');
+      return await rejectFlowerTransferRequestSupabase(input);
+    } catch (error) {
+      if (mode === 'supabase') {
+        throw error;
+      }
+    }
+  }
+
+  return rejectFlowerTransferRequestLocal(input);
+}
+
+export async function cancelFlowerTransferRequest(
+  input: ResolveFlowerTransferRequestInput,
+): Promise<FlowerTransferRequest> {
+  const mode = getFlowerStorageMode();
+
+  if (shouldUseFlowerSupabase(mode)) {
+    try {
+      const { cancelFlowerTransferRequestSupabase } = await import('./flowers-inventory.supabase');
+      return await cancelFlowerTransferRequestSupabase(input);
+    } catch (error) {
+      if (mode === 'supabase') {
+        throw error;
+      }
+    }
+  }
+
+  return cancelFlowerTransferRequestLocal(input);
 }

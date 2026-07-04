@@ -1,18 +1,26 @@
 import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
 import {
   adjustFlowerInventory,
+  cancelFlowerTransferRequest,
+  confirmFlowerTransferRequest,
+  createFlowerTransferRequest,
   listFlowerBranches,
   listFlowerInventoryMovements,
   listFlowerInventoryStock,
-  transferFlowerInventory,
+  listFlowerTransferRequests,
+  rejectFlowerTransferRequest,
 } from '../../../../services/flowers/inventory';
 import { useFlowerAuth } from '../../../../lib/auth/FlowerAuthContext';
-import type { FlowerBranchOption, FlowerInventoryMovementRow, FlowerInventoryStockRow } from '../../shared/types/flower-inventory';
+import type {
+  FlowerBranchOption,
+  FlowerInventoryMovementRow,
+  FlowerInventoryStockRow,
+  FlowerTransferRequest,
+} from '../../shared/types/flower-inventory';
 import FlowerPageHeader from '../../shared/components/FlowerPageHeader';
-import { RequireFlowerAdmin } from '../components/RequireFlowerAuth';
 import FlowerInventoryStockPrint from '../components/FlowerPrintableInventoryStockPanel';
 import FlowerPrintControls from '../../shared/components/FlowerPrintControls';
-import { Minus, Plus, ArrowLeftRight, Package, ChevronDown } from 'lucide-react';
+import { Minus, Plus, ArrowLeftRight, Package, ChevronDown, Check, X } from 'lucide-react';
 import { INVENTORY_MOVEMENT_TYPE_LABELS } from '../../shared/utils/flower-format';
 import {
   compareInventoryStockRows,
@@ -521,6 +529,209 @@ function StockAdjustControls({
   );
 }
 
+const TRANSFER_STATUS_BADGES: Record<
+  FlowerTransferRequest['status'],
+  { label: string; className: string }
+> = {
+  pending: { label: 'Pending', className: 'border-amber-200 bg-amber-50 text-amber-800' },
+  confirmed: { label: 'Confirmed', className: 'border-emerald-200 bg-emerald-50 text-emerald-800' },
+  rejected: { label: 'Rejected', className: 'border-red-200 bg-red-50 text-red-700' },
+  cancelled: { label: 'Cancelled', className: 'border-brand-muted/50 bg-brand-beige/40 text-brand-brown/70' },
+};
+
+function TransferStatusBadge({ status }: { status: FlowerTransferRequest['status'] }) {
+  const badge = TRANSFER_STATUS_BADGES[status];
+
+  return (
+    <span
+      className={`inline-flex rounded-full border px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide ${badge.className}`}
+    >
+      {badge.label}
+    </span>
+  );
+}
+
+function TransferRequestProductLabel({ request }: { request: FlowerTransferRequest }) {
+  const isFlower = normalizeFlowerProductKind(request.product_kind) === 'flower';
+  const color = normalizeFlowerProductColor(request.product_color);
+
+  return (
+    <span className="inline-flex items-center gap-1.5 font-medium text-brand-dark">
+      {isFlower ? (
+        <span
+          className={`h-3 w-3 shrink-0 rounded-full ${flowerProductColorSwatchClass(color)}`}
+          aria-hidden
+        />
+      ) : null}
+      {request.product_name}
+      {isFlower ? <span className="font-normal text-brand-brown/70">· {color}</span> : null}
+    </span>
+  );
+}
+
+function TransferRequestCard({
+  request,
+  actions,
+  pendingActionId,
+  onResolve,
+}: {
+  request: FlowerTransferRequest;
+  actions: Array<'confirm' | 'reject' | 'cancel'>;
+  pendingActionId: string | null;
+  onResolve: (request: FlowerTransferRequest, action: 'confirm' | 'reject' | 'cancel') => void;
+}) {
+  const busy = pendingActionId === request.id;
+
+  return (
+    <li className="rounded-xl border border-brand-muted/40 bg-white p-3 shadow-sm sm:p-4">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div className="min-w-0 flex-1">
+          <div className="flex flex-wrap items-center gap-2 text-sm">
+            <span className="font-semibold text-brand-dark">{request.from_branch_name}</span>
+            <ArrowLeftRight className="h-3.5 w-3.5 text-brand-brown/60" aria-hidden />
+            <span className="font-semibold text-brand-dark">{request.to_branch_name}</span>
+          </div>
+          <p className="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-sm">
+            <TransferRequestProductLabel request={request} />
+            <span className="rounded-full border border-brand-muted/40 bg-brand-beige/30 px-2 py-0.5 text-xs font-semibold text-brand-dark">
+              {request.quantity} units
+            </span>
+          </p>
+          <p className="mt-1 text-xs text-brand-brown/60">
+            Filed by {request.requested_by_name}
+            {request.note ? ` · ${request.note}` : ''}
+          </p>
+        </div>
+        <div className="flex shrink-0 flex-wrap gap-2">
+          {actions.includes('confirm') ? (
+            <button
+              type="button"
+              disabled={busy}
+              onClick={() => onResolve(request, 'confirm')}
+              className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              <Check className="h-3.5 w-3.5" />
+              Confirm received
+            </button>
+          ) : null}
+          {actions.includes('reject') ? (
+            <button
+              type="button"
+              disabled={busy}
+              onClick={() => onResolve(request, 'reject')}
+              className="inline-flex items-center gap-1.5 rounded-lg border border-red-200 bg-white px-3 py-1.5 text-xs font-semibold text-red-700 transition hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              <X className="h-3.5 w-3.5" />
+              Reject
+            </button>
+          ) : null}
+          {actions.includes('cancel') ? (
+            <button
+              type="button"
+              disabled={busy}
+              onClick={() => onResolve(request, 'cancel')}
+              className="inline-flex items-center gap-1.5 rounded-lg border border-brand-muted/60 bg-white px-3 py-1.5 text-xs font-semibold text-brand-brown transition hover:bg-brand-beige/50 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              <X className="h-3.5 w-3.5" />
+              Cancel request
+            </button>
+          ) : null}
+        </div>
+      </div>
+    </li>
+  );
+}
+
+function TransferRequestInbox({
+  incoming,
+  outgoing,
+  isAdmin,
+  loading,
+  pendingActionId,
+  onResolve,
+}: {
+  incoming: FlowerTransferRequest[];
+  outgoing: FlowerTransferRequest[];
+  isAdmin: boolean;
+  loading: boolean;
+  pendingActionId: string | null;
+  onResolve: (request: FlowerTransferRequest, action: 'confirm' | 'reject' | 'cancel') => void;
+}) {
+  return (
+    <div className="mt-5 space-y-5">
+      <section className="rounded-2xl border border-brand-muted/40 bg-white p-4 sm:p-5">
+        <div className="flex items-center justify-between gap-2">
+          <h3 className="text-sm font-semibold text-brand-dark">
+            {isAdmin ? 'Pending approvals' : 'Incoming requests to confirm'}
+          </h3>
+          {incoming.length > 0 ? (
+            <span className="rounded-full bg-amber-100 px-2 py-0.5 text-xs font-semibold text-amber-800">
+              {incoming.length}
+            </span>
+          ) : null}
+        </div>
+        <p className="mt-1 text-sm text-brand-brown/70">
+          {isAdmin
+            ? 'Confirm once the receiving branch has the stock in hand. Stock is added on confirmation.'
+            : 'Another branch is sending you stock. Confirm once it arrives to add it to your inventory.'}
+        </p>
+        {loading && incoming.length === 0 ? (
+          <p className="mt-3 text-sm text-brand-brown/60">Loading requests…</p>
+        ) : incoming.length > 0 ? (
+          <ul className="mt-3 space-y-2">
+            {incoming.map((request) => (
+              <TransferRequestCard
+                key={request.id}
+                request={request}
+                actions={['confirm', 'reject']}
+                pendingActionId={pendingActionId}
+                onResolve={onResolve}
+              />
+            ))}
+          </ul>
+        ) : (
+          <p className="mt-3 rounded-lg border border-dashed border-brand-muted/40 px-3 py-4 text-center text-sm text-brand-brown/60">
+            No incoming requests waiting for confirmation.
+          </p>
+        )}
+      </section>
+
+      {!isAdmin ? (
+        <section className="rounded-2xl border border-brand-muted/40 bg-white p-4 sm:p-5">
+          <div className="flex items-center justify-between gap-2">
+            <h3 className="text-sm font-semibold text-brand-dark">Your outgoing requests</h3>
+            {outgoing.length > 0 ? (
+              <span className="rounded-full bg-brand-beige/60 px-2 py-0.5 text-xs font-semibold text-brand-brown">
+                {outgoing.length}
+              </span>
+            ) : null}
+          </div>
+          <p className="mt-1 text-sm text-brand-brown/70">
+            Waiting for the receiving branch to confirm. You can cancel to return the stock to your branch.
+          </p>
+          {outgoing.length > 0 ? (
+            <ul className="mt-3 space-y-2">
+              {outgoing.map((request) => (
+                <TransferRequestCard
+                  key={request.id}
+                  request={request}
+                  actions={['cancel']}
+                  pendingActionId={pendingActionId}
+                  onResolve={onResolve}
+                />
+              ))}
+            </ul>
+          ) : (
+            <p className="mt-3 rounded-lg border border-dashed border-brand-muted/40 px-3 py-4 text-center text-sm text-brand-brown/60">
+              You have no pending outgoing requests.
+            </p>
+          )}
+        </section>
+      ) : null}
+    </div>
+  );
+}
+
 type InventoryTab = 'stock' | 'transfer';
 
 export default function FlowerInventoryPage() {
@@ -551,6 +762,9 @@ export default function FlowerInventoryPage() {
   const [fromBranchStockLoading, setFromBranchStockLoading] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const isFirstLoadRef = useRef(true);
+  const [transferRequests, setTransferRequests] = useState<FlowerTransferRequest[]>([]);
+  const [transferRequestsLoading, setTransferRequestsLoading] = useState(false);
+  const [pendingActionId, setPendingActionId] = useState<string | null>(null);
 
   async function loadData() {
     const isFirstLoad = isFirstLoadRef.current;
@@ -617,6 +831,37 @@ export default function FlowerInventoryPage() {
       });
   }, [fromBranchId]);
 
+  useEffect(() => {
+    if (staffBranchId && fromBranchId !== staffBranchId) {
+      setFromBranchId(staffBranchId);
+    }
+  }, [staffBranchId, fromBranchId]);
+
+  async function loadTransferRequests() {
+    setTransferRequestsLoading(true);
+    try {
+      const requests = await listFlowerTransferRequests(
+        staffBranchId ? { branchId: staffBranchId } : {},
+      );
+      setTransferRequests(requests);
+    } catch (error) {
+      setTransferErrorMessage(
+        error instanceof Error ? error.message : 'Failed to load transfer requests.',
+      );
+    } finally {
+      setTransferRequestsLoading(false);
+    }
+  }
+
+  useEffect(() => {
+    if (authLoading || activeTab !== 'transfer') {
+      return;
+    }
+
+    void loadTransferRequests();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeTab, authLoading, staffBranchId]);
+
   const isAllBranchesView = selectedBranchId === 'all';
 
   const displayStock = useMemo(() => {
@@ -674,16 +919,33 @@ export default function FlowerInventoryPage() {
   const selectedBranchName =
     branches.find((branch) => branch.id === selectedBranchId)?.name ?? 'All branches';
 
-  const transferMovements = useMemo(
-    () =>
-      movementRows.filter(
-        (movement) =>
-          movement.movement_type === 'transfer_in' || movement.movement_type === 'transfer_out',
-      ),
-    [movementRows],
+  const fromBranchName = branches.find((branch) => branch.id === fromBranchId)?.name ?? '';
+
+  const pendingTransferRequests = useMemo(
+    () => transferRequests.filter((request) => request.status === 'pending'),
+    [transferRequests],
   );
 
-  const fromBranchName = branches.find((branch) => branch.id === fromBranchId)?.name ?? '';
+  const incomingTransferRequests = useMemo(
+    () =>
+      pendingTransferRequests.filter((request) =>
+        staffBranchId ? request.to_branch_id === staffBranchId : true,
+      ),
+    [pendingTransferRequests, staffBranchId],
+  );
+
+  const outgoingTransferRequests = useMemo(
+    () =>
+      pendingTransferRequests.filter((request) =>
+        staffBranchId ? request.from_branch_id === staffBranchId : false,
+      ),
+    [pendingTransferRequests, staffBranchId],
+  );
+
+  const resolvedTransferRequests = useMemo(
+    () => transferRequests.filter((request) => request.status !== 'pending'),
+    [transferRequests],
+  );
 
   const transferFlowerSections = useMemo(
     () =>
@@ -757,7 +1019,15 @@ export default function FlowerInventoryPage() {
     }
   }
 
-  async function handleTransfer(event: React.FormEvent) {
+  async function refreshTransferData() {
+    await Promise.all([loadData(), loadTransferRequests()]);
+    if (fromBranchId) {
+      const refreshedStock = await listFlowerInventoryStock({ branchId: fromBranchId });
+      setFromBranchStock(refreshedStock);
+    }
+  }
+
+  async function handleCreateTransferRequest(event: React.FormEvent) {
     event.preventDefault();
     const quantity = Number(transferQty);
 
@@ -767,24 +1037,69 @@ export default function FlowerInventoryPage() {
       return;
     }
 
+    if (!user) {
+      setTransferErrorMessage('Your session has expired. Please sign in again.');
+      return;
+    }
+
     try {
-      await transferFlowerInventory({
+      await createFlowerTransferRequest({
         fromBranchId,
         toBranchId,
-        items: [{ productId: transferProductId, quantity }],
+        productId: transferProductId,
+        quantity,
+        requestedById: user.id,
+        requestedByName: user.display_name,
       });
-      setTransferMessage('Transfer completed.');
+      setTransferMessage('Transfer request filed. The receiving branch will confirm once received.');
       setTransferErrorMessage('');
       setMessage('');
-      setTransferQty('1');
-      await loadData();
-      if (fromBranchId) {
-        const refreshedStock = await listFlowerInventoryStock({ branchId: fromBranchId });
-        setFromBranchStock(refreshedStock);
-      }
+      resetTransferSelection();
+      await refreshTransferData();
     } catch (error) {
-      setTransferErrorMessage(error instanceof Error ? error.message : 'Transfer failed.');
+      setTransferErrorMessage(error instanceof Error ? error.message : 'Transfer request failed.');
       setTransferMessage('');
+    }
+  }
+
+  async function handleResolveTransferRequest(
+    request: FlowerTransferRequest,
+    action: 'confirm' | 'reject' | 'cancel',
+  ) {
+    if (!user) {
+      setTransferErrorMessage('Your session has expired. Please sign in again.');
+      return;
+    }
+
+    setPendingActionId(request.id);
+    setTransferErrorMessage('');
+    setTransferMessage('');
+
+    try {
+      const payload = {
+        requestId: request.id,
+        resolvedById: user.id,
+        resolvedByName: user.display_name,
+      };
+
+      if (action === 'confirm') {
+        await confirmFlowerTransferRequest(payload);
+        setTransferMessage(
+          `Confirmed ${request.quantity} × ${request.product_name} into ${request.to_branch_name}.`,
+        );
+      } else if (action === 'reject') {
+        await rejectFlowerTransferRequest(payload);
+        setTransferMessage(`Rejected transfer request. Stock returned to ${request.from_branch_name}.`);
+      } else {
+        await cancelFlowerTransferRequest(payload);
+        setTransferMessage(`Cancelled transfer request. Stock returned to ${request.from_branch_name}.`);
+      }
+
+      await refreshTransferData();
+    } catch (error) {
+      setTransferErrorMessage(error instanceof Error ? error.message : 'Could not update the request.');
+    } finally {
+      setPendingActionId(null);
     }
   }
 
@@ -799,7 +1114,7 @@ export default function FlowerInventoryPage() {
     setTransferMessage('');
   }
 
-  const isStockView = activeTab === 'stock' || !isAdmin;
+  const isStockView = activeTab === 'stock';
   const canPrintBranchStock = isStockView && !isAllBranchesView;
 
   return (
@@ -827,48 +1142,66 @@ export default function FlowerInventoryPage() {
         }
       />
 
-      {isAdmin ? (
-        <div className="mt-4 inline-flex rounded-xl border border-brand-muted/50 bg-white p-1">
-          <button
-            type="button"
-            onClick={() => setActiveTab('stock')}
-            className={`flower-pill flex items-center gap-1.5 ${activeTab === 'stock' ? 'flower-pill-active' : 'flower-pill-inactive'}`}
-          >
-            <Package className="h-3.5 w-3.5" />
-            Stock levels
-          </button>
-          <button
-            type="button"
-            onClick={() => setActiveTab('transfer')}
-            className={`flower-pill flex items-center gap-1.5 ${activeTab === 'transfer' ? 'flower-pill-active' : 'flower-pill-inactive'}`}
-          >
-            <ArrowLeftRight className="h-3.5 w-3.5" />
-            Inter-branch transfer
-          </button>
-        </div>
-      ) : null}
+      <div className="mt-4 inline-flex rounded-xl border border-brand-muted/50 bg-white p-1">
+        <button
+          type="button"
+          onClick={() => setActiveTab('stock')}
+          className={`flower-pill flex items-center gap-1.5 ${activeTab === 'stock' ? 'flower-pill-active' : 'flower-pill-inactive'}`}
+        >
+          <Package className="h-3.5 w-3.5" />
+          Stock levels
+        </button>
+        <button
+          type="button"
+          onClick={() => setActiveTab('transfer')}
+          className={`flower-pill flex items-center gap-1.5 ${activeTab === 'transfer' ? 'flower-pill-active' : 'flower-pill-inactive'}`}
+        >
+          <ArrowLeftRight className="h-3.5 w-3.5" />
+          Inter-branch transfer
+        </button>
+      </div>
 
-      {message && (activeTab === 'stock' || !isAdmin) ? (
+      {message && activeTab === 'stock' ? (
         <p className="mt-3 text-sm text-emerald-700">{message}</p>
       ) : null}
-      {errorMessage && (activeTab === 'stock' || !isAdmin) ? (
+      {errorMessage && activeTab === 'stock' ? (
         <p className="mt-3 text-sm text-red-700">{errorMessage}</p>
       ) : null}
 
       {loading && stockRows.length === 0 ? (
         <p className="mt-6 text-sm text-brand-brown/60">Loading inventory...</p>
-      ) : activeTab === 'transfer' && isAdmin ? (
+      ) : activeTab === 'transfer' ? (
         <>
-          <RequireFlowerAdmin>
-            <form
-              onSubmit={handleTransfer}
-              className="mt-5 rounded-2xl border border-brand-muted/40 bg-brand-cream/20 p-4 sm:p-5"
-            >
-              <h3 className="text-sm font-semibold text-brand-dark">Inter-branch transfer</h3>
-              <p className="mt-1 text-sm text-brand-brown/70">
-                Move stock from one branch to another. The source branch can go negative if you transfer more than on hand.
-              </p>
-              <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+          {transferErrorMessage ? (
+            <p className="mt-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+              {transferErrorMessage}
+            </p>
+          ) : null}
+          {transferMessage ? (
+            <p className="mt-3 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-800">
+              {transferMessage}
+            </p>
+          ) : null}
+
+          <TransferRequestInbox
+            incoming={incomingTransferRequests}
+            outgoing={outgoingTransferRequests}
+            isAdmin={isAdmin}
+            loading={transferRequestsLoading}
+            pendingActionId={pendingActionId}
+            onResolve={handleResolveTransferRequest}
+          />
+
+          <form
+            onSubmit={handleCreateTransferRequest}
+            className="mt-6 rounded-2xl border border-brand-muted/40 bg-brand-cream/20 p-4 sm:p-5"
+          >
+            <h3 className="text-sm font-semibold text-brand-dark">File a transfer request</h3>
+            <p className="mt-1 text-sm text-brand-brown/70">
+              Stock leaves the source branch right away and is held in transit. It is only added to the
+              receiving branch once they confirm it arrived.
+            </p>
+            <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
                 <label className="block text-sm font-medium text-brand-brown">
                   From branch
                   <select
@@ -880,12 +1213,18 @@ export default function FlowerInventoryPage() {
                     }}
                     className="flower-input mt-1.5"
                     required
+                    disabled={Boolean(staffBranchId)}
                   >
                     <option value="">Select branch</option>
                     {branches.map((b) => (
                       <option key={b.id} value={b.id}>{b.name}</option>
                     ))}
                   </select>
+                  {staffBranchId ? (
+                    <span className="mt-1 block text-xs text-brand-brown/60">
+                      You can only send from your branch.
+                    </span>
+                  ) : null}
                 </label>
                 <label className="block text-sm font-medium text-brand-brown">
                   To branch
@@ -899,9 +1238,11 @@ export default function FlowerInventoryPage() {
                     required
                   >
                     <option value="">Select branch</option>
-                    {branches.map((b) => (
-                      <option key={b.id} value={b.id}>{b.name}</option>
-                    ))}
+                    {branches
+                      .filter((b) => b.id !== fromBranchId)
+                      .map((b) => (
+                        <option key={b.id} value={b.id}>{b.name}</option>
+                      ))}
                   </select>
                 </label>
               </div>
@@ -1045,7 +1386,7 @@ export default function FlowerInventoryPage() {
                 </label>
                 <div className="flex items-end sm:col-span-2 lg:col-span-3">
                   <button type="submit" className="flower-btn-primary w-full sm:w-auto">
-                    Transfer stock
+                    File transfer request
                   </button>
                 </div>
               </div>
@@ -1070,32 +1411,30 @@ export default function FlowerInventoryPage() {
                       : 'Choose the item to transfer.'}
                 </p>
               ) : null}
-              {transferErrorMessage ? (
-                <p className="mt-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
-                  {transferErrorMessage}
-                </p>
-              ) : null}
-              {transferMessage ? (
-                <p className="mt-3 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-800">
-                  {transferMessage}
-                </p>
-              ) : null}
-            </form>
-          </RequireFlowerAdmin>
+          </form>
 
           <div className="mt-6">
-            <h3 className="text-sm font-semibold text-brand-dark">Recent transfers</h3>
+            <h3 className="text-sm font-semibold text-brand-dark">Transfer request history</h3>
             <ul className="mt-2 space-y-2 text-sm text-brand-brown/80">
-              {transferMovements.length > 0 ? (
-                transferMovements.map((movement) => (
-                  <li key={movement.id} className="rounded-lg border border-brand-muted/30 px-3 py-2">
-                    {movement.branch_name} · {movement.product_name} · {movement.movement_type} ·{' '}
-                    {movement.quantity} · {movement.note}
+              {resolvedTransferRequests.length > 0 ? (
+                resolvedTransferRequests.map((request) => (
+                  <li
+                    key={request.id}
+                    className="flex flex-wrap items-center gap-x-2 gap-y-1 rounded-lg border border-brand-muted/30 px-3 py-2"
+                  >
+                    <TransferStatusBadge status={request.status} />
+                    <span>
+                      {request.from_branch_name} → {request.to_branch_name} · {request.product_name} ·{' '}
+                      {request.quantity}
+                    </span>
+                    {request.resolved_by_name ? (
+                      <span className="text-xs text-brand-brown/60">by {request.resolved_by_name}</span>
+                    ) : null}
                   </li>
                 ))
               ) : (
                 <li className="rounded-lg border border-brand-muted/30 px-3 py-2 text-brand-brown/60">
-                  No transfers recorded yet.
+                  No completed transfer requests yet.
                 </li>
               )}
             </ul>
