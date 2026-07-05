@@ -244,7 +244,7 @@ export async function createFlowerOrderLocal(input: CreateFlowerOrderInput): Pro
   }
 
   const products = await listFlowerStemsLocal();
-  validateOrderInspoPhotoWithProducts(input.items, input.photo_inspo_data_url, products);
+  validateOrderInspoPhotoWithProducts(input.items, input.photo_inspo_data_url, products, input.claim_mode);
   await validateFlowerOrderStockLocal(input.branch_id, input.items);
 
   const created = buildOrderFromInput(input, branch.name);
@@ -271,7 +271,7 @@ export async function updateFlowerOrderLocal(input: UpdateFlowerOrderInput): Pro
   }
 
   const products = await listFlowerStemsLocal();
-  validateOrderInspoPhotoWithProducts(input.items, input.photo_inspo_data_url, products);
+  validateOrderInspoPhotoWithProducts(input.items, input.photo_inspo_data_url, products, input.claim_mode);
 
   const updated = buildOrderFromInput(input, branch.name, existing);
 

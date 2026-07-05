@@ -24,7 +24,12 @@ export function orderIsMiscOnly(
 export function orderRequiresInspoPhoto(
   items: Array<{ product_id: string }>,
   flowerProductIds: ReadonlySet<string>,
+  claimMode?: FlowerClaimMode,
 ): boolean {
+  if (claimMode === 'walk_in') {
+    return false;
+  }
+
   if (items.length === 0) {
     return false;
   }
@@ -36,8 +41,9 @@ export function assertOrderInspoPhotoProvided(
   items: Array<{ product_id: string }>,
   photoInspoDataUrl: string | null | undefined,
   flowerProductIds: ReadonlySet<string>,
+  claimMode?: FlowerClaimMode,
 ): void {
-  if (!orderRequiresInspoPhoto(items, flowerProductIds)) {
+  if (!orderRequiresInspoPhoto(items, flowerProductIds, claimMode)) {
     return;
   }
 

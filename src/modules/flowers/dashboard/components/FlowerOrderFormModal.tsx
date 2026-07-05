@@ -1103,8 +1103,8 @@ export default function FlowerOrderFormModal({
     [currentOrderItems, form.claim_mode, flowerProductIds],
   );
   const requiresInspoPhoto = useMemo(
-    () => orderRequiresInspoPhoto(currentOrderItems, flowerProductIds),
-    [currentOrderItems, flowerProductIds],
+    () => orderRequiresInspoPhoto(currentOrderItems, flowerProductIds, form.claim_mode),
+    [currentOrderItems, flowerProductIds, form.claim_mode],
   );
   const prepDeadline = existingOrder
     ? getOrderPrepDeadlineInfo(
@@ -1359,7 +1359,10 @@ export default function FlowerOrderFormModal({
       return null;
     }
 
-    if (orderRequiresInspoPhoto(items, flowerProductIds) && !form.photo_inspo_data_url.trim()) {
+    if (
+      orderRequiresInspoPhoto(items, flowerProductIds, form.claim_mode) &&
+      !form.photo_inspo_data_url.trim()
+    ) {
       setErrorMessage('Photo of order / inspo is required for flower orders.');
       return null;
     }

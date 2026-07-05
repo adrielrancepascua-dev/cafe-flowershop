@@ -114,6 +114,7 @@ async function validateOrderInspoPhotoSupabase(
   supabase: ReturnType<typeof requireSupabaseClient>,
   items: Array<{ product_id: string }>,
   photoInspoDataUrl: string,
+  claimMode: FlowerClaimMode,
 ): Promise<void> {
   const productIds = [...new Set(items.map((item) => item.product_id))];
   if (productIds.length === 0) {
@@ -129,7 +130,7 @@ async function validateOrderInspoPhotoSupabase(
     throw error;
   }
 
-  validateOrderInspoPhotoForProductRows(items, photoInspoDataUrl, data ?? []);
+  validateOrderInspoPhotoForProductRows(items, photoInspoDataUrl, data ?? [], claimMode);
 }
 
 function buildOrderId(): string {
@@ -338,7 +339,7 @@ export async function createFlowerOrderSupabase(
     throw new Error('Branch not found.');
   }
 
-  await validateOrderInspoPhotoSupabase(supabase, input.items, input.photo_inspo_data_url);
+  await validateOrderInspoPhotoSupabase(supabase, input.items, input.photo_inspo_data_url, input.claim_mode);
   await validateFlowerOrderStockSupabase(input.branch_id, input.items);
 
   const orderId = buildOrderId();
@@ -432,7 +433,7 @@ export async function updateFlowerOrderSupabase(
     throw new Error('Branch not found.');
   }
 
-  await validateOrderInspoPhotoSupabase(supabase, input.items, input.photo_inspo_data_url);
+  await validateOrderInspoPhotoSupabase(supabase, input.items, input.photo_inspo_data_url, input.claim_mode);
 
   const attachments = await resolveOrderAttachments({
     orderId: input.id,
