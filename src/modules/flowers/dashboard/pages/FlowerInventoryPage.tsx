@@ -9,6 +9,7 @@ import {
   listFlowerInventoryStock,
   listFlowerTransferRequests,
   rejectFlowerTransferRequest,
+  updateFlowerTransferRequestBilling,
 } from '../../../../services/flowers/inventory';
 import { getFlowerOrder } from '../../../../services/flowers/orders';
 import { useFlowerAuth } from '../../../../lib/auth/FlowerAuthContext';
@@ -31,6 +32,7 @@ import {
   INVENTORY_MOVEMENT_TYPE_LABELS,
   parseInventoryMovementOrderId,
   parseInventoryMovementReceiver,
+  PRICE_FORMATTER,
   resolveInventoryMovementReceiver,
 } from '../../shared/utils/flower-format';
 import {
@@ -52,6 +54,8 @@ import {
   miscCategoryFromFlowerType,
   type MiscProductCategory,
 } from '../../shared/utils/flower-misc-category';
+import { summarizeUnpaidTransferBalances } from '../../shared/utils/flower-transfer-billing';
+import TransferRequestAdminBillingPanel from '../components/TransferRequestAdminBillingPanel';
 
 function aggregateStockByProduct(rows: FlowerInventoryStockRow[]): FlowerInventoryStockRow[] {
   const totals = new Map<string, FlowerInventoryStockRow>();
@@ -630,11 +634,21 @@ function TransferRequestCard({
   actions,
   pendingActionId,
   onResolve,
+  isAdmin = false,
+  billingSavingId = null,
+  onBillingSave,
 }: {
   request: FlowerTransferRequest;
   actions: Array<'confirm' | 'reject' | 'cancel'>;
   pendingActionId: string | null;
   onResolve: (request: FlowerTransferRequest, action: 'confirm' | 'reject' | 'cancel') => void;
+  isAdmin?: boolean;
+  billingSavingId?: string | null;
+  onBillingSave?: (input: {
+    requestId: string;
+    total_cost: number | null;
+    cost_paid: boolean;
+  }) => Promise<void>;
 }) {
   const busy = pendingActionId === request.id;
 
@@ -646,6 +660,7 @@ function TransferRequestCard({
             <span className="font-semibold text-brand-dark">{request.from_branch_name}</span>
             <ArrowLeftRight className="h-3.5 w-3.5 text-brand-brown/60" aria-hidden />
             <span className="font-semibold text-brand-dark">{request.to_branch_name}</span>
+            <TransferStatusBadge status={request.status} />
           </div>
           <p className="mt-1.5 space-y-1.5 text-sm">
             {request.items.map((item) => (
@@ -704,6 +719,13 @@ function TransferRequestCard({
           ) : null}
         </div>
       </div>
+      {isAdmin && onBillingSave ? (
+        <TransferRequestAdminBillingPanel
+          request={request}
+          saving={billingSavingId === request.id}
+          onSave={async (input) => onBillingSave({ requestId: request.id, ...input })}
+        />
+      ) : null}
     </li>
   );
 }
@@ -714,14 +736,22 @@ function TransferRequestInbox({
   isAdmin,
   loading,
   pendingActionId,
+  billingSavingId,
   onResolve,
+  onBillingSave,
 }: {
   incoming: FlowerTransferRequest[];
   outgoing: FlowerTransferRequest[];
   isAdmin: boolean;
   loading: boolean;
   pendingActionId: string | null;
+  billingSavingId: string | null;
   onResolve: (request: FlowerTransferRequest, action: 'confirm' | 'reject' | 'cancel') => void;
+  onBillingSave?: (input: {
+    requestId: string;
+    total_cost: number | null;
+    cost_paid: boolean;
+  }) => Promise<void>;
 }) {
   return (
     <div className="mt-5 space-y-5">
@@ -752,6 +782,9 @@ function TransferRequestInbox({
                 actions={['confirm', 'reject']}
                 pendingActionId={pendingActionId}
                 onResolve={onResolve}
+                isAdmin={isAdmin}
+                billingSavingId={billingSavingId}
+                onBillingSave={onBillingSave}
               />
             ))}
           </ul>
@@ -1029,6 +1062,7 @@ export default function FlowerInventoryPage() {
   const [transferRequests, setTransferRequests] = useState<FlowerTransferRequest[]>([]);
   const [transferRequestsLoading, setTransferRequestsLoading] = useState(false);
   const [pendingActionId, setPendingActionId] = useState<string | null>(null);
+  const [billingSavingId, setBillingSavingId] = useState<string | null>(null);
 
   async function loadData() {
     const isFirstLoad = isFirstLoadRef.current;
@@ -1106,9 +1140,10 @@ export default function FlowerInventoryPage() {
   async function loadTransferRequests() {
     setTransferRequestsLoading(true);
     try {
-      const requests = await listFlowerTransferRequests(
-        staffBranchId ? { branchId: staffBranchId } : {},
-      );
+      const requests = await listFlowerTransferRequests({
+        ...(staffBranchId ? { branchId: staffBranchId } : {}),
+        includeBilling: isAdmin,
+      });
       setTransferRequests(requests);
     } catch (error) {
       setTransferErrorMessage(
@@ -1126,7 +1161,7 @@ export default function FlowerInventoryPage() {
 
     void loadTransferRequests();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeTab, authLoading, staffBranchId]);
+  }, [activeTab, authLoading, staffBranchId, isAdmin]);
 
   const isAllBranchesView = selectedBranchId === 'all';
 
@@ -1212,6 +1247,13 @@ export default function FlowerInventoryPage() {
     () => transferRequests.filter((request) => request.status !== 'pending'),
     [transferRequests],
   );
+
+  const unpaidTransferBalances = useMemo(
+    () => (isAdmin ? summarizeUnpaidTransferBalances(transferRequests) : []),
+    [isAdmin, transferRequests],
+  );
+
+  const inboxIncomingRequests = isAdmin ? pendingTransferRequests : incomingTransferRequests;
 
   const transferFlowerSections = useMemo(
     () =>
@@ -1385,6 +1427,26 @@ export default function FlowerInventoryPage() {
     setTransferCart((current) => current.filter((line) => line.productId !== productId));
   }
 
+  async function handleSaveTransferBilling(input: {
+    requestId: string;
+    total_cost: number | null;
+    cost_paid: boolean;
+  }) {
+    setBillingSavingId(input.requestId);
+    setTransferErrorMessage('');
+    setTransferMessage('');
+
+    try {
+      await updateFlowerTransferRequestBilling(input);
+      setTransferMessage('Transfer billing saved.');
+      await loadTransferRequests();
+    } catch (error) {
+      setTransferErrorMessage(extractSupabaseErrorMessage(error, 'Failed to save transfer billing.'));
+    } finally {
+      setBillingSavingId(null);
+    }
+  }
+
   async function handleResolveTransferRequest(
     request: FlowerTransferRequest,
     action: 'confirm' | 'reject' | 'cancel',
@@ -1511,13 +1573,40 @@ export default function FlowerInventoryPage() {
             </p>
           ) : null}
 
+          {isAdmin && unpaidTransferBalances.length > 0 ? (
+            <section className="mt-4 rounded-2xl border border-amber-200/80 bg-amber-50/70 p-4 sm:p-5">
+              <h3 className="text-sm font-semibold text-brand-dark">Unpaid branch balances</h3>
+              <p className="mt-1 text-sm text-brand-brown/70">
+                Confirmed transfers with a cost on file that are not marked paid yet.
+              </p>
+              <ul className="mt-3 space-y-2">
+                {unpaidTransferBalances.map((row) => (
+                  <li
+                    key={`${row.from_branch_id}:${row.to_branch_id}`}
+                    className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-amber-200/70 bg-white/80 px-3 py-2 text-sm"
+                  >
+                    <span className="font-medium text-brand-dark">
+                      {row.to_branch_name} owes {row.from_branch_name}
+                    </span>
+                    <span className="text-brand-brown/75">
+                      {PRICE_FORMATTER.format(row.unpaid_total)} · {row.unpaid_count} transfer
+                      {row.unpaid_count === 1 ? '' : 's'}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            </section>
+          ) : null}
+
           <TransferRequestInbox
-            incoming={incomingTransferRequests}
+            incoming={inboxIncomingRequests}
             outgoing={outgoingTransferRequests}
             isAdmin={isAdmin}
             loading={transferRequestsLoading}
             pendingActionId={pendingActionId}
+            billingSavingId={billingSavingId}
             onResolve={handleResolveTransferRequest}
+            onBillingSave={isAdmin ? handleSaveTransferBilling : undefined}
           />
 
           <form
@@ -1816,19 +1905,31 @@ export default function FlowerInventoryPage() {
 
           <div className="mt-6">
             <h3 className="text-sm font-semibold text-brand-dark">Transfer request history</h3>
-            <ul className="mt-2 space-y-2 text-sm text-brand-brown/80">
+            <ul className="mt-2 space-y-3 text-sm text-brand-brown/80">
               {resolvedTransferRequests.length > 0 ? (
                 resolvedTransferRequests.map((request) => (
                   <li
                     key={request.id}
-                    className="flex flex-wrap items-center gap-x-2 gap-y-1 rounded-lg border border-brand-muted/30 px-3 py-2"
+                    className="rounded-xl border border-brand-muted/30 bg-white px-3 py-3 sm:px-4"
                   >
-                    <TransferStatusBadge status={request.status} />
-                    <span>
-                      {request.from_branch_name} → {request.to_branch_name} · {transferRequestSummary(request)}
-                    </span>
-                    {request.resolved_by_name ? (
-                      <span className="text-xs text-brand-brown/60">by {request.resolved_by_name}</span>
+                    <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                      <TransferStatusBadge status={request.status} />
+                      <span className="font-medium text-brand-dark">
+                        {request.from_branch_name} → {request.to_branch_name}
+                      </span>
+                      <span>· {transferRequestSummary(request)}</span>
+                      {request.resolved_by_name ? (
+                        <span className="text-xs text-brand-brown/60">by {request.resolved_by_name}</span>
+                      ) : null}
+                    </div>
+                    {isAdmin ? (
+                      <TransferRequestAdminBillingPanel
+                        request={request}
+                        saving={billingSavingId === request.id}
+                        onSave={async (input) =>
+                          handleSaveTransferBilling({ requestId: request.id, ...input })
+                        }
+                      />
                     ) : null}
                   </li>
                 ))

@@ -5,6 +5,7 @@ import type {
   ListFlowerTransferRequestsOptions,
   ResolveFlowerTransferRequestInput,
   TransferFlowerInventoryInput,
+  UpdateFlowerTransferRequestBillingInput,
 } from '../../../modules/flowers/shared/types/flower-inventory';
 import { getFlowerStorageMode, shouldUseFlowerSupabase } from '../storage-mode';
 import { toServiceError } from '../../../lib/supabase/errors';
@@ -19,6 +20,7 @@ import {
   listFlowerTransferRequestsLocal,
   rejectFlowerTransferRequestLocal,
   transferFlowerInventoryLocal,
+  updateFlowerTransferRequestBillingLocal,
 } from './flowers-inventory.local';
 
 export async function listFlowerBranches() {
@@ -145,6 +147,23 @@ export async function listFlowerTransferRequests(
   }
 
   return listFlowerTransferRequestsLocal(options);
+}
+
+export async function updateFlowerTransferRequestBilling(
+  input: UpdateFlowerTransferRequestBillingInput,
+): Promise<FlowerTransferRequest> {
+  const mode = getFlowerStorageMode();
+
+  if (shouldUseFlowerSupabase(mode)) {
+    try {
+      const { updateFlowerTransferRequestBillingSupabase } = await import('./flowers-inventory.supabase');
+      return await updateFlowerTransferRequestBillingSupabase(input);
+    } catch (error) {
+      throw toServiceError(error, 'Failed to update transfer billing.');
+    }
+  }
+
+  return updateFlowerTransferRequestBillingLocal(input);
 }
 
 export async function confirmFlowerTransferRequest(

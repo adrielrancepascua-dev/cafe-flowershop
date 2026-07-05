@@ -111,6 +111,10 @@ export interface FlowerTransferRequest {
   resolved_by_name: string | null;
   resolved_at: string | null;
   created_at: string;
+  /** Admin-only: amount the receiving branch owes the sending branch. */
+  total_cost: number | null;
+  /** Admin-only: whether the receiving branch has settled this transfer. */
+  cost_paid: boolean;
 }
 
 export interface CreateFlowerTransferRequestInput {
@@ -133,4 +137,12 @@ export interface ListFlowerTransferRequestsOptions {
   branchId?: string;
   status?: FlowerTransferRequestStatus;
   limit?: number;
+  /** When true, include admin billing fields. Staff callers should leave this false. */
+  includeBilling?: boolean;
+}
+
+export interface UpdateFlowerTransferRequestBillingInput {
+  requestId: string;
+  total_cost: number | null;
+  cost_paid: boolean;
 }

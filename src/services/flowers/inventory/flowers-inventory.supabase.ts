@@ -15,6 +15,7 @@ import type {
   ListFlowerTransferRequestsOptions,
   ResolveFlowerTransferRequestInput,
   TransferFlowerInventoryInput,
+  UpdateFlowerTransferRequestBillingInput,
 } from '../../../modules/flowers/shared/types/flower-inventory';
 import { getLocalDayBoundsIso, formatInventoryOrderDeductNote } from '../../../modules/flowers/shared/utils/flower-format';
 import {
@@ -624,6 +625,8 @@ type TransferRequestDbRow = {
   resolved_by_name: string | null;
   resolved_at: string | null;
   created_at: string;
+  total_cost?: number | null;
+  cost_paid?: boolean | null;
 };
 
 type TransferRequestItemDbRow = {
@@ -633,10 +636,36 @@ type TransferRequestItemDbRow = {
   quantity: number;
 };
 
-const TRANSFER_REQUEST_COLUMNS =
+const TRANSFER_REQUEST_BASE_COLUMNS =
   'id, from_branch_id, to_branch_id, status, note, requested_by_id, requested_by_name, resolved_by_id, resolved_by_name, resolved_at, created_at';
 
+const TRANSFER_REQUEST_BILLING_COLUMNS = ', total_cost, cost_paid';
+
+function transferRequestSelectColumns(includeBilling: boolean): string {
+  return includeBilling
+    ? `${TRANSFER_REQUEST_BASE_COLUMNS}${TRANSFER_REQUEST_BILLING_COLUMNS}`
+    : TRANSFER_REQUEST_BASE_COLUMNS;
+}
+
+function mapTransferBillingFields(row: TransferRequestDbRow): {
+  total_cost: number | null;
+  cost_paid: boolean;
+} {
+  return {
+    total_cost: row.total_cost === null || row.total_cost === undefined ? null : Number(row.total_cost),
+    cost_paid: Boolean(row.cost_paid),
+  };
+}
+
 const TRANSFER_REQUEST_ITEM_COLUMNS = 'id, transfer_id, product_id, quantity';
+
+function asTransferRequestDbRow(data: unknown): TransferRequestDbRow {
+  return data as TransferRequestDbRow;
+}
+
+function asTransferRequestDbRows(data: unknown): TransferRequestDbRow[] {
+  return (data as TransferRequestDbRow[] | null) ?? [];
+}
 
 async function listTransferRequestItems(
   supabase: ReturnType<typeof requireSupabaseClient>,
@@ -661,6 +690,7 @@ async function listTransferRequestItems(
 async function mapTransferRequestRows(
   supabase: ReturnType<typeof requireSupabaseClient>,
   rows: TransferRequestDbRow[],
+  includeBilling: boolean,
 ): Promise<FlowerTransferRequest[]> {
   if (rows.length === 0) {
     return [];
@@ -734,6 +764,9 @@ async function mapTransferRequestRows(
       resolved_by_name: row.resolved_by_name,
       resolved_at: row.resolved_at,
       created_at: row.created_at,
+      ...(includeBilling
+        ? mapTransferBillingFields(row)
+        : { total_cost: null, cost_paid: false }),
     };
   });
 }
@@ -790,7 +823,7 @@ export async function createFlowerTransferRequestSupabase(
       requested_by_id: input.requestedById,
       requested_by_name: input.requestedByName,
     })
-    .select(TRANSFER_REQUEST_COLUMNS)
+    .select(transferRequestSelectColumns(false))
     .single();
 
   if (error || !data) {
@@ -807,7 +840,7 @@ export async function createFlowerTransferRequestSupabase(
     throw toServiceError(error, 'Failed to create transfer request.');
   }
 
-  const transferId = (data as TransferRequestDbRow).id;
+  const transferId = asTransferRequestDbRow(data).id;
   const { error: itemsError } = await supabase.from('flower_inventory_transfer_items').insert(
     normalizedItems.map((item) => ({
       transfer_id: transferId,
@@ -831,7 +864,7 @@ export async function createFlowerTransferRequestSupabase(
     throw toServiceError(itemsError, 'Failed to save transfer line items.');
   }
 
-  const [mapped] = await mapTransferRequestRows(supabase, [data as TransferRequestDbRow]);
+  const [mapped] = await mapTransferRequestRows(supabase, [asTransferRequestDbRow(data)], false);
   return mapped;
 }
 
@@ -839,10 +872,11 @@ export async function listFlowerTransferRequestsSupabase(
   options: ListFlowerTransferRequestsOptions = {},
 ): Promise<FlowerTransferRequest[]> {
   const supabase = await requireAuthenticatedSupabaseClient();
+  const includeBilling = Boolean(options.includeBilling);
 
   let query = supabase
     .from('flower_inventory_transfers')
-    .select(TRANSFER_REQUEST_COLUMNS)
+    .select(transferRequestSelectColumns(includeBilling))
     .order('created_at', { ascending: false })
     .limit(options.limit ?? 100);
 
@@ -860,7 +894,7 @@ export async function listFlowerTransferRequestsSupabase(
     throw error;
   }
 
-  return mapTransferRequestRows(supabase, (data as TransferRequestDbRow[] | null) ?? []);
+  return mapTransferRequestRows(supabase, asTransferRequestDbRows(data), includeBilling);
 }
 
 async function loadPendingTransferRequest(
@@ -869,7 +903,7 @@ async function loadPendingTransferRequest(
 ): Promise<FlowerTransferRequest> {
   const { data, error } = await supabase
     .from('flower_inventory_transfers')
-    .select(TRANSFER_REQUEST_COLUMNS)
+    .select(transferRequestSelectColumns(false))
     .eq('id', requestId)
     .maybeSingle();
 
@@ -881,7 +915,7 @@ async function loadPendingTransferRequest(
     throw new Error('Transfer request not found.');
   }
 
-  const [mapped] = await mapTransferRequestRows(supabase, [data as TransferRequestDbRow]);
+  const [mapped] = await mapTransferRequestRows(supabase, [asTransferRequestDbRow(data)], false);
   if (mapped.status !== 'pending') {
     throw new Error('This transfer request has already been resolved.');
   }
@@ -938,7 +972,7 @@ async function resolveTransferRequest(
     })
     .eq('id', input.requestId)
     .eq('status', 'pending')
-    .select(TRANSFER_REQUEST_COLUMNS)
+    .select(transferRequestSelectColumns(false))
     .maybeSingle();
 
   if (error) {
@@ -949,7 +983,58 @@ async function resolveTransferRequest(
     throw new Error('This transfer request has already been resolved.');
   }
 
-  const [mapped] = await mapTransferRequestRows(supabase, [data as TransferRequestDbRow]);
+  const [mapped] = await mapTransferRequestRows(supabase, [asTransferRequestDbRow(data)], false);
+  return mapped;
+}
+
+export async function updateFlowerTransferRequestBillingSupabase(
+  input: UpdateFlowerTransferRequestBillingInput,
+): Promise<FlowerTransferRequest> {
+  const supabase = await requireAuthenticatedSupabaseClient();
+  const totalCost =
+    input.total_cost === null || input.total_cost === undefined
+      ? null
+      : Number(input.total_cost);
+
+  if (totalCost !== null && (!Number.isFinite(totalCost) || totalCost < 0)) {
+    throw new Error('Total cost must be zero or greater.');
+  }
+
+  const { error } = await supabase.rpc('update_flower_transfer_billing', {
+    p_transfer_id: input.requestId,
+    p_total_cost: totalCost,
+    p_cost_paid: Boolean(input.cost_paid),
+  });
+
+  if (error) {
+    if (/only admins can update transfer billing/i.test(error.message ?? '')) {
+      throw new Error('Only admins can update transfer billing.');
+    }
+
+    if (isMissingFunctionError(error)) {
+      throw new Error(
+        'Transfer billing is not available yet. Run supabase/add_flower_transfer_billing.sql in Supabase.',
+      );
+    }
+
+    throw toServiceError(error, 'Failed to update transfer billing.');
+  }
+
+  const { data, error: loadError } = await supabase
+    .from('flower_inventory_transfers')
+    .select(transferRequestSelectColumns(true))
+    .eq('id', input.requestId)
+    .maybeSingle();
+
+  if (loadError) {
+    throw loadError;
+  }
+
+  if (!data) {
+    throw new Error('Transfer request not found.');
+  }
+
+  const [mapped] = await mapTransferRequestRows(supabase, [asTransferRequestDbRow(data)], true);
   return mapped;
 }
 

@@ -21,6 +21,7 @@ Use this before collecting the ₱30k balance. Run on the **production** deploy 
 - [ ] `supabase/add_flower_supply_transfers.sql` applied (admin Supplies tab vouchers)
 - [ ] `supabase/add_atomic_stock_rpc.sql` applied (atomic inventory stock updates)
 - [ ] `supabase/fix_adjust_flower_stock_security.sql` applied (harden stock RPC for staff writes)
+- [ ] `supabase/add_flower_transfer_billing.sql` applied (admin-only transfer cost + paid/unpaid tracking)
 - [ ] Optional: run `supabase/verify_production_readiness.sql` — all checks pass
 
 ### Create the first admin (one-time)
@@ -92,6 +93,13 @@ Pick a test day with 2+ orders (or create them for today).
 - [ ] Only after confirmation does the stock appear in the receiving branch's on-hand
 - [ ] Rejecting (receiver) or cancelling (sender) a pending request returns the stock to the source branch
 - [ ] Both branches show updated on-hand on both devices
+
+### 5b. Transfer billing (admin only)
+
+- [ ] Admin opens **Inventory → Transfers** — each transfer card shows **Branch billing · admin only** at the bottom
+- [ ] Admin enters total cost and marks **Unpaid** or **Paid**; staff accounts do not see billing fields
+- [ ] **Unpaid branch balances** summary lists what one branch still owes another (e.g. San Carlos → Dagupan)
+- [ ] Billing can be updated on pending requests and in transfer history after confirmation
 
 ### 6. Supplies (admin)
 

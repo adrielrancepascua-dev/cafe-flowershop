@@ -9,6 +9,7 @@ export {
   listFlowerTransferRequests,
   rejectFlowerTransferRequest,
   transferFlowerInventory,
+  updateFlowerTransferRequestBilling,
 } from './flowers-inventory.service';
 
 export {

@@ -15,7 +15,9 @@ import type {
   ListFlowerTransferRequestsOptions,
   ResolveFlowerTransferRequestInput,
   TransferFlowerInventoryInput,
+  UpdateFlowerTransferRequestBillingInput,
 } from '../../../modules/flowers/shared/types/flower-inventory';
+import { stripTransferRequestBilling } from '../../../modules/flowers/shared/utils/flower-transfer-billing';
 import { listFlowerStemsLocal, lookupFlowerProductNameLocal } from '../products/flowers-products.local';
 import {
   compareInventoryStockRows,
@@ -313,13 +315,22 @@ function normalizeTransferRequest(raw: FlowerTransferRequest & {
   product_flower_type?: string;
   quantity?: number;
 }): FlowerTransferRequest {
+  const billingDefaults = {
+    total_cost: raw.total_cost ?? null,
+    cost_paid: raw.cost_paid ?? false,
+  };
+
   if (Array.isArray(raw.items) && raw.items.length > 0) {
-    return raw;
+    return {
+      ...raw,
+      ...billingDefaults,
+    };
   }
 
   if (raw.product_id) {
     return {
       ...raw,
+      ...billingDefaults,
       items: [
         {
           id: `${raw.id}-item-0`,
@@ -334,7 +345,7 @@ function normalizeTransferRequest(raw: FlowerTransferRequest & {
     };
   }
 
-  return { ...raw, items: [] };
+  return { ...raw, ...billingDefaults, items: [] };
 }
 
 function readTransferRequestsFromStorage(): FlowerTransferRequest[] {
@@ -485,6 +496,8 @@ export async function createFlowerTransferRequestLocal(
     resolved_by_name: null,
     resolved_at: null,
     created_at: new Date().toISOString(),
+    total_cost: null,
+    cost_paid: false,
   };
 
   writeTransferRequestsToStorage([request, ...readTransferRequestsFromStorage()]);
@@ -516,7 +529,13 @@ export async function listFlowerTransferRequestsLocal(
     (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime(),
   );
 
-  return typeof options.limit === 'number' ? sorted.slice(0, options.limit) : sorted;
+  const limited = typeof options.limit === 'number' ? sorted.slice(0, options.limit) : sorted;
+
+  if (options.includeBilling) {
+    return limited;
+  }
+
+  return limited.map(stripTransferRequestBilling);
 }
 
 function findPendingRequest(requestId: string): {
@@ -621,4 +640,34 @@ export async function cancelFlowerTransferRequestLocal(
   requests[index] = resolved;
   writeTransferRequestsToStorage(requests);
   return resolved;
+}
+
+export async function updateFlowerTransferRequestBillingLocal(
+  input: UpdateFlowerTransferRequestBillingInput,
+): Promise<FlowerTransferRequest> {
+  const requests = readTransferRequestsFromStorage();
+  const index = requests.findIndex((request) => request.id === input.requestId);
+
+  if (index === -1) {
+    throw new Error('Transfer request not found.');
+  }
+
+  const totalCost =
+    input.total_cost === null || input.total_cost === undefined
+      ? null
+      : Number(input.total_cost);
+
+  if (totalCost !== null && (!Number.isFinite(totalCost) || totalCost < 0)) {
+    throw new Error('Total cost must be zero or greater.');
+  }
+
+  const updated: FlowerTransferRequest = {
+    ...requests[index],
+    total_cost: totalCost,
+    cost_paid: Boolean(input.cost_paid),
+  };
+
+  requests[index] = updated;
+  writeTransferRequestsToStorage(requests);
+  return updated;
 }
