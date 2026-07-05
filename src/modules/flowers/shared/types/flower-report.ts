@@ -34,6 +34,10 @@ export interface FlowerAdvanceOrderOverviewRow {
 export interface FlowerFinancialSummary {
   total_sales: number;
   staff_expenses: number;
+  staff_expenses_cash: number;
+  staff_expenses_gcash: number;
+  /** Cash sales minus cash-only staff expenses for the report date. */
+  cash_on_hand: number;
   supplier_costs: number;
   cogs: number;
   net_sales: number;

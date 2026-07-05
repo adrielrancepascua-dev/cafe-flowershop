@@ -23,6 +23,7 @@ Use this before collecting the ₱30k balance. Run on the **production** deploy 
 - [ ] `supabase/fix_adjust_flower_stock_security.sql` applied (harden stock RPC for staff writes)
 - [ ] `supabase/add_flower_transfer_billing.sql` applied (admin-only transfer cost + paid/unpaid tracking)
 - [ ] `supabase/add_flower_order_content_edit_policy.sql` applied (one staff edit until 6 PM on order day)
+- [ ] `supabase/add_flower_expense_payment_mode.sql` applied (cash vs GCash on staff expenses)
 - [ ] Optional: run `supabase/verify_production_readiness.sql` — all checks pass
 
 ### Create the first admin (one-time)
@@ -83,8 +84,9 @@ Pick a test day with 2+ orders (or create them for today).
 
 ### 4. Expenses & reports
 
-- [ ] Staff adds an expense on Device A
-- [ ] Admin sees it on Device B under Expenses
+- [ ] Staff adds an expense on Device A — choose **Cash** or **GCash** payment mode
+- [ ] Admin sees it on Device B under Expenses with paid-via label
+- [ ] Reports **Cash on hand** = cash sales − cash expenses only (GCash expenses listed separately)
 - [ ] Admin adds supplier cost; net income on Reports matches: sales − staff expenses − supplier costs
 - [ ] Printable day/week/month report totals match Reports page
 

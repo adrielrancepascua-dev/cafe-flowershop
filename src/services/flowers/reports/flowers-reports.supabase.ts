@@ -222,11 +222,24 @@ export async function getFlowerReportsSupabase(options: FlowerReportsOptions = {
       item_count: (order.flower_order_items ?? []).length,
     }));
 
-  const [staffExpenses, supplierCosts, products] = await Promise.all([
+  const [staffExpenses, staffExpensesCash, staffExpensesGcash, supplierCosts, products] =
+    await Promise.all([
     sumStaffExpensesForPeriodSupabase({
       branchId: options.branchId,
       fromDate: reportDate,
       toDate: reportDate,
+    }),
+    sumStaffExpensesForPeriodSupabase({
+      branchId: options.branchId,
+      fromDate: reportDate,
+      toDate: reportDate,
+      paymentMode: 'cash',
+    }),
+    sumStaffExpensesForPeriodSupabase({
+      branchId: options.branchId,
+      fromDate: reportDate,
+      toDate: reportDate,
+      paymentMode: 'gcash',
     }),
     sumSupplierCostsForPeriodSupabase({
       branchId: options.branchId,
@@ -246,6 +259,8 @@ export async function getFlowerReportsSupabase(options: FlowerReportsOptions = {
       orders: reportOrders,
       reportDate,
       staffExpenses,
+      staffExpensesCash,
+      staffExpensesGcash,
       supplierCosts,
       unitCostByProductId,
     }),

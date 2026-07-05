@@ -197,6 +197,9 @@ export function FlowerThermalExpensesDocument({
                 <p className="flower-thermal-line flower-thermal-bold">{expense.expense_date}</p>
                 <p className="flower-thermal-line">{expense.description.toUpperCase()}</p>
                 <p className="flower-thermal-line">{expense.staff_name.toUpperCase()}</p>
+                <p className="flower-thermal-line">
+                  {expense.payment_mode === 'gcash' ? 'GCASH' : 'CASH'}
+                </p>
                 <p className="flower-thermal-line">{PRICE_FORMATTER.format(expense.amount)}</p>
               </div>
             ))}

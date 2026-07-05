@@ -34,6 +34,9 @@ function emptyReports(): FlowerReportsData {
     financial: {
       total_sales: 0,
       staff_expenses: 0,
+      staff_expenses_cash: 0,
+      staff_expenses_gcash: 0,
+      cash_on_hand: 0,
       supplier_costs: 0,
       cogs: 0,
       net_sales: 0,
@@ -324,6 +327,40 @@ export default function FlowerReportsPage() {
               </div>
             </div>
           ) : null}
+
+          <div className="mt-5 rounded-2xl border border-emerald-200/70 bg-emerald-50/40 p-4">
+            <h3 className="text-sm font-semibold text-brand-dark">Expected cash on hand</h3>
+            <p className="mt-1 text-xs text-brand-brown/60">
+              Cash sales minus cash-only expenses. GCash expenses are tracked separately and do not
+              reduce this amount.
+            </p>
+            <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-3">
+              <div className="rounded-xl border border-brand-muted/30 bg-white/80 px-3 py-2">
+                <p className="text-[10px] font-semibold uppercase tracking-wide text-brand-brown/60 sm:text-xs">
+                  Cash expenses
+                </p>
+                <p className="mt-1 font-serif text-base font-semibold text-brand-dark sm:text-lg">
+                  {PRICE_FORMATTER.format(reportsData.financial.staff_expenses_cash)}
+                </p>
+              </div>
+              <div className="rounded-xl border border-brand-muted/30 bg-white/80 px-3 py-2">
+                <p className="text-[10px] font-semibold uppercase tracking-wide text-brand-brown/60 sm:text-xs">
+                  GCash expenses
+                </p>
+                <p className="mt-1 font-serif text-base font-semibold text-brand-dark sm:text-lg">
+                  {PRICE_FORMATTER.format(reportsData.financial.staff_expenses_gcash)}
+                </p>
+              </div>
+              <div className="rounded-xl border border-emerald-300/60 bg-white px-3 py-2">
+                <p className="text-[10px] font-semibold uppercase tracking-wide text-emerald-800/70 sm:text-xs">
+                  Cash on hand
+                </p>
+                <p className="mt-1 font-serif text-base font-semibold text-emerald-900 sm:text-lg">
+                  {PRICE_FORMATTER.format(reportsData.financial.cash_on_hand)}
+                </p>
+              </div>
+            </div>
+          </div>
 
           {isAdmin ? (
             <div className="mt-6 rounded-2xl border border-brand-muted/40 bg-brand-cream/20 p-4">

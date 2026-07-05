@@ -1,6 +1,7 @@
 import type {
   CreateFlowerStaffExpenseInput,
   CreateFlowerSupplierCostInput,
+  FlowerExpensePaymentMode,
   UpdateFlowerStaffExpenseInput,
   UpdateFlowerSupplierCostInput,
 } from '../../../modules/flowers/shared/types/flower-expense';
@@ -122,6 +123,7 @@ export async function sumStaffExpensesForPeriod(options: {
   branchId?: string;
   fromDate?: string;
   toDate?: string;
+  paymentMode?: FlowerExpensePaymentMode;
 }) {
   return withSupabaseExpenses(
     async () => {

@@ -119,11 +119,24 @@ export async function getFlowerReportsLocal(
     }
   }
 
-  const [staffExpenses, supplierCosts, products] = await Promise.all([
+  const [staffExpenses, staffExpensesCash, staffExpensesGcash, supplierCosts, products] =
+    await Promise.all([
     sumStaffExpensesForPeriod({
       branchId: options.branchId,
       fromDate: reportDate,
       toDate: reportDate,
+    }),
+    sumStaffExpensesForPeriod({
+      branchId: options.branchId,
+      fromDate: reportDate,
+      toDate: reportDate,
+      paymentMode: 'cash',
+    }),
+    sumStaffExpensesForPeriod({
+      branchId: options.branchId,
+      fromDate: reportDate,
+      toDate: reportDate,
+      paymentMode: 'gcash',
     }),
     sumSupplierCostsForPeriod({
       branchId: options.branchId,
@@ -145,6 +158,8 @@ export async function getFlowerReportsLocal(
       orders,
       reportDate,
       staffExpenses,
+      staffExpensesCash,
+      staffExpensesGcash,
       supplierCosts,
       unitCostByProductId,
     }),

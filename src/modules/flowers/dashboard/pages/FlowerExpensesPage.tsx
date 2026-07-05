@@ -7,7 +7,10 @@ import {
 } from '../../../../services/flowers/expenses/flowers-expenses.service';
 import { listFlowerBranches } from '../../../../services/flowers/inventory';
 import { useFlowerAuth } from '../../../../lib/auth/FlowerAuthContext';
-import type { FlowerStaffExpense } from '../../shared/types/flower-expense';
+import type { FlowerStaffExpense, FlowerExpensePaymentMode } from '../../shared/types/flower-expense';
+import {
+  FLOWER_EXPENSE_PAYMENT_MODE_LABELS,
+} from '../../shared/types/flower-expense';
 import type { FlowerBranchOption } from '../../shared/types/flower-inventory';
 import FlowerPageHeader from '../../shared/components/FlowerPageHeader';
 import FlowerMobileCardList from '../../shared/components/FlowerMobileCardList';
@@ -23,6 +26,7 @@ type ExpenseDraft = {
   branch_id: string;
   amount: string;
   description: string;
+  payment_mode: FlowerExpensePaymentMode;
 };
 
 function emptyDraft(branchId: string): ExpenseDraft {
@@ -31,7 +35,38 @@ function emptyDraft(branchId: string): ExpenseDraft {
     branch_id: branchId,
     amount: '',
     description: '',
+    payment_mode: 'cash',
   };
+}
+
+function ExpensePaymentModeField({
+  value,
+  onChange,
+  className = '',
+}: {
+  value: FlowerExpensePaymentMode;
+  onChange: (value: FlowerExpensePaymentMode) => void;
+  className?: string;
+}) {
+  return (
+    <fieldset className={className}>
+      <legend className="mb-1.5 text-sm font-medium text-brand-brown">Paid via</legend>
+      <div className="inline-flex rounded-xl border border-brand-muted/50 bg-white p-1">
+        {(['cash', 'gcash'] as const).map((mode) => (
+          <button
+            key={mode}
+            type="button"
+            onClick={() => onChange(mode)}
+            className={`rounded-lg px-3 py-1.5 text-xs font-semibold transition ${
+              value === mode ? 'bg-brand-dark text-white' : 'text-brand-brown/70 hover:bg-brand-beige/40'
+            }`}
+          >
+            {FLOWER_EXPENSE_PAYMENT_MODE_LABELS[mode]}
+          </button>
+        ))}
+      </div>
+    </fieldset>
+  );
 }
 
 export default function FlowerExpensesPage() {
@@ -168,6 +203,7 @@ export default function FlowerExpensesPage() {
         amount: parsedAmount,
         description: draft.description,
         expense_date: draft.expense_date,
+        payment_mode: draft.payment_mode,
       });
 
       setDraft((current) => ({
@@ -189,6 +225,7 @@ export default function FlowerExpensesPage() {
       branch_id: expense.branch_id,
       amount: String(expense.amount),
       description: expense.description,
+      payment_mode: expense.payment_mode,
     });
     setMessage('');
     setErrorMessage('');
@@ -217,6 +254,7 @@ export default function FlowerExpensesPage() {
         amount: parsedAmount,
         description: editDraft.description,
         expense_date: editDraft.expense_date,
+        payment_mode: editDraft.payment_mode,
       });
       cancelEditing();
       setMessage('Expense updated.');
@@ -254,7 +292,7 @@ export default function FlowerExpensesPage() {
         description={
           isAdmin
             ? 'Staff log expenses here. Admins can edit or remove incorrect entries.'
-            : 'Staff log expenses here — deducted from net income on the reports page.'
+            : 'Log what you spent and whether it came from cash or GCash. Only cash expenses reduce expected cash on hand on Reports.'
         }
       />
 
@@ -347,6 +385,10 @@ export default function FlowerExpensesPage() {
           className="flower-input"
           required
         />
+        <ExpensePaymentModeField
+          value={draft.payment_mode}
+          onChange={(payment_mode) => setDraft((current) => ({ ...current, payment_mode }))}
+        />
         <button type="submit" className="flower-btn-primary md:col-span-2">Add expense</button>
       </form>
 
@@ -408,6 +450,12 @@ export default function FlowerExpensesPage() {
                   }
                   className="flower-input w-full"
                 />
+                <ExpensePaymentModeField
+                  value={editDraft.payment_mode}
+                  onChange={(payment_mode) =>
+                    setEditDraft((current) => (current ? { ...current, payment_mode } : current))
+                  }
+                />
                 <div className="flex gap-2">
                   <button
                     type="button"
@@ -433,7 +481,8 @@ export default function FlowerExpensesPage() {
                   </p>
                 </div>
                 <p className="text-sm text-brand-brown/75">
-                  {expense.staff_name} · {expense.branch_name}
+                  {expense.staff_name} · {expense.branch_name} ·{' '}
+                  {FLOWER_EXPENSE_PAYMENT_MODE_LABELS[expense.payment_mode]}
                 </p>
                 {isAdmin ? (
                   <div className="flex gap-2 pt-1">
@@ -467,6 +516,7 @@ export default function FlowerExpensesPage() {
               <th className="px-3 py-2">Staff</th>
               <th className="px-3 py-2">Branch</th>
               <th className="px-3 py-2">Description</th>
+              <th className="px-3 py-2">Paid via</th>
               <th className="px-3 py-2">Amount</th>
               {isAdmin ? <th className="px-3 py-2">Actions</th> : null}
             </tr>
@@ -475,7 +525,7 @@ export default function FlowerExpensesPage() {
             {visibleExpenses.length === 0 ? (
               <tr>
                 <td
-                  colSpan={isAdmin ? 6 : 5}
+                  colSpan={isAdmin ? 7 : 6}
                   className="border-t border-brand-muted/30 px-3 py-6 text-center text-brand-brown/60"
                 >
                   {branchFilter !== 'all' ? 'No expenses for this branch.' : 'No expenses logged yet.'}
@@ -526,6 +576,14 @@ export default function FlowerExpensesPage() {
                     />
                   </td>
                   <td className="px-3 py-2">
+                    <ExpensePaymentModeField
+                      value={editDraft.payment_mode}
+                      onChange={(payment_mode) =>
+                        setEditDraft((current) => (current ? { ...current, payment_mode } : current))
+                      }
+                    />
+                  </td>
+                  <td className="px-3 py-2">
                     <input
                       type="number"
                       min="0"
@@ -564,6 +622,9 @@ export default function FlowerExpensesPage() {
                   <td className="px-3 py-2">{expense.staff_name}</td>
                   <td className="px-3 py-2">{expense.branch_name}</td>
                   <td className="px-3 py-2">{expense.description}</td>
+                  <td className="px-3 py-2">
+                    {FLOWER_EXPENSE_PAYMENT_MODE_LABELS[expense.payment_mode]}
+                  </td>
                   <td className="px-3 py-2">{PRICE_FORMATTER.format(expense.amount)}</td>
                   {isAdmin ? (
                     <td className="px-3 py-2">

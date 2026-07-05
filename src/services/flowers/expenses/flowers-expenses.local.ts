@@ -1,11 +1,13 @@
 import type {
   CreateFlowerStaffExpenseInput,
   CreateFlowerSupplierCostInput,
+  FlowerExpensePaymentMode,
   FlowerStaffExpense,
   FlowerSupplierCost,
   UpdateFlowerStaffExpenseInput,
   UpdateFlowerSupplierCostInput,
 } from '../../../modules/flowers/shared/types/flower-expense';
+import { normalizeFlowerExpensePaymentMode } from '../../../modules/flowers/shared/types/flower-expense';
 import { FLOWER_BRANCHES_MOCK } from '../../../modules/flowers/shared/data/flowers.mock';
 import { lookupFlowerProductNameLocal } from '../products/flowers-products.local';
 
@@ -24,7 +26,14 @@ function readExpenses(): FlowerStaffExpense[] {
     }
 
     const parsed = JSON.parse(raw) as FlowerStaffExpense[];
-    return Array.isArray(parsed) ? parsed : [];
+    if (!Array.isArray(parsed)) {
+      return [];
+    }
+
+    return parsed.map((expense) => ({
+      ...expense,
+      payment_mode: normalizeFlowerExpensePaymentMode(expense.payment_mode),
+    }));
   } catch {
     return [];
   }
@@ -89,6 +98,7 @@ export async function createFlowerStaffExpenseLocal(
     amount: input.amount,
     description: input.description.trim(),
     expense_date: input.expense_date,
+    payment_mode: normalizeFlowerExpensePaymentMode(input.payment_mode),
     created_at: new Date().toISOString(),
   };
 
@@ -113,6 +123,7 @@ export async function updateFlowerStaffExpenseLocal(
     amount: input.amount,
     description: input.description.trim(),
     expense_date: input.expense_date,
+    payment_mode: normalizeFlowerExpensePaymentMode(input.payment_mode),
   };
 
   expenses[index] = updated;
@@ -208,10 +219,15 @@ export async function sumStaffExpensesForPeriodLocal(options: {
   branchId?: string;
   fromDate?: string;
   toDate?: string;
+  paymentMode?: FlowerExpensePaymentMode;
 }): Promise<number> {
   const expenses = await listFlowerStaffExpensesLocal();
   return expenses
     .filter((expense) => {
+      if (options.paymentMode && expense.payment_mode !== options.paymentMode) {
+        return false;
+      }
+
       if (options.branchId && expense.branch_id !== options.branchId) {
         return false;
       }

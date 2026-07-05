@@ -150,10 +150,20 @@ export function buildFlowerReportFinancialSummary(input: {
   orders: FlowerReportOrderSnapshot[];
   reportDate: string;
   staffExpenses: number;
+  staffExpensesCash: number;
+  staffExpensesGcash: number;
   supplierCosts: number;
   unitCostByProductId: Map<string, number>;
 }): FlowerFinancialSummary {
-  const { orders, reportDate, staffExpenses, supplierCosts, unitCostByProductId } = input;
+  const {
+    orders,
+    reportDate,
+    staffExpenses,
+    staffExpensesCash,
+    staffExpensesGcash,
+    supplierCosts,
+    unitCostByProductId,
+  } = input;
 
   let totalSales = 0;
 
@@ -169,11 +179,15 @@ export function buildFlowerReportFinancialSummary(input: {
 
   const cogs = calculateCogsForOrders(orders, reportDate, unitCostByProductId);
   const salesByPayment = sumSalesByPaymentForReportDate(orders, reportDate);
+  const cashSales = salesByPayment.find((row) => row.payment_mode === 'cash')?.amount ?? 0;
   const netSales = totalSales - staffExpenses - cogs;
 
   return {
     total_sales: totalSales,
     staff_expenses: staffExpenses,
+    staff_expenses_cash: staffExpensesCash,
+    staff_expenses_gcash: staffExpensesGcash,
+    cash_on_hand: cashSales - staffExpensesCash,
     supplier_costs: supplierCosts,
     cogs,
     net_sales: netSales,

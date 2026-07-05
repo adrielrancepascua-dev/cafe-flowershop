@@ -1,3 +1,16 @@
+export type FlowerExpensePaymentMode = 'cash' | 'gcash';
+
+export const FLOWER_EXPENSE_PAYMENT_MODE_LABELS: Record<FlowerExpensePaymentMode, string> = {
+  cash: 'Cash',
+  gcash: 'GCash',
+};
+
+export function normalizeFlowerExpensePaymentMode(
+  value: string | null | undefined,
+): FlowerExpensePaymentMode {
+  return value === 'gcash' ? 'gcash' : 'cash';
+}
+
 export interface FlowerStaffExpense {
   id: string;
   staff_id: string;
@@ -7,6 +20,7 @@ export interface FlowerStaffExpense {
   amount: number;
   description: string;
   expense_date: string;
+  payment_mode: FlowerExpensePaymentMode;
   created_at: string;
 }
 
@@ -17,6 +31,7 @@ export interface CreateFlowerStaffExpenseInput {
   amount: number;
   description: string;
   expense_date: string;
+  payment_mode: FlowerExpensePaymentMode;
 }
 
 export interface UpdateFlowerStaffExpenseInput {
@@ -25,6 +40,7 @@ export interface UpdateFlowerStaffExpenseInput {
   amount: number;
   description: string;
   expense_date: string;
+  payment_mode: FlowerExpensePaymentMode;
 }
 
 export interface FlowerSupplierCost {

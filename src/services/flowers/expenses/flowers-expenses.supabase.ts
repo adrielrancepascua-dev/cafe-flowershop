@@ -3,11 +3,13 @@ import { requireSupabaseAuthSession } from '../../../lib/auth/flower-auth.servic
 import type {
   CreateFlowerStaffExpenseInput,
   CreateFlowerSupplierCostInput,
+  FlowerExpensePaymentMode,
   FlowerStaffExpense,
   FlowerSupplierCost,
   UpdateFlowerStaffExpenseInput,
   UpdateFlowerSupplierCostInput,
 } from '../../../modules/flowers/shared/types/flower-expense';
+import { normalizeFlowerExpensePaymentMode } from '../../../modules/flowers/shared/types/flower-expense';
 
 type BranchRow = {
   id: string;
@@ -27,6 +29,7 @@ type StaffExpenseDbRow = {
   amount: number;
   description: string;
   expense_date: string;
+  payment_mode?: string | null;
   created_at: string;
 };
 
@@ -101,6 +104,7 @@ function mapStaffExpense(row: StaffExpenseDbRow, branchName: string): FlowerStaf
     amount: Number(row.amount),
     description: row.description,
     expense_date: row.expense_date,
+    payment_mode: normalizeFlowerExpensePaymentMode(row.payment_mode),
     created_at: row.created_at,
   };
 }
@@ -170,6 +174,7 @@ export async function createFlowerStaffExpenseSupabase(
     amount: input.amount,
     description: input.description.trim(),
     expense_date: input.expense_date,
+    payment_mode: normalizeFlowerExpensePaymentMode(input.payment_mode),
     created_at: new Date().toISOString(),
   };
 
@@ -200,6 +205,7 @@ export async function updateFlowerStaffExpenseSupabase(
       amount: input.amount,
       description: input.description.trim(),
       expense_date: input.expense_date,
+      payment_mode: normalizeFlowerExpensePaymentMode(input.payment_mode),
     })
     .eq('id', input.id)
     .select('*')
@@ -355,10 +361,15 @@ export async function sumStaffExpensesForPeriodSupabase(options: {
   branchId?: string;
   fromDate?: string;
   toDate?: string;
+  paymentMode?: FlowerExpensePaymentMode;
 }): Promise<number> {
   const expenses = await listFlowerStaffExpensesSupabase();
   return expenses
     .filter((expense) => {
+      if (options.paymentMode && expense.payment_mode !== options.paymentMode) {
+        return false;
+      }
+
       if (options.branchId && expense.branch_id !== options.branchId) {
         return false;
       }
