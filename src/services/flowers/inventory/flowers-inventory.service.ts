@@ -7,6 +7,7 @@ import type {
   TransferFlowerInventoryInput,
 } from '../../../modules/flowers/shared/types/flower-inventory';
 import { getFlowerStorageMode, shouldUseFlowerSupabase } from '../storage-mode';
+import { toServiceError } from '../../../lib/supabase/errors';
 import {
   adjustFlowerInventoryLocal,
   cancelFlowerTransferRequestLocal,
@@ -120,9 +121,7 @@ export async function createFlowerTransferRequest(
       const { createFlowerTransferRequestSupabase } = await import('./flowers-inventory.supabase');
       return await createFlowerTransferRequestSupabase(input);
     } catch (error) {
-      if (mode === 'supabase') {
-        throw error;
-      }
+      throw toServiceError(error, 'Transfer request failed.');
     }
   }
 

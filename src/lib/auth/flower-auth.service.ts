@@ -208,13 +208,36 @@ export async function ensureSupabaseSession(): Promise<void> {
 
   const stored = readLocalSession();
   if (!stored?.token || !stored.refresh_token) {
+    writeLocalSession(null);
     return;
   }
 
-  await supabase.auth.setSession({
+  const { data: restored, error } = await supabase.auth.setSession({
     access_token: stored.token,
     refresh_token: stored.refresh_token,
   });
+
+  if (error || !restored.session?.access_token) {
+    writeLocalSession(null);
+  }
+}
+
+export async function requireSupabaseAuthSession(): Promise<void> {
+  if (!shouldUseSupabaseAuth()) {
+    return;
+  }
+
+  await ensureSupabaseSession();
+
+  const supabase = getSupabaseClient();
+  if (!supabase) {
+    throw new Error('Supabase is not configured.');
+  }
+
+  const { data, error } = await supabase.auth.getSession();
+  if (error || !data.session?.access_token) {
+    throw new Error('Your session has expired. Please sign in again.');
+  }
 }
 
 export async function restoreFlowerSession(): Promise<FlowerAuthSession | null> {

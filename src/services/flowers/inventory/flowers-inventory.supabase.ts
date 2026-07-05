@@ -1,5 +1,6 @@
 import { getSupabaseClient } from '../../../lib/supabase/client';
-import { ensureSupabaseSession } from '../../../lib/auth/flower-auth.service';
+import { requireSupabaseAuthSession } from '../../../lib/auth/flower-auth.service';
+import { toServiceError } from '../../../lib/supabase/errors';
 import { FLOWER_BRANCHES_MOCK } from '../../../modules/flowers/shared/data/flowers.mock';
 import type {
   AdjustFlowerInventoryInput,
@@ -70,7 +71,7 @@ function requireSupabaseClient() {
 }
 
 async function requireAuthenticatedSupabaseClient() {
-  await ensureSupabaseSession();
+  await requireSupabaseAuthSession();
   return requireSupabaseClient();
 }
 
@@ -140,7 +141,11 @@ async function runAtomicStockChange(
     throw new Error('Insufficient stock. Stock out would result in negative balance.');
   }
 
-  throw error;
+  if (/unauthorized inventory update/i.test(error.message ?? '')) {
+    throw new Error('Your session has expired. Please sign in again.');
+  }
+
+  throw toServiceError(error, 'Stock update failed.');
 }
 
 function toDisplayMovementType(value: string): FlowerInventoryMovementRow['movement_type'] {
@@ -799,7 +804,7 @@ export async function createFlowerTransferRequestSupabase(
         allowNegative: true,
       });
     }
-    throw error ?? new Error('Failed to create transfer request.');
+    throw toServiceError(error, 'Failed to create transfer request.');
   }
 
   const transferId = (data as TransferRequestDbRow).id;
@@ -823,7 +828,7 @@ export async function createFlowerTransferRequestSupabase(
         allowNegative: true,
       });
     }
-    throw itemsError;
+    throw toServiceError(itemsError, 'Failed to save transfer line items.');
   }
 
   const [mapped] = await mapTransferRequestRows(supabase, [data as TransferRequestDbRow]);

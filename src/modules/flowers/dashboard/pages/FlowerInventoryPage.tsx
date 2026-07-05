@@ -12,6 +12,7 @@ import {
 } from '../../../../services/flowers/inventory';
 import { getFlowerOrder } from '../../../../services/flowers/orders';
 import { useFlowerAuth } from '../../../../lib/auth/FlowerAuthContext';
+import { extractSupabaseErrorMessage } from '../../../../lib/supabase/errors';
 import type {
   FlowerBranchOption,
   FlowerInventoryMovementRow,
@@ -1053,7 +1054,7 @@ export default function FlowerInventoryPage() {
       const receiverLookup = await loadOrderReceiverLookup(movements);
       setOrderReceiverById(receiverLookup);
     } catch (error) {
-      setErrorMessage(error instanceof Error ? error.message : 'Failed to load inventory.');
+      setErrorMessage(extractSupabaseErrorMessage(error, 'Failed to load inventory.'));
     } finally {
       setLoading(false);
       setIsRefreshing(false);
@@ -1111,7 +1112,7 @@ export default function FlowerInventoryPage() {
       setTransferRequests(requests);
     } catch (error) {
       setTransferErrorMessage(
-        error instanceof Error ? error.message : 'Failed to load transfer requests.',
+        extractSupabaseErrorMessage(error, 'Failed to load transfer requests.'),
       );
     } finally {
       setTransferRequestsLoading(false);
@@ -1280,7 +1281,7 @@ export default function FlowerInventoryPage() {
       setErrorMessage('');
       await loadData();
     } catch (error) {
-      setErrorMessage(error instanceof Error ? error.message : 'Adjustment failed.');
+      setErrorMessage(extractSupabaseErrorMessage(error, 'Adjustment failed.'));
     }
   }
 
@@ -1332,7 +1333,7 @@ export default function FlowerInventoryPage() {
       setTransferCart([]);
       await refreshTransferData();
     } catch (error) {
-      setTransferErrorMessage(error instanceof Error ? error.message : 'Transfer request failed.');
+      setTransferErrorMessage(extractSupabaseErrorMessage(error, 'Transfer request failed.'));
       setTransferMessage('');
     }
   }
@@ -1419,7 +1420,7 @@ export default function FlowerInventoryPage() {
 
       await refreshTransferData();
     } catch (error) {
-      setTransferErrorMessage(error instanceof Error ? error.message : 'Could not update the request.');
+      setTransferErrorMessage(extractSupabaseErrorMessage(error, 'Could not update the request.'));
     } finally {
       setPendingActionId(null);
     }
