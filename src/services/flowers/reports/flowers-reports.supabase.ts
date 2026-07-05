@@ -1,4 +1,5 @@
 import { getSupabaseClient } from '../../../lib/supabase/client';
+import { requireSupabaseAuthSession } from '../../../lib/auth/flower-auth.service';
 import type {
   FlowerDailySalesSummaryRow,
   FlowerMonthlySalesSummaryRow,
@@ -52,6 +53,11 @@ function requireSupabaseClient() {
   return supabase;
 }
 
+async function requireAuthenticatedSupabaseClient() {
+  await requireSupabaseAuthSession();
+  return requireSupabaseClient();
+}
+
 function formatDateKeyUtc(date: Date): string {
   return date.toISOString().slice(0, 10);
 }
@@ -98,7 +104,7 @@ function buildMonthlySkeleton(months: number): FlowerMonthlySalesSummaryRow[] {
 }
 
 export async function getFlowerReportsSupabase(options: FlowerReportsOptions = {}): Promise<FlowerReportsData> {
-  const supabase = requireSupabaseClient();
+  const supabase = await requireAuthenticatedSupabaseClient();
   const dailyDays = options.dailyDays ?? 14;
   const monthlyMonths = options.monthlyMonths ?? 6;
   const advanceLimit = options.advanceLimit ?? 25;

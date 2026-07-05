@@ -1,10 +1,10 @@
-import { ensureSupabaseSession } from '../../../lib/auth/flower-auth.service';
+import { requireSupabaseAuthSession } from '../../../lib/auth/flower-auth.service';
 import { getSupabaseClient } from '../../../lib/supabase/client';
 import type { CreateFlowerStaffResult, FlowerTeamMember } from '../../../modules/flowers/shared/types/auth';
 import { mapFlowerProfileRow } from './flowers-team.shared';
 
 async function requireSessionToken(): Promise<string> {
-  await ensureSupabaseSession();
+  await requireSupabaseAuthSession();
   const supabase = getSupabaseClient();
   if (!supabase) {
     throw new Error('Supabase is not configured.');
@@ -19,7 +19,7 @@ async function requireSessionToken(): Promise<string> {
 }
 
 export async function listFlowerTeamSupabase(): Promise<FlowerTeamMember[]> {
-  await ensureSupabaseSession();
+  await requireSupabaseAuthSession();
   const supabase = getSupabaseClient();
   if (!supabase) {
     throw new Error('Supabase is not configured.');
@@ -62,7 +62,7 @@ export async function setFlowerTeamMemberActiveSupabase(
   memberId: string,
   isActive: boolean,
 ): Promise<void> {
-  await ensureSupabaseSession();
+  await requireSupabaseAuthSession();
   const supabase = getSupabaseClient();
   if (!supabase) {
     throw new Error('Supabase is not configured.');
@@ -100,7 +100,7 @@ export async function completeStaffOnboardingSupabase(
   branchId: string,
   newPassword: string,
 ): Promise<void> {
-  await ensureSupabaseSession();
+  await requireSupabaseAuthSession();
   const supabase = getSupabaseClient();
   if (!supabase) {
     throw new Error('Supabase is not configured.');
@@ -124,7 +124,7 @@ export async function completeStaffOnboardingSupabase(
 }
 
 export async function completeAdminOnboardingSupabase(newPassword: string): Promise<void> {
-  await ensureSupabaseSession();
+  await requireSupabaseAuthSession();
   const supabase = getSupabaseClient();
   if (!supabase) {
     throw new Error('Supabase is not configured.');

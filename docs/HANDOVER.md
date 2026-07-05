@@ -19,6 +19,9 @@ Use this before collecting the ₱30k balance. Run on the **production** deploy 
 - [ ] `supabase/add_inventory_transfer_requests.sql` applied (inter-branch transfer requests)
 - [ ] `supabase/add_inventory_transfer_items.sql` applied (multi-product transfer lines)
 - [ ] `supabase/add_flower_supply_transfers.sql` applied (admin Supplies tab vouchers)
+- [ ] `supabase/add_atomic_stock_rpc.sql` applied (atomic inventory stock updates)
+- [ ] `supabase/fix_adjust_flower_stock_security.sql` applied (harden stock RPC for staff writes)
+- [ ] Optional: run `supabase/verify_production_readiness.sql` — all checks pass
 
 ### Create the first admin (one-time)
 
@@ -83,6 +86,7 @@ Pick a test day with 2+ orders (or create them for today).
 
 ### 5. Inter-branch transfer (with receiving-branch approval)
 
+- [ ] After a deploy that changes auth/inventory, staff **sign out and sign in once** if transfers fail with "session expired"
 - [ ] Staff/admin file a transfer request (e.g. Dagupan → Urdaneta); stock leaves the source branch immediately
 - [ ] Receiving branch sees the incoming request and taps **Confirm received**
 - [ ] Only after confirmation does the stock appear in the receiving branch's on-hand

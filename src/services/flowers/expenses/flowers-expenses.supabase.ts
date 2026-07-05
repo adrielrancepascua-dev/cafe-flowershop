@@ -1,5 +1,5 @@
 import { getSupabaseClient } from '../../../lib/supabase/client';
-import { ensureSupabaseSession } from '../../../lib/auth/flower-auth.service';
+import { requireSupabaseAuthSession } from '../../../lib/auth/flower-auth.service';
 import type {
   CreateFlowerStaffExpenseInput,
   CreateFlowerSupplierCostInput,
@@ -52,7 +52,7 @@ function requireSupabaseClient() {
 }
 
 async function requireAuthenticatedSupabaseClient() {
-  await ensureSupabaseSession();
+  await requireSupabaseAuthSession();
   return requireSupabaseClient();
 }
 
