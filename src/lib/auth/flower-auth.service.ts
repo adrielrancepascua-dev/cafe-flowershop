@@ -320,6 +320,10 @@ export function isAdminUser(user: FlowerUser | null | undefined): boolean {
   return user?.role === 'admin';
 }
 
+export function currentFlowerUserIsAdmin(): boolean {
+  return isAdminUser(getStoredFlowerSession()?.user ?? null);
+}
+
 export function needsStaffOnboarding(user: FlowerUser | null | undefined): boolean {
   return Boolean(user && user.role === 'staff' && !user.onboarding_completed && user.is_active);
 }

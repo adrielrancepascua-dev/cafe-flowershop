@@ -64,7 +64,7 @@ Use two phones (or one phone + laptop) logged in as **different staff** accounts
 - [ ] Device B: change status to **Ready**
 - [ ] Device A: status update visible without clearing cache
 - [ ] Staff can **edit an order once until 6:00 PM** on the day it was created (e.g. update flowers after assembling a Thumbelina bouquet); after one save or after 6 PM, **Edit order** is hidden
-- [ ] Admin can still edit any time
+- [ ] **Admin can edit any order unlimited times**, any day — no 6 PM or once-only limit
 
 ### 2. Photo uploads
 

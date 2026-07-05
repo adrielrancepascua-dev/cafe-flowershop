@@ -22,7 +22,7 @@ import {
   getOrdersPendingInventoryDeduction,
   getPickupDateKey,
 } from './flowers-order-day-close';
-import { getStoredFlowerSession, isAdminUser } from '../../../lib/auth/flower-auth.service';
+import { currentFlowerUserIsAdmin } from '../../../lib/auth/flower-auth.service';
 import { assertOrderContentEditable } from '../../../modules/flowers/shared/utils/flower-order-edit-policy';
 import { validateOrderInspoPhotoWithProducts } from './flowers-order-validation';
 import { listFlowerStemsLocal } from '../products/flowers-products.local';
@@ -276,11 +276,11 @@ export async function updateFlowerOrderLocal(input: UpdateFlowerOrderInput): Pro
   const products = await listFlowerStemsLocal();
   validateOrderInspoPhotoWithProducts(input.items, input.photo_inspo_data_url, products, input.claim_mode);
 
-  const bypassEditRestrictions = isAdminUser(getStoredFlowerSession()?.user ?? null);
-  assertOrderContentEditable(existing, Date.now(), { bypassRestrictions: bypassEditRestrictions });
+  const adminUnlimitedEdits = currentFlowerUserIsAdmin();
+  assertOrderContentEditable(existing, Date.now(), { adminUnlimitedEdits });
 
   const updated = buildOrderFromInput(input, branch.name, existing);
-  if (!bypassEditRestrictions && !existing.content_edited_at) {
+  if (!adminUnlimitedEdits && !existing.content_edited_at) {
     updated.content_edited_at = new Date().toISOString();
   }
 

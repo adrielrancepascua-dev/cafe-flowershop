@@ -1,4 +1,4 @@
-import { getStoredFlowerSession, isAdminUser } from '../../../lib/auth/flower-auth.service';
+import { currentFlowerUserIsAdmin } from '../../../lib/auth/flower-auth.service';
 import { requireSupabaseAuthSession } from '../../../lib/auth/flower-auth.service';
 import { getSupabaseClient } from '../../../lib/supabase/client';
 import type {
@@ -438,8 +438,8 @@ export async function updateFlowerOrderSupabase(
     throw new Error('Branch not found.');
   }
 
-  const bypassEditRestrictions = isAdminUser(getStoredFlowerSession()?.user ?? null);
-  assertOrderContentEditable(existing, Date.now(), { bypassRestrictions: bypassEditRestrictions });
+  const adminUnlimitedEdits = currentFlowerUserIsAdmin();
+  assertOrderContentEditable(existing, Date.now(), { adminUnlimitedEdits });
 
   await validateOrderInspoPhotoSupabase(supabase, input.items, input.photo_inspo_data_url, input.claim_mode);
 
@@ -491,7 +491,7 @@ export async function updateFlowerOrderSupabase(
       ready_photo_data_url: attachments.ready_photo_data_url || existing.ready_photo_data_url,
       created_by_id: input.created_by_id,
       created_by_name: input.created_by_name,
-      content_edited_at: bypassEditRestrictions
+      content_edited_at: adminUnlimitedEdits
         ? existing.content_edited_at
         : existing.content_edited_at ?? new Date().toISOString(),
     })

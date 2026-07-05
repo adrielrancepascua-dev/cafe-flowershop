@@ -24,11 +24,11 @@ export interface OrderContentEditPolicyResult {
 export function getOrderContentEditPolicy(
   order: Pick<FlowerOrder, 'created_at' | 'content_edited_at'>,
   nowMs: number = Date.now(),
-  options?: { bypassRestrictions?: boolean },
+  options?: { adminUnlimitedEdits?: boolean },
 ): OrderContentEditPolicyResult {
   const deadlineMs = getOrderContentEditDeadlineMs(order.created_at);
 
-  if (options?.bypassRestrictions) {
+  if (options?.adminUnlimitedEdits) {
     return { allowed: true, reason: null, deadlineMs };
   }
 
@@ -54,7 +54,7 @@ export function getOrderContentEditPolicy(
 export function assertOrderContentEditable(
   order: Pick<FlowerOrder, 'created_at' | 'content_edited_at'>,
   nowMs: number = Date.now(),
-  options?: { bypassRestrictions?: boolean },
+  options?: { adminUnlimitedEdits?: boolean },
 ): void {
   const result = getOrderContentEditPolicy(order, nowMs, options);
   if (!result.allowed) {

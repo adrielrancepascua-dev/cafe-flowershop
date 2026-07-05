@@ -1116,7 +1116,7 @@ export default function FlowerOrderFormModal({
     () =>
       existingOrder
         ? getOrderContentEditPolicy(existingOrder, deadlineNowMs, {
-            bypassRestrictions: isAdmin,
+            adminUnlimitedEdits: isAdmin,
           })
         : null,
     [existingOrder, deadlineNowMs, isAdmin],
@@ -2210,7 +2210,7 @@ export default function FlowerOrderFormModal({
             orderContentEditPolicy.allowed ? (
               <p className="mt-4 rounded-lg border border-sky-200 bg-sky-50 px-3 py-2 text-sm text-sky-900">
                 {isAdmin
-                  ? 'Admin can edit this order any time.'
+                  ? 'Admin: you can edit this order as many times as you need.'
                   : `You can edit this order once until ${formatOrderContentEditDeadlinePh(existingOrder.created_at)}.`}
               </p>
             ) : !isAdmin && orderContentEditPolicy.reason ? (
