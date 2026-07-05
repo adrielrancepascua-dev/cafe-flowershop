@@ -87,6 +87,7 @@ Pick a test day with 2+ orders (or create them for today).
 
 ### 5. Inter-branch transfer (with receiving-branch approval)
 
+- [ ] **`supabase/add_inventory_transfer_items.sql` applied** — required; without it transfers fail with `product_id` not-null error
 - [ ] After a deploy that changes auth/inventory, staff **sign out and sign in once** if transfers fail with "session expired"
 - [ ] Staff/admin file a transfer request (e.g. Dagupan → Urdaneta); stock leaves the source branch immediately
 - [ ] Receiving branch sees the incoming request and taps **Confirm received**

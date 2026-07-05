@@ -35,3 +35,11 @@ select id, email, display_name, role, branch_id, is_active
 from public.flower_profiles
 where is_active = true
 order by role, email;
+
+-- 5) Transfer table upgraded to line items (legacy product_id column removed)
+--    If this returns rows, run supabase/add_inventory_transfer_items.sql
+select column_name
+from information_schema.columns
+where table_schema = 'public'
+  and table_name = 'flower_inventory_transfers'
+  and column_name in ('product_id', 'quantity');

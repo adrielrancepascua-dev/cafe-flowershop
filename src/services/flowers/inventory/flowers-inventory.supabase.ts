@@ -1,6 +1,6 @@
 import { getSupabaseClient } from '../../../lib/supabase/client';
 import { requireSupabaseAuthSession } from '../../../lib/auth/flower-auth.service';
-import { toServiceError } from '../../../lib/supabase/errors';
+import { extractSupabaseErrorMessage, toServiceError } from '../../../lib/supabase/errors';
 import { FLOWER_BRANCHES_MOCK } from '../../../modules/flowers/shared/data/flowers.mock';
 import type {
   AdjustFlowerInventoryInput,
@@ -771,6 +771,13 @@ async function mapTransferRequestRows(
   });
 }
 
+function isLegacyTransferSchemaError(error: unknown): boolean {
+  const message = extractSupabaseErrorMessage(error, '');
+  return /flower_inventory_transfers.*product_id|column "product_id".*flower_inventory_transfers/i.test(
+    message,
+  );
+}
+
 function mergeTransferItems(items: CreateFlowerTransferRequestInput['items']) {
   const merged = new Map<string, number>();
 
@@ -836,6 +843,11 @@ export async function createFlowerTransferRequestSupabase(
         note: 'Transfer request failed — reverted',
         allowNegative: true,
       });
+    }
+    if (error && isLegacyTransferSchemaError(error)) {
+      throw new Error(
+        'Supabase still uses the old single-product transfer table. Run supabase/add_inventory_transfer_items.sql in the SQL editor, then try again.',
+      );
     }
     throw toServiceError(error, 'Failed to create transfer request.');
   }
