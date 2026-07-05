@@ -60,6 +60,13 @@ export function getSupabaseClient(): SupabaseClient | null {
     );
   }
 
-  clientCache = createClient(supabaseUrl, supabaseAnonKey);
+  clientCache = createClient(supabaseUrl, supabaseAnonKey, {
+    auth: {
+      persistSession: true,
+      autoRefreshToken: true,
+      // Email/password app — no OAuth redirect flow, so skip URL token parsing.
+      detectSessionInUrl: false,
+    },
+  });
   return clientCache;
 }

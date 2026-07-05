@@ -16,6 +16,7 @@ import {
   restoreFlowerSession,
   signInFlowerUser,
   signOutFlowerUser,
+  subscribeToFlowerAuthChanges,
 } from './flower-auth.service';
 
 interface FlowerAuthContextValue {
@@ -47,8 +48,17 @@ export function FlowerAuthProvider({ children }: { children: ReactNode }) {
 
     void bootstrap();
 
+    const unsubscribe = subscribeToFlowerAuthChanges({
+      onSignedOut: () => {
+        if (!cancelled) {
+          setSession(null);
+        }
+      },
+    });
+
     return () => {
       cancelled = true;
+      unsubscribe();
     };
   }, []);
 

@@ -316,3 +316,47 @@ export async function refreshFlowerSession(): Promise<FlowerAuthSession | null> 
   }
   return session;
 }
+
+/**
+ * Subscribes to Supabase auth lifecycle events so the app stays in sync when
+ * the SDK silently refreshes an access token or when a session expires / is
+ * signed out from another tab. Returns an unsubscribe function; callers MUST
+ * invoke it on unmount to avoid leaking the listener.
+ */
+export function subscribeToFlowerAuthChanges(handlers: {
+  onSignedOut: () => void;
+}): () => void {
+  if (!shouldUseSupabaseAuth()) {
+    return () => {};
+  }
+
+  const supabase = getSupabaseClient();
+  if (!supabase) {
+    return () => {};
+  }
+
+  const { data } = supabase.auth.onAuthStateChange((event, session) => {
+    if (event === 'SIGNED_OUT') {
+      writeLocalSession(null);
+      handlers.onSignedOut();
+      return;
+    }
+
+    // Persist rotated tokens so ensureSupabaseSession() can always re-hydrate
+    // the SDK from our own storage without forcing a re-login.
+    if (event === 'TOKEN_REFRESHED' && session?.access_token) {
+      const stored = readLocalSession();
+      if (stored) {
+        writeLocalSession({
+          ...stored,
+          token: session.access_token,
+          refresh_token: session.refresh_token ?? stored.refresh_token,
+        });
+      }
+    }
+  });
+
+  return () => {
+    data.subscription.unsubscribe();
+  };
+}

@@ -74,6 +74,75 @@ async function requireAuthenticatedSupabaseClient() {
   return requireSupabaseClient();
 }
 
+function assertPositiveInteger(quantity: number): void {
+  if (!Number.isFinite(quantity) || quantity <= 0 || !Number.isInteger(quantity)) {
+    throw new Error('Quantity must be a whole number greater than 0.');
+  }
+}
+
+// Cached per session: once we learn the atomic RPC is missing we stop probing
+// for it and use the JS fallback for the rest of the session.
+let atomicStockRpcAvailable: boolean | undefined;
+
+function isMissingFunctionError(error: { code?: string; message?: string } | null): boolean {
+  if (!error) {
+    return false;
+  }
+
+  const code = error.code ?? '';
+  const message = error.message ?? '';
+  return (
+    code === 'PGRST202' ||
+    /could not find the function|schema cache|does not exist/i.test(message)
+  );
+}
+
+/**
+ * Attempts the atomic DB-side stock adjustment. Returns true when the RPC
+ * handled the change, false when the RPC is not deployed yet (so the caller
+ * should run the legacy read-modify-write path). Real errors are rethrown.
+ */
+async function runAtomicStockChange(
+  supabase: ReturnType<typeof requireSupabaseClient>,
+  params: {
+    branchId: string;
+    productId: string;
+    delta: number;
+    movementType: string;
+    note: string;
+    allowNegative: boolean;
+  },
+): Promise<boolean> {
+  if (atomicStockRpcAvailable === false) {
+    return false;
+  }
+
+  const { error } = await supabase.rpc('adjust_flower_stock', {
+    p_branch_id: params.branchId,
+    p_product_id: params.productId,
+    p_delta: params.delta,
+    p_movement_type: params.movementType,
+    p_note: params.note,
+    p_allow_negative: params.allowNegative,
+  });
+
+  if (!error) {
+    atomicStockRpcAvailable = true;
+    return true;
+  }
+
+  if (isMissingFunctionError(error)) {
+    atomicStockRpcAvailable = false;
+    return false;
+  }
+
+  if (/insufficient stock/i.test(error.message ?? '')) {
+    throw new Error('Insufficient stock. Stock out would result in negative balance.');
+  }
+
+  throw error;
+}
+
 function toDisplayMovementType(value: string): FlowerInventoryMovementRow['movement_type'] {
   if (value === 'stock_in' || value === 'in' || value === 'transfer_in') {
     return value === 'transfer_in' ? 'transfer_in' : 'stock_in';
@@ -287,11 +356,25 @@ export async function listFlowerInventoryMovementsSupabase(
 }
 
 export async function adjustFlowerInventorySupabase(input: AdjustFlowerInventoryInput): Promise<void> {
-  const supabase = await requireAuthenticatedSupabaseClient();
   const quantity = Number(input.quantity);
+  assertPositiveInteger(quantity);
 
-  if (!Number.isFinite(quantity) || quantity <= 0 || !Number.isInteger(quantity)) {
-    throw new Error('Quantity must be a whole number greater than 0.');
+  const supabase = await requireAuthenticatedSupabaseClient();
+  const delta = input.movementType === 'stock_in' ? quantity : -quantity;
+  const movementType = toMovementType(input.movementType);
+  const note = input.note?.trim() ?? '';
+
+  if (
+    await runAtomicStockChange(supabase, {
+      branchId: input.branchId,
+      productId: input.productId,
+      delta,
+      movementType,
+      note,
+      allowNegative: false,
+    })
+  ) {
+    return;
   }
 
   const { data: existingStock, error: existingStockError } = await supabase
@@ -373,11 +456,23 @@ async function applyFlowerStockChangeSupabase(input: {
   note: string;
   allowNegative?: boolean;
 }): Promise<void> {
-  const supabase = await requireAuthenticatedSupabaseClient();
   const quantity = Math.abs(input.delta);
+  assertPositiveInteger(quantity);
 
-  if (!Number.isFinite(quantity) || quantity <= 0 || !Number.isInteger(quantity)) {
-    throw new Error('Quantity must be a whole number greater than 0.');
+  const supabase = await requireAuthenticatedSupabaseClient();
+  const note = input.note.trim();
+
+  if (
+    await runAtomicStockChange(supabase, {
+      branchId: input.branchId,
+      productId: input.productId,
+      delta: input.delta,
+      movementType: input.movementType,
+      note,
+      allowNegative: Boolean(input.allowNegative),
+    })
+  ) {
+    return;
   }
 
   const { data: existingStock, error: existingStockError } = await supabase
