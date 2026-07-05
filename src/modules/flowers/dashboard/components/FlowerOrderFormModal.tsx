@@ -48,6 +48,7 @@ import {
 } from '../../shared/utils/flower-order-deadlines';
 import {
   buildFlowerProductIdSet,
+  orderRequiresInspoPhoto,
   orderSkipsReadyPhotoRequirement,
 } from '../../shared/utils/flower-order-items';
 import OrderAttachmentField from './OrderAttachmentField';
@@ -1101,6 +1102,10 @@ export default function FlowerOrderFormModal({
     () => orderSkipsReadyPhotoRequirement(currentOrderItems, form.claim_mode, flowerProductIds),
     [currentOrderItems, form.claim_mode, flowerProductIds],
   );
+  const requiresInspoPhoto = useMemo(
+    () => orderRequiresInspoPhoto(currentOrderItems, flowerProductIds),
+    [currentOrderItems, flowerProductIds],
+  );
   const prepDeadline = existingOrder
     ? getOrderPrepDeadlineInfo(
         {
@@ -1351,6 +1356,11 @@ export default function FlowerOrderFormModal({
 
     if (requiresProof && !form.proof_dp_data_url) {
       setErrorMessage('Proof of DP is required when downpayment is greater than 0.');
+      return null;
+    }
+
+    if (orderRequiresInspoPhoto(items, flowerProductIds) && !form.photo_inspo_data_url.trim()) {
+      setErrorMessage('Photo of order / inspo is required for flower orders.');
       return null;
     }
 
@@ -2137,7 +2147,7 @@ export default function FlowerOrderFormModal({
               label="Photo of order / inspo"
               previewLabel="Current inspo photo"
               value={form.photo_inspo_data_url}
-              optional
+              optional={!requiresInspoPhoto}
               readOnly={isViewMode}
               onEditRequest={() => setIsEditMode(true)}
               onChange={(file) => void handleFileChange('photo_inspo_data_url', file)}

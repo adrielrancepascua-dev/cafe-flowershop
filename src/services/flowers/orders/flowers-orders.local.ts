@@ -22,6 +22,8 @@ import {
   getOrdersPendingInventoryDeduction,
   getPickupDateKey,
 } from './flowers-order-day-close';
+import { validateOrderInspoPhotoWithProducts } from './flowers-order-validation';
+import { listFlowerStemsLocal } from '../products/flowers-products.local';
 
 const ORDERS_STORAGE_KEY = 'papers_petals_flower_orders_v2';
 const ORDERS_SEEDED_KEY = 'papers_petals_flower_orders_seeded_v2';
@@ -241,6 +243,8 @@ export async function createFlowerOrderLocal(input: CreateFlowerOrderInput): Pro
     throw new Error('Branch not found.');
   }
 
+  const products = await listFlowerStemsLocal();
+  validateOrderInspoPhotoWithProducts(input.items, input.photo_inspo_data_url, products);
   await validateFlowerOrderStockLocal(input.branch_id, input.items);
 
   const created = buildOrderFromInput(input, branch.name);
@@ -265,6 +269,9 @@ export async function updateFlowerOrderLocal(input: UpdateFlowerOrderInput): Pro
   if (!branch) {
     throw new Error('Branch not found.');
   }
+
+  const products = await listFlowerStemsLocal();
+  validateOrderInspoPhotoWithProducts(input.items, input.photo_inspo_data_url, products);
 
   const updated = buildOrderFromInput(input, branch.name, existing);
 

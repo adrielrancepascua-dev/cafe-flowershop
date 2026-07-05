@@ -21,6 +21,31 @@ export function orderIsMiscOnly(
   return items.length > 0 && !orderHasFlowerLineItems(items, flowerProductIds);
 }
 
+export function orderRequiresInspoPhoto(
+  items: Array<{ product_id: string }>,
+  flowerProductIds: ReadonlySet<string>,
+): boolean {
+  if (items.length === 0) {
+    return false;
+  }
+
+  return !orderIsMiscOnly(items, flowerProductIds);
+}
+
+export function assertOrderInspoPhotoProvided(
+  items: Array<{ product_id: string }>,
+  photoInspoDataUrl: string | null | undefined,
+  flowerProductIds: ReadonlySet<string>,
+): void {
+  if (!orderRequiresInspoPhoto(items, flowerProductIds)) {
+    return;
+  }
+
+  if (!String(photoInspoDataUrl ?? '').trim()) {
+    throw new Error('Photo of order / inspo is required for flower orders.');
+  }
+}
+
 /** Misc-only orders follow walk-in finished-photo rules (optional, never blocks status). */
 export function orderSkipsReadyPhotoRequirement(
   items: Array<{ product_id: string }>,

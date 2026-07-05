@@ -23,6 +23,7 @@ import {
   getOrdersPendingInventoryDeduction,
   getPickupDateKey,
 } from './flowers-order-day-close';
+import { validateOrderInspoPhotoForProductRows } from './flowers-order-validation';
 
 type OrderItemDbRow = {
   id: number;
@@ -107,6 +108,28 @@ function requireSupabaseClient() {
 async function requireAuthenticatedSupabaseClient() {
   await requireSupabaseAuthSession();
   return requireSupabaseClient();
+}
+
+async function validateOrderInspoPhotoSupabase(
+  supabase: ReturnType<typeof requireSupabaseClient>,
+  items: Array<{ product_id: string }>,
+  photoInspoDataUrl: string,
+): Promise<void> {
+  const productIds = [...new Set(items.map((item) => item.product_id))];
+  if (productIds.length === 0) {
+    return;
+  }
+
+  const { data, error } = await supabase
+    .from('flower_products')
+    .select('id, product_kind')
+    .in('id', productIds);
+
+  if (error) {
+    throw error;
+  }
+
+  validateOrderInspoPhotoForProductRows(items, photoInspoDataUrl, data ?? []);
 }
 
 function buildOrderId(): string {
@@ -315,6 +338,7 @@ export async function createFlowerOrderSupabase(
     throw new Error('Branch not found.');
   }
 
+  await validateOrderInspoPhotoSupabase(supabase, input.items, input.photo_inspo_data_url);
   await validateFlowerOrderStockSupabase(input.branch_id, input.items);
 
   const orderId = buildOrderId();
@@ -407,6 +431,8 @@ export async function updateFlowerOrderSupabase(
   if (!branch) {
     throw new Error('Branch not found.');
   }
+
+  await validateOrderInspoPhotoSupabase(supabase, input.items, input.photo_inspo_data_url);
 
   const attachments = await resolveOrderAttachments({
     orderId: input.id,
