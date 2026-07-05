@@ -22,6 +22,8 @@ import {
   getOrdersPendingInventoryDeduction,
   getPickupDateKey,
 } from './flowers-order-day-close';
+import { getStoredFlowerSession, isAdminUser } from '../../../lib/auth/flower-auth.service';
+import { assertOrderContentEditable } from '../../../modules/flowers/shared/utils/flower-order-edit-policy';
 import { validateOrderInspoPhotoWithProducts } from './flowers-order-validation';
 import { listFlowerStemsLocal } from '../products/flowers-products.local';
 
@@ -231,6 +233,7 @@ function buildOrderFromInput(
     created_by_id: input.created_by_id,
     created_by_name: input.created_by_name,
     inventory_deducted: existing?.inventory_deducted ?? false,
+    content_edited_at: existing?.content_edited_at ?? null,
     items: input.items.map((item) => ({ ...item })),
   };
 }
@@ -273,7 +276,13 @@ export async function updateFlowerOrderLocal(input: UpdateFlowerOrderInput): Pro
   const products = await listFlowerStemsLocal();
   validateOrderInspoPhotoWithProducts(input.items, input.photo_inspo_data_url, products, input.claim_mode);
 
+  const bypassEditRestrictions = isAdminUser(getStoredFlowerSession()?.user ?? null);
+  assertOrderContentEditable(existing, Date.now(), { bypassRestrictions: bypassEditRestrictions });
+
   const updated = buildOrderFromInput(input, branch.name, existing);
+  if (!bypassEditRestrictions && !existing.content_edited_at) {
+    updated.content_edited_at = new Date().toISOString();
+  }
 
   const creditByProductId =
     existing.inventory_deducted && existing.branch_id === input.branch_id

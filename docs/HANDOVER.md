@@ -22,6 +22,7 @@ Use this before collecting the ₱30k balance. Run on the **production** deploy 
 - [ ] `supabase/add_atomic_stock_rpc.sql` applied (atomic inventory stock updates)
 - [ ] `supabase/fix_adjust_flower_stock_security.sql` applied (harden stock RPC for staff writes)
 - [ ] `supabase/add_flower_transfer_billing.sql` applied (admin-only transfer cost + paid/unpaid tracking)
+- [ ] `supabase/add_flower_order_content_edit_policy.sql` applied (one staff edit until 6 PM on order day)
 - [ ] Optional: run `supabase/verify_production_readiness.sql` — all checks pass
 
 ### Create the first admin (one-time)
@@ -62,6 +63,8 @@ Use two phones (or one phone + laptop) logged in as **different staff** accounts
 - [ ] Device B: refresh Orders — same order appears with correct receiver and total
 - [ ] Device B: change status to **Ready**
 - [ ] Device A: status update visible without clearing cache
+- [ ] Staff can **edit an order once until 6:00 PM** on the day it was created (e.g. update flowers after assembling a Thumbelina bouquet); after one save or after 6 PM, **Edit order** is hidden
+- [ ] Admin can still edit any time
 
 ### 2. Photo uploads
 

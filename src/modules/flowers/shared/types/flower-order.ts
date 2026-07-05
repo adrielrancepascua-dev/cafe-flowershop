@@ -114,6 +114,7 @@ export interface FlowerOrder {
   created_by_id: string;
   created_by_name: string;
   inventory_deducted: boolean;
+  content_edited_at: string | null;
   items: FlowerOrderItem[];
 }
 

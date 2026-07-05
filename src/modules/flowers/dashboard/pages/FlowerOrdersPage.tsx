@@ -1184,6 +1184,7 @@ export default function FlowerOrdersPage() {
           existingOrder={selectedOrder}
           staffId={user.id}
           staffName={user.display_name}
+          isAdmin={isAdmin}
           isSubmitting={isSubmitting}
         />
       ) : null}

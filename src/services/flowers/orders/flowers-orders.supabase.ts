@@ -1,5 +1,6 @@
-import { getSupabaseClient } from '../../../lib/supabase/client';
+import { getStoredFlowerSession, isAdminUser } from '../../../lib/auth/flower-auth.service';
 import { requireSupabaseAuthSession } from '../../../lib/auth/flower-auth.service';
+import { getSupabaseClient } from '../../../lib/supabase/client';
 import type {
   CreateFlowerOrderInput,
   FlowerClaimMode,
@@ -23,6 +24,7 @@ import {
   getOrdersPendingInventoryDeduction,
   getPickupDateKey,
 } from './flowers-order-day-close';
+import { assertOrderContentEditable } from '../../../modules/flowers/shared/utils/flower-order-edit-policy';
 import { validateOrderInspoPhotoForProductRows } from './flowers-order-validation';
 
 type OrderItemDbRow = {
@@ -60,6 +62,7 @@ type OrderDbRow = {
   created_by_name: string;
   inventory_deducted: boolean;
   created_at: string;
+  content_edited_at?: string | null;
   flower_branches?: { name: string } | { name: string }[] | null;
   flower_order_items?: OrderItemDbRow[] | null;
 };
@@ -92,6 +95,7 @@ const ORDER_SELECT = `
   created_by_name,
   inventory_deducted,
   created_at,
+  content_edited_at,
   flower_branches ( name ),
   flower_order_items ( id, product_id, item_name, quantity )
 `;
@@ -188,6 +192,7 @@ function mapOrderRow(row: OrderDbRow): FlowerOrder {
     created_by_id: row.created_by_id,
     created_by_name: row.created_by_name,
     inventory_deducted: Boolean(row.inventory_deducted),
+    content_edited_at: row.content_edited_at ?? null,
     items: (row.flower_order_items ?? []).map((item) => ({
       id: item.id,
       product_id: item.product_id,
@@ -433,6 +438,9 @@ export async function updateFlowerOrderSupabase(
     throw new Error('Branch not found.');
   }
 
+  const bypassEditRestrictions = isAdminUser(getStoredFlowerSession()?.user ?? null);
+  assertOrderContentEditable(existing, Date.now(), { bypassRestrictions: bypassEditRestrictions });
+
   await validateOrderInspoPhotoSupabase(supabase, input.items, input.photo_inspo_data_url, input.claim_mode);
 
   const attachments = await resolveOrderAttachments({
@@ -483,6 +491,9 @@ export async function updateFlowerOrderSupabase(
       ready_photo_data_url: attachments.ready_photo_data_url || existing.ready_photo_data_url,
       created_by_id: input.created_by_id,
       created_by_name: input.created_by_name,
+      content_edited_at: bypassEditRestrictions
+        ? existing.content_edited_at
+        : existing.content_edited_at ?? new Date().toISOString(),
     })
     .eq('id', input.id);
 

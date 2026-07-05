@@ -51,6 +51,10 @@ import {
   orderRequiresInspoPhoto,
   orderSkipsReadyPhotoRequirement,
 } from '../../shared/utils/flower-order-items';
+import {
+  formatOrderContentEditDeadlinePh,
+  getOrderContentEditPolicy,
+} from '../../shared/utils/flower-order-edit-policy';
 import OrderAttachmentField from './OrderAttachmentField';
 import OrderAttachmentPreview from './OrderAttachmentPreview';
 
@@ -115,6 +119,7 @@ type OrderFormProps = {
   existingOrder?: FlowerOrder | null;
   staffId: string;
   staffName: string;
+  isAdmin?: boolean;
   isSubmitting?: boolean;
 };
 
@@ -842,6 +847,7 @@ export default function FlowerOrderFormModal({
   existingOrder,
   staffId,
   staffName,
+  isAdmin = false,
   isSubmitting = false,
 }: OrderFormProps) {
   const [form, setForm] = useState<CreateFlowerOrderInput>(() =>
@@ -1106,6 +1112,16 @@ export default function FlowerOrderFormModal({
     () => orderRequiresInspoPhoto(currentOrderItems, flowerProductIds, form.claim_mode),
     [currentOrderItems, flowerProductIds, form.claim_mode],
   );
+  const orderContentEditPolicy = useMemo(
+    () =>
+      existingOrder
+        ? getOrderContentEditPolicy(existingOrder, deadlineNowMs, {
+            bypassRestrictions: isAdmin,
+          })
+        : null,
+    [existingOrder, deadlineNowMs, isAdmin],
+  );
+  const canEditOrderContent = orderContentEditPolicy?.allowed ?? false;
   const prepDeadline = existingOrder
     ? getOrderPrepDeadlineInfo(
         {
@@ -1364,6 +1380,11 @@ export default function FlowerOrderFormModal({
       !form.photo_inspo_data_url.trim()
     ) {
       setErrorMessage('Photo of order / inspo is required for flower orders.');
+      return null;
+    }
+
+    if (existingOrder && !canEditOrderContent) {
+      setErrorMessage(orderContentEditPolicy?.reason ?? 'This order can no longer be edited.');
       return null;
     }
 
@@ -2184,6 +2205,20 @@ export default function FlowerOrderFormModal({
               {errorMessage}
             </p>
           ) : null}
+
+          {existingOrder && isViewMode && orderContentEditPolicy ? (
+            orderContentEditPolicy.allowed ? (
+              <p className="mt-4 rounded-lg border border-sky-200 bg-sky-50 px-3 py-2 text-sm text-sky-900">
+                {isAdmin
+                  ? 'Admin can edit this order any time.'
+                  : `You can edit this order once until ${formatOrderContentEditDeadlinePh(existingOrder.created_at)}.`}
+              </p>
+            ) : !isAdmin && orderContentEditPolicy.reason ? (
+              <p className="mt-4 rounded-lg border border-brand-muted/50 bg-brand-beige/40 px-3 py-2 text-sm text-brand-brown/80">
+                {orderContentEditPolicy.reason}
+              </p>
+            ) : null
+          ) : null}
         </form>
 
         <div className="flex shrink-0 gap-2 border-t border-brand-muted/40 bg-white px-4 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:px-6">
@@ -2192,13 +2227,15 @@ export default function FlowerOrderFormModal({
               <button type="button" onClick={onClose} className="flower-btn-secondary flex-1">
                 Close
               </button>
-              <button
-                type="button"
-                onClick={() => setIsEditMode(true)}
-                className="flower-btn-primary flex-1"
-              >
-                Edit order
-              </button>
+              {canEditOrderContent ? (
+                <button
+                  type="button"
+                  onClick={() => setIsEditMode(true)}
+                  className="flower-btn-primary flex-1"
+                >
+                  Edit order
+                </button>
+              ) : null}
             </>
           ) : (
             <>
