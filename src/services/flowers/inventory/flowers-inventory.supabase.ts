@@ -17,7 +17,7 @@ import type {
   TransferFlowerInventoryInput,
   UpdateFlowerTransferRequestBillingInput,
 } from '../../../modules/flowers/shared/types/flower-inventory';
-import { getLocalDayBoundsIso, formatInventoryOrderDeductNote } from '../../../modules/flowers/shared/utils/flower-format';
+import { getLocalDayBoundsIso, formatInventoryOrderDeductNote, formatInventoryOrderVoidNote } from '../../../modules/flowers/shared/utils/flower-format';
 import {
   compareInventoryStockRows,
   normalizeFlowerProductColor,
@@ -561,6 +561,22 @@ export async function deductFlowerInventoryForOrderSupabase(input: {
     movementType: 'order_deduct',
     note: formatInventoryOrderDeductNote(input.orderId, input.receiver),
     allowNegative: true,
+  });
+}
+
+export async function restoreFlowerInventoryForOrderSupabase(input: {
+  branchId: string;
+  productId: string;
+  quantity: number;
+  orderId: string;
+  receiver: string;
+}): Promise<void> {
+  await applyFlowerStockChangeSupabase({
+    branchId: input.branchId,
+    productId: input.productId,
+    delta: input.quantity,
+    movementType: 'stock_in',
+    note: formatInventoryOrderVoidNote(input.orderId, input.receiver),
   });
 }
 

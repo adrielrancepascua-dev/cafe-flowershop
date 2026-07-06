@@ -225,6 +225,11 @@ export function formatInventoryOrderDeductNote(orderId: string, receiver: string
   return `Order ${orderId} · ${trimmedReceiver} · day-close deduct`;
 }
 
+export function formatInventoryOrderVoidNote(orderId: string, receiver: string): string {
+  const trimmedReceiver = receiver.trim() || 'Unknown';
+  return `Order ${orderId} · ${trimmedReceiver} · void/delete restore`;
+}
+
 export function resolveInventoryMovementReceiver(
   note: string,
   orderReceiverById?: ReadonlyMap<string, string>,

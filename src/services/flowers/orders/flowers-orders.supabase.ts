@@ -16,6 +16,7 @@ import type { FlowerPaymentMode } from '../../../modules/flowers/shared/types/fl
 import {
   deductFlowerInventoryForOrderSupabase,
   listFlowerBranchesSupabase,
+  restoreFlowerInventoryForOrderSupabase,
   validateFlowerOrderStockSupabase,
 } from '../inventory/flowers-inventory.supabase';
 import { resolveOrderAttachmentUrl, resolveOrderAttachments } from './flowers-order-attachments';
@@ -25,6 +26,7 @@ import {
   getPickupDateKey,
 } from './flowers-order-day-close';
 import { assertOrderContentEditable } from '../../../modules/flowers/shared/utils/flower-order-edit-policy';
+import { computeOrderPaymentFields } from '../../../modules/flowers/shared/utils/flower-order-payment-fields';
 import { validateOrderInspoPhotoForProductRows } from './flowers-order-validation';
 
 type OrderItemDbRow = {
@@ -451,10 +453,10 @@ export async function updateFlowerOrderSupabase(
     ready_photo_data_url: input.ready_photo_data_url || existing.ready_photo_data_url,
   });
 
-  const nextBalance = existing.balance_paid
-    ? 0
-    : Math.max(0, input.total_amount - input.downpayment);
-  const nextDownpayment = existing.balance_paid ? input.total_amount : input.downpayment;
+  const payment = computeOrderPaymentFields(input.total_amount, input.downpayment, {
+    balance_payment_mode: existing.balance_payment_mode,
+    balance_payment_reference: existing.balance_payment_reference,
+  });
   const creditByProductId =
     existing.inventory_deducted && existing.branch_id === input.branch_id
       ? buildCreditFromOrderItems(existing.items)
@@ -473,17 +475,18 @@ export async function updateFlowerOrderSupabase(
       wrapper_color: input.wrapper_color.trim(),
       greeting_card: input.greeting_card.trim(),
       special_instructions: input.special_instructions.trim(),
-      downpayment: nextDownpayment,
+      downpayment: payment.downpayment,
       payment_mode: normalizeFlowerPaymentMode(
       input.payment_mode,
       input.branch_id,
       branch.name,
     ),
       payment_reference: input.payment_reference.trim(),
-      total_amount: input.total_amount,
-      balance: nextBalance,
-      balance_paid: existing.balance_paid || nextBalance === 0,
-      balance_payment_mode: existing.balance_payment_mode,
+      total_amount: payment.total_amount,
+      balance: payment.balance,
+      balance_paid: payment.balance_paid,
+      balance_payment_mode: payment.balance_payment_mode,
+      balance_payment_reference: payment.balance_payment_reference,
       notes: input.notes.trim(),
       photo_inspo_data_url: attachments.photo_inspo_data_url,
       proof_dp_data_url: attachments.proof_dp_data_url,
@@ -575,6 +578,18 @@ export async function deleteFlowerOrderSupabase(orderId: string): Promise<void> 
 
   if (!existing) {
     throw new Error('Order not found.');
+  }
+
+  if (existing.inventory_deducted) {
+    for (const item of existing.items) {
+      await restoreFlowerInventoryForOrderSupabase({
+        branchId: existing.branch_id,
+        productId: item.product_id,
+        quantity: item.quantity,
+        orderId: existing.id,
+        receiver: existing.receiver,
+      });
+    }
   }
 
   const { error } = await supabase.from('flower_orders').delete().eq('id', orderId);

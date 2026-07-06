@@ -1195,6 +1195,10 @@ export default function FlowerOrdersPage() {
         message={
           orderPendingDelete
             ? `Remove the order for ${orderPendingDelete.receiver} (${formatPickupDateTimeLocal(orderPendingDelete.scheduled_for)})? This cannot be undone.${
+                orderPendingDelete.inventory_deducted
+                  ? ' Flower stock from this order will be added back to inventory.'
+                  : ''
+              }${
                 deleteErrorMessage ? ` ${deleteErrorMessage}` : ''
               }`
             : ''
