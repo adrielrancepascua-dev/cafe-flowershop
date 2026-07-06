@@ -873,7 +873,8 @@ export default function FlowerOrderFormModal({
   const [readyPhotoMessage, setReadyPhotoMessage] = useState('');
   const readyPhotoInputRef = useRef<HTMLInputElement>(null);
 
-  const isViewMode = Boolean(existingOrder && !isEditMode);
+  // Staff view orders read-only until they tap Edit; admins edit inline anytime.
+  const isViewMode = Boolean(existingOrder && !isEditMode && !isAdmin);
   const readOnlyFieldClass = isViewMode ? 'bg-brand-beige/40 text-brand-brown/90' : '';
   const displayOrderStatus = existingOrder
     ? normalizeOrderStatusForPicker(existingOrder.status, existingOrder.claim_mode)
@@ -955,7 +956,7 @@ export default function FlowerOrderFormModal({
 
     if (existingOrder) {
       loadExistingOrderIntoForm(existingOrder);
-      setIsEditMode(false);
+      setIsEditMode(isAdmin);
       return;
     }
 
@@ -972,7 +973,7 @@ export default function FlowerOrderFormModal({
     setBalancePaymentMode('cash');
     setBalancePaymentReference('');
     setBalancePaidMessage('');
-  }, [open, existingOrder, initialPickupIso, staffId, staffName]);
+  }, [open, existingOrder, initialPickupIso, staffId, staffName, isAdmin]);
 
   useEffect(() => {
     if (!open || !existingOrder || readyPhotoSaved) {
@@ -1406,7 +1407,7 @@ export default function FlowerOrderFormModal({
     try {
       await onSubmit(payload);
       setErrorMessage('');
-      if (existingOrder) {
+      if (existingOrder && !isAdmin) {
         setIsEditMode(false);
       }
     } catch (error) {
@@ -2206,14 +2207,16 @@ export default function FlowerOrderFormModal({
             </p>
           ) : null}
 
-          {existingOrder && isViewMode && orderContentEditPolicy ? (
-            orderContentEditPolicy.allowed ? (
+          {existingOrder && orderContentEditPolicy ? (
+            isAdmin && orderContentEditPolicy.allowed ? (
               <p className="mt-4 rounded-lg border border-sky-200 bg-sky-50 px-3 py-2 text-sm text-sky-900">
-                {isAdmin
-                  ? 'Admin: you can edit this order as many times as you need.'
-                  : `You can edit this order once until ${formatOrderContentEditDeadlinePh(existingOrder.created_at)}.`}
+                Admin: you can edit this order as many times as you need.
               </p>
-            ) : !isAdmin && orderContentEditPolicy.reason ? (
+            ) : isViewMode && orderContentEditPolicy.allowed ? (
+              <p className="mt-4 rounded-lg border border-sky-200 bg-sky-50 px-3 py-2 text-sm text-sky-900">
+                {`You can edit this order once until ${formatOrderContentEditDeadlinePh(existingOrder.created_at)}.`}
+              </p>
+            ) : isViewMode && !isAdmin && orderContentEditPolicy.reason ? (
               <p className="mt-4 rounded-lg border border-brand-muted/50 bg-brand-beige/40 px-3 py-2 text-sm text-brand-brown/80">
                 {orderContentEditPolicy.reason}
               </p>
