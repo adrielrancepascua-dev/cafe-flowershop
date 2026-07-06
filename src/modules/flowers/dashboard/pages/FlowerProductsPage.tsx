@@ -305,6 +305,89 @@ function FixedFlowerColorBadge({ color }: { color: string }) {
   );
 }
 
+function FlowerProductUnitCostEditor({
+  product,
+  onChanged,
+}: {
+  product: FlowerProduct;
+  onChanged: () => Promise<void>;
+}) {
+  const { isAdmin } = useFlowerAuth();
+  const [unitCost, setUnitCost] = useState(String(product.unit_cost));
+  const [saving, setSaving] = useState(false);
+  const [errorMessage, setErrorMessage] = useState('');
+
+  useEffect(() => {
+    setUnitCost(String(product.unit_cost));
+    setErrorMessage('');
+  }, [product.id, product.unit_cost]);
+
+  if (!isAdmin) {
+    return (
+      <p className="text-sm font-semibold text-brand-dark">
+        {PRICE_FORMATTER.format(product.unit_cost)}
+      </p>
+    );
+  }
+
+  async function saveCost() {
+    const unit_cost = Number(unitCost);
+    if (!Number.isFinite(unit_cost) || unit_cost < 0) {
+      setErrorMessage('Enter a valid unit cost.');
+      return;
+    }
+
+    if (unit_cost === product.unit_cost) {
+      return;
+    }
+
+    setSaving(true);
+    setErrorMessage('');
+
+    try {
+      await updateFlowerProduct(product.id, {
+        name: product.name,
+        flower_type: product.flower_type || product.name,
+        product_kind: product.product_kind,
+        color: product.color,
+        unit_cost,
+      });
+      await onChanged();
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : 'Failed to save unit cost.');
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  const dirty = Number(unitCost) !== product.unit_cost;
+
+  return (
+    <div className="flex flex-col gap-1">
+      <div className="flex flex-wrap items-center gap-2">
+        <input
+          type="number"
+          min="0"
+          step="0.01"
+          value={unitCost}
+          onChange={(event) => setUnitCost(event.target.value)}
+          className="flower-input w-28 text-sm"
+          aria-label={`Unit cost for ${product.name}`}
+        />
+        <button
+          type="button"
+          disabled={saving || !dirty}
+          onClick={() => void saveCost()}
+          className="flower-btn-secondary px-3 py-1.5 text-xs disabled:cursor-not-allowed disabled:opacity-50"
+        >
+          {saving ? 'Saving...' : 'Save cost'}
+        </button>
+      </div>
+      {errorMessage ? <p className="text-xs text-red-700">{errorMessage}</p> : null}
+    </div>
+  );
+}
+
 function AddColorVariationForm({
   flowerType,
   existingColors,
@@ -508,7 +591,7 @@ function ProductCategoryVariantRow({
       </div>
 
       <div className="flex flex-wrap items-center gap-3 sm:justify-end">
-        <p className="text-sm font-semibold text-brand-dark">{PRICE_FORMATTER.format(product.unit_cost)}</p>
+        <FlowerProductUnitCostEditor product={product} onChanged={onChanged} />
         <ProductStatusBadge isActive={product.is_active} />
         <RequireFlowerAdmin silent>
           <ProductVariantActions product={product} onChanged={onChanged} onDelete={onDelete} />
@@ -549,7 +632,7 @@ function ProductStandaloneCard({
               onChanged={onChanged}
             />
           ) : null}
-          <p className="text-sm font-semibold text-brand-dark">{PRICE_FORMATTER.format(product.unit_cost)}</p>
+          <FlowerProductUnitCostEditor product={product} onChanged={onChanged} />
           <ProductStatusBadge isActive={product.is_active} />
           <RequireFlowerAdmin silent>
             <ProductVariantActions product={product} onChanged={onChanged} onDelete={onDelete} />
