@@ -257,15 +257,18 @@ async function deductInventoryForOrder(order: FlowerOrder): Promise<void> {
   }
 }
 
-async function maybeBatchDeductInventoryForClosedDay(dateKey: string): Promise<void> {
+async function maybeBatchDeductInventoryForClosedDay(
+  dateKey: string,
+  branchId: string,
+): Promise<void> {
   const dayOrders = await listOrdersForPickupDate(dateKey);
-  const closeStatus = computeFlowerDayCloseStatus(dayOrders, dateKey);
+  const closeStatus = computeFlowerDayCloseStatus(dayOrders, dateKey, branchId);
 
   if (!closeStatus.is_closed) {
     return;
   }
 
-  const pending = getOrdersPendingInventoryDeduction(dayOrders, dateKey);
+  const pending = getOrdersPendingInventoryDeduction(dayOrders, dateKey, branchId);
   if (pending.length === 0) {
     return;
   }
@@ -625,7 +628,7 @@ export async function updateFlowerOrderStatusSupabase(
   }
 
   const pickupDateKey = getPickupDateKey(existing.scheduled_for);
-  await maybeBatchDeductInventoryForClosedDay(pickupDateKey);
+  await maybeBatchDeductInventoryForClosedDay(pickupDateKey, existing.branch_id);
 
   const updated = await fetchOrderById(orderId);
   if (!updated) {
@@ -654,7 +657,6 @@ export async function markFlowerOrderBalancePaidSupabase(
   const { error } = await supabase
     .from('flower_orders')
     .update({
-      downpayment: existing.total_amount,
       balance: 0,
       balance_paid: true,
       balance_payment_mode: balancePaymentMode,

@@ -56,10 +56,22 @@ export function allocateOrderSalesByPayment(order: FlowerReportOrderSnapshot): M
   const balance = Number(order.balance) || 0;
   const total = Number(order.total_amount) || 0;
 
-  if (balance > 0 && order.balance_paid && order.balance_payment_mode) {
-    const downpaymentAmount = downpayment > 0 ? downpayment : Math.max(0, total - balance);
-    addPaymentAmount(totals, order.payment_mode, downpaymentAmount, order.branch_id, order.branch_name);
-    addPaymentAmount(totals, order.balance_payment_mode, balance, order.branch_id, order.branch_name);
+  if (order.balance_paid && order.balance_payment_mode) {
+    if (downpayment > 0) {
+      addPaymentAmount(totals, order.payment_mode, downpayment, order.branch_id, order.branch_name);
+    }
+
+    const collectedAsBalance = balance > 0 ? balance : Math.max(0, total - downpayment);
+    if (collectedAsBalance > 0) {
+      addPaymentAmount(
+        totals,
+        order.balance_payment_mode,
+        collectedAsBalance,
+        order.branch_id,
+        order.branch_name,
+      );
+    }
+
     return totals;
   }
 

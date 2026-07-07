@@ -111,18 +111,21 @@ function getPickupDateKeyFromOrder(iso: string): string {
   return getPickupDateKey(iso);
 }
 
-async function maybeBatchDeductInventoryForClosedDay(dateKey: string): Promise<void> {
+async function maybeBatchDeductInventoryForClosedDay(
+  dateKey: string,
+  branchId: string,
+): Promise<void> {
   const orders = readOrdersFromStorage();
   const dayOrders = orders.filter(
     (order) => getPickupDateKey(order.scheduled_for) === dateKey,
   );
-  const closeStatus = computeFlowerDayCloseStatus(dayOrders, dateKey);
+  const closeStatus = computeFlowerDayCloseStatus(dayOrders, dateKey, branchId);
 
   if (!closeStatus.is_closed) {
     return;
   }
 
-  const pending = getOrdersPendingInventoryDeduction(dayOrders, dateKey);
+  const pending = getOrdersPendingInventoryDeduction(dayOrders, dateKey, branchId);
 
   for (const order of pending) {
     const freshOrders = readOrdersFromStorage();
@@ -394,7 +397,10 @@ export async function updateFlowerOrderStatusLocal(
   orders[index] = order;
   writeOrdersToStorage(orders);
 
-  await maybeBatchDeductInventoryForClosedDay(getPickupDateKeyFromOrder(current.scheduled_for));
+  await maybeBatchDeductInventoryForClosedDay(
+    getPickupDateKeyFromOrder(current.scheduled_for),
+    current.branch_id,
+  );
 
   const refreshed = readOrdersFromStorage().find((entry) => entry.id === orderId);
   return refreshed ?? order;
@@ -419,7 +425,6 @@ export async function markFlowerOrderBalancePaidLocal(
 
   const updated: FlowerOrder = {
     ...current,
-    downpayment: current.total_amount,
     balance: 0,
     balance_paid: true,
     balance_payment_mode: balancePaymentMode,

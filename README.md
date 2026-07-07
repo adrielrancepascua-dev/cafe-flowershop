@@ -12,7 +12,7 @@ Flowers-only operations system for **Papers & Petals** (Dagupan, San Carlos, Urd
 - Calendar + list order views with full order form + photo uploads
 - Flower type + quantity lines, manual total price, auto balance
 - Per-branch inventory with admin stock in/out and staff-accessible inter-branch transfer requests (receiving branch confirms before stock is added)
-- Stock deducts when **all orders for a pickup day** are picked up, delivered, or completed
+- Stock deducts when **all orders for a pickup day at that branch** are picked up, delivered, or completed
 - Staff expenses + admin supplier costs
 - Reports with net income; staff reports gated until pickup day is closed
 - Printable day/week/month sales by branch

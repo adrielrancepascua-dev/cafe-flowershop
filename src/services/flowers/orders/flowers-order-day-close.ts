@@ -38,11 +38,13 @@ export function computeFlowerDayCloseStatus(
 export function getOrdersPendingInventoryDeduction(
   orders: FlowerOrder[],
   dateKey: string,
+  branchId?: string,
 ): FlowerOrder[] {
   return orders.filter(
     (order) =>
       getPickupDateKey(order.scheduled_for) === dateKey &&
       order.status !== 'cancelled' &&
+      (!branchId || order.branch_id === branchId) &&
       FLOWER_ORDER_TERMINAL_STATUSES.includes(order.status) &&
       !order.inventory_deducted,
   );
