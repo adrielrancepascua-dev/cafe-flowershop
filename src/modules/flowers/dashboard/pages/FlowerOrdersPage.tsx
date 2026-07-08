@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { CalendarDays, ChevronUp, List } from 'lucide-react';
+import { CalendarDays, ChevronUp, ClipboardList, List } from 'lucide-react';
 import { listFlowerBranches } from '../../../../services/flowers/inventory';
 import {
   createFlowerOrder,
@@ -23,6 +23,7 @@ import FlowerOrderPrintControls from '../../shared/components/FlowerOrderPrintCo
 import { scheduleFlowerCouponPrint } from '../../shared/utils/flower-print-settings';
 import FlowerOrderFormModal from '../components/FlowerOrderFormModal';
 import FlowerConfirmDialog from '../components/FlowerConfirmDialog';
+import SupplierOrderSummaryPanel from '../components/SupplierOrderSummaryPanel';
 import { useScheduledInventoryDeduction } from '../hooks/useScheduledInventoryDeduction';
 import OrderDeadlineAlertsPanel from '../components/OrderDeadlineAlertsPanel';
 import OrderDeadlineBadge from '../components/OrderDeadlineBadge';
@@ -36,7 +37,7 @@ import {
 } from '../../shared/utils/flower-format';
 import { buildFlowerProductIdSet } from '../../shared/utils/flower-order-items';
 
-type ViewMode = 'calendar' | 'list';
+type ViewMode = 'calendar' | 'list' | 'supplier';
 
 const WEEKDAY_LABELS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
@@ -475,7 +476,12 @@ export default function FlowerOrdersPage() {
       return 'calendar';
     }
 
-    return (window.localStorage.getItem('pp_orders_view') as ViewMode) ?? 'calendar';
+    const stored = window.localStorage.getItem('pp_orders_view');
+    if (stored === 'list' || stored === 'supplier') {
+      return stored;
+    }
+
+    return 'calendar';
   });
   const [cursorMonth, setCursorMonth] = useState(() => new Date());
   const [orders, setOrders] = useState<FlowerOrder[]>([]);
@@ -506,6 +512,12 @@ export default function FlowerOrdersPage() {
   useEffect(() => {
     window.localStorage.setItem('pp_orders_view', viewMode);
   }, [viewMode]);
+
+  useEffect(() => {
+    if (!authLoading && !isAdmin && viewMode === 'supplier') {
+      setViewMode('calendar');
+    }
+  }, [authLoading, isAdmin, viewMode]);
 
   useEffect(() => {
     const intervalId = window.setInterval(() => {
@@ -854,20 +866,32 @@ export default function FlowerOrdersPage() {
             <List className="h-3.5 w-3.5" />
             List
           </button>
+          {isAdmin ? (
+            <button
+              type="button"
+              onClick={() => setViewMode('supplier')}
+              className={`flower-pill flex items-center gap-1.5 ${viewMode === 'supplier' ? 'flower-pill-active' : 'flower-pill-inactive'}`}
+            >
+              <ClipboardList className="h-3.5 w-3.5" />
+              Supplier
+            </button>
+          ) : null}
         </div>
 
-        <select
-          value={branchFilter}
-          onChange={(event) => setBranchFilter(event.target.value)}
-          className="flower-input max-w-[180px]"
-        >
-          <option value="all">All branches</option>
-          {branches.map((branch) => (
-            <option key={branch.id} value={branch.id}>
-              {branch.name}
-            </option>
-          ))}
-        </select>
+        {viewMode !== 'supplier' ? (
+          <select
+            value={branchFilter}
+            onChange={(event) => setBranchFilter(event.target.value)}
+            className="flower-input max-w-[180px]"
+          >
+            <option value="all">All branches</option>
+            {branches.map((branch) => (
+              <option key={branch.id} value={branch.id}>
+                {branch.name}
+              </option>
+            ))}
+          </select>
+        ) : null}
 
         {isRefreshing ? (
           <span className="text-xs text-brand-brown/55">Updating…</span>
@@ -881,7 +905,7 @@ export default function FlowerOrdersPage() {
           New order
         </button>
 
-        {!loading && printableOrders.length > 0 && viewMode === 'list' && branchFilter !== 'all' ? (
+        {!loading && printableOrders.length > 0 && viewMode !== 'supplier' && viewMode === 'list' && branchFilter !== 'all' ? (
           <FlowerOrderPrintControls
             orders={printableOrders}
             onPrint={printSelectedOrder}
@@ -892,7 +916,7 @@ export default function FlowerOrdersPage() {
           />
         ) : null}
 
-        {!loading && printableOrders.length > 0 && viewMode === 'calendar' && selectedDateKey ? (
+        {!loading && printableOrders.length > 0 && viewMode !== 'supplier' && viewMode === 'calendar' && selectedDateKey ? (
           <div className="hidden w-full lg:block lg:max-w-md">
             <FlowerOrderPrintControls
               orders={printableOrders}
@@ -905,7 +929,7 @@ export default function FlowerOrdersPage() {
         ) : null}
       </div>
 
-      {!loading ? (
+      {!loading && viewMode !== 'supplier' ? (
         <OrderDeadlineAlertsPanel
           orders={orders}
           onSelectOrder={openExistingOrder}
@@ -913,7 +937,9 @@ export default function FlowerOrdersPage() {
         />
       ) : null}
 
-      {loading && orders.length === 0 ? (
+      {viewMode === 'supplier' && isAdmin ? (
+        <SupplierOrderSummaryPanel products={products} />
+      ) : loading && orders.length === 0 ? (
         <p className="mt-6 text-sm text-brand-brown/60">Loading orders...</p>
       ) : viewMode === 'calendar' ? (
         <div className="mt-5">
