@@ -1085,7 +1085,11 @@ export default function FlowerOrdersPage() {
                   {isAdmin ? (
                     <button
                       type="button"
-                      onClick={() => requestDeleteOrder(order)}
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        requestDeleteOrder(order);
+                      }}
+                      onPointerDown={(event) => event.stopPropagation()}
                       className="shrink-0 rounded-xl border border-red-200 px-2.5 py-1.5 text-xs font-semibold text-red-700 hover:bg-red-50"
                       aria-label={`Delete order for ${order.receiver}`}
                     >
@@ -1098,19 +1102,19 @@ export default function FlowerOrdersPage() {
           </div>
 
           <div className="mt-5 hidden overflow-x-auto rounded-2xl border border-brand-muted/40 md:block">
-          <table className="w-full min-w-0 text-left text-sm">
+          <table className="min-w-[72rem] w-full text-left text-sm">
             <thead className="bg-brand-beige/40 text-brand-brown">
               <tr>
                 <th className="px-3 py-2 whitespace-nowrap">Pickup</th>
-                <th className="max-w-[8rem] px-3 py-2">Receiver</th>
+                <th className="min-w-[7rem] px-3 py-2">Receiver</th>
                 <th className="px-3 py-2 whitespace-nowrap">Branch</th>
-                <th className="max-w-[9rem] px-3 py-2">Flowers</th>
+                <th className="min-w-[8rem] max-w-[12rem] px-3 py-2">Flowers</th>
                 <th className="px-3 py-2 whitespace-nowrap">Status</th>
                 <th className="min-w-[7.5rem] px-3 py-2">Prep deadline</th>
                 <th className="px-3 py-2 whitespace-nowrap">Total</th>
-                <th className="max-w-[6rem] truncate px-3 py-2">By</th>
+                <th className="min-w-[5.5rem] px-3 py-2 whitespace-nowrap">By</th>
                 {isAdmin ? (
-                  <th className="sticky right-0 z-10 bg-brand-beige/40 px-3 py-2 text-right shadow-[-6px_0_10px_-8px_rgba(62,39,35,0.35)]">
+                  <th className="min-w-[5.5rem] px-3 py-2 text-right whitespace-nowrap">
                     Actions
                   </th>
                 ) : null}
@@ -1126,11 +1130,11 @@ export default function FlowerOrdersPage() {
                   <td className="px-3 py-2 whitespace-nowrap">
                     {formatPickupDateTimeLocal(order.scheduled_for)}
                   </td>
-                  <td className="max-w-[8rem] truncate px-3 py-2" title={order.receiver}>
+                  <td className="min-w-[7rem] max-w-[10rem] truncate px-3 py-2" title={order.receiver}>
                     {order.receiver}
                   </td>
                   <td className="px-3 py-2 whitespace-nowrap">{order.branch_name}</td>
-                  <td className="max-w-[9rem] truncate px-3 py-2" title={summarizeFlowerLines(order.items)}>
+                  <td className="max-w-[12rem] truncate px-3 py-2" title={summarizeFlowerLines(order.items)}>
                     {summarizeFlowerLines(order.items)}
                   </td>
                   <td className="px-3 py-2 whitespace-nowrap">{ORDER_STATUS_LABELS[order.status]}</td>
@@ -1140,17 +1144,22 @@ export default function FlowerOrdersPage() {
                   <td className="px-3 py-2 whitespace-nowrap">
                     {PRICE_FORMATTER.format(order.total_amount)}
                   </td>
-                  <td className="max-w-[6rem] truncate px-3 py-2" title={order.created_by_name}>
+                  <td className="min-w-[5.5rem] px-3 py-2 whitespace-nowrap" title={order.created_by_name}>
                     {order.created_by_name}
                   </td>
                   {isAdmin ? (
-                    <td className="sticky right-0 z-10 bg-white px-3 py-2 text-right shadow-[-6px_0_10px_-8px_rgba(62,39,35,0.35)] group-hover:bg-brand-beige/20">
+                    <td
+                      className="px-3 py-2 text-right whitespace-nowrap"
+                      onClick={(event) => event.stopPropagation()}
+                      onPointerDown={(event) => event.stopPropagation()}
+                    >
                       <button
                         type="button"
                         onClick={(event) => {
                           event.stopPropagation();
-                          void requestDeleteOrder(order);
+                          requestDeleteOrder(order);
                         }}
+                        onPointerDown={(event) => event.stopPropagation()}
                         className="inline-flex whitespace-nowrap rounded-xl border border-red-200 px-3 py-1.5 text-xs font-semibold text-red-700 hover:bg-red-50"
                       >
                         Delete
