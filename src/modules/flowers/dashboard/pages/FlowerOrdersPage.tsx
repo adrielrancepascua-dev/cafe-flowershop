@@ -23,6 +23,7 @@ import FlowerOrderPrintControls from '../../shared/components/FlowerOrderPrintCo
 import { scheduleFlowerCouponPrint } from '../../shared/utils/flower-print-settings';
 import FlowerOrderFormModal from '../components/FlowerOrderFormModal';
 import FlowerConfirmDialog from '../components/FlowerConfirmDialog';
+import { useScheduledInventoryDeduction } from '../hooks/useScheduledInventoryDeduction';
 import OrderDeadlineAlertsPanel from '../components/OrderDeadlineAlertsPanel';
 import OrderDeadlineBadge from '../components/OrderDeadlineBadge';
 import {
@@ -556,6 +557,12 @@ export default function FlowerOrdersPage() {
 
     void loadData();
   }, [branchFilter, authLoading, staffBranchId]);
+
+  const loadDataRef = useRef(loadData);
+  loadDataRef.current = loadData;
+  useScheduledInventoryDeduction(() => {
+    void loadDataRef.current();
+  });
 
   const ordersByDate = useMemo(() => {
     const map = new Map<string, FlowerOrder[]>();

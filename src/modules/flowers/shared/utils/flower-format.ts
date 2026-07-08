@@ -166,7 +166,14 @@ export function fromDateInputValue(value: string): string {
   return date.toISOString();
 }
 
-/** Calendar/report day for a pickup timestamp in the user's local timezone. */
+export const FLOWER_BUSINESS_TIMEZONE = 'Asia/Manila';
+
+/** Calendar day in Philippines time (matches shop operations). */
+export function toManilaDateKeyFromDate(date: Date = new Date()): string {
+  return date.toLocaleDateString('en-CA', { timeZone: FLOWER_BUSINESS_TIMEZONE });
+}
+
+/** Calendar/report day for a pickup timestamp in Philippines time. */
 export function scheduledForToDateKey(iso: string): string {
   if (!iso) {
     return '';
@@ -177,14 +184,15 @@ export function scheduledForToDateKey(iso: string): string {
     return '';
   }
 
-  return toDateKey(date);
+  return toManilaDateKeyFromDate(date);
 }
 
 export function getLocalDayBoundsIso(dateKey: string): { startIso: string; endIso: string } {
   const [year, month, day] = dateKey.split('-').map(Number);
-  const start = new Date(year, month - 1, day, 0, 0, 0, 0);
-  const end = new Date(year, month - 1, day, 23, 59, 59, 999);
-  return { startIso: start.toISOString(), endIso: end.toISOString() };
+  const manilaOffsetMs = 8 * 60 * 60 * 1000;
+  const startMs = Date.UTC(year, month - 1, day, 0, 0, 0, 0) - manilaOffsetMs;
+  const endMs = Date.UTC(year, month - 1, day, 23, 59, 59, 999) - manilaOffsetMs;
+  return { startIso: new Date(startMs).toISOString(), endIso: new Date(endMs).toISOString() };
 }
 
 export function toDateKey(date: Date): string {

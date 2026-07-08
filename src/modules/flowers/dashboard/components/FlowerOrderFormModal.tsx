@@ -344,7 +344,7 @@ function OrderCatalogQuantityPicker({
                           }`}
                         >
                           {onHand} on hand
-                          {willGoNegative ? ' — will go negative on day close' : ''}
+                          {willGoNegative ? ' — will go negative at 7 PM' : ''}
                         </p>
                       ) : null}
                     </div>
@@ -649,7 +649,7 @@ function FlowerCategoryPickerGroup({
                         }`}
                       >
                         {onHand} on hand
-                        {willGoNegative ? ' — will go negative on day close' : ''}
+                        {willGoNegative ? ' — will go negative at 7 PM' : ''}
                       </p>
                     ) : null}
                   </div>
@@ -720,7 +720,7 @@ function FlowerStandalonePickerRow({
               }`}
             >
               {onHand} on hand
-              {willGoNegative ? ' — will go negative on day close' : ''}
+              {willGoNegative ? ' — will go negative at 7 PM' : ''}
             </p>
           ) : null}
         </div>

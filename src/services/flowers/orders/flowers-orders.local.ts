@@ -22,6 +22,7 @@ import {
   computeFlowerDayCloseStatus,
   getOrdersPendingInventoryDeduction,
   getPickupDateKey,
+  isInventoryDeductionDue,
 } from './flowers-order-day-close';
 import { currentFlowerUserIsAdmin } from '../../../lib/auth/flower-auth.service';
 import { assertOrderContentEditable } from '../../../modules/flowers/shared/utils/flower-order-edit-policy';
@@ -119,9 +120,8 @@ async function maybeBatchDeductInventoryForClosedDay(
   const dayOrders = orders.filter(
     (order) => getPickupDateKey(order.scheduled_for) === dateKey,
   );
-  const closeStatus = computeFlowerDayCloseStatus(dayOrders, dateKey, branchId);
 
-  if (!closeStatus.is_closed) {
+  if (!isInventoryDeductionDue(dateKey)) {
     return;
   }
 
@@ -448,4 +448,35 @@ export async function getFlowerDayCloseStatusLocal(
 }> {
   const orders = readOrdersFromStorage();
   return computeFlowerDayCloseStatus(orders, dateKey, branchId);
+}
+
+export async function runDueInventoryDeductionsLocal(): Promise<void> {
+  const orders = readOrdersFromStorage();
+  const buckets = new Set<string>();
+
+  for (const order of orders) {
+    if (order.inventory_deducted || order.status === 'cancelled') {
+      continue;
+    }
+
+    if (!FLOWER_ORDER_TERMINAL_STATUSES.includes(order.status)) {
+      continue;
+    }
+
+    const dateKey = getPickupDateKey(order.scheduled_for);
+    if (!isInventoryDeductionDue(dateKey)) {
+      continue;
+    }
+
+    buckets.add(`${dateKey}|${order.branch_id}`);
+  }
+
+  for (const bucket of buckets) {
+    const [dateKey, branchId] = bucket.split('|');
+    try {
+      await maybeBatchDeductInventoryForClosedDay(dateKey, branchId);
+    } catch (error) {
+      console.warn('Scheduled inventory deduction failed.', { dateKey, branchId, error });
+    }
+  }
 }

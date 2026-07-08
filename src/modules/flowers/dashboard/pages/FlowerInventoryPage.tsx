@@ -56,6 +56,7 @@ import {
 } from '../../shared/utils/flower-misc-category';
 import { summarizeUnpaidTransferBalances } from '../../shared/utils/flower-transfer-billing';
 import TransferRequestAdminBillingPanel from '../components/TransferRequestAdminBillingPanel';
+import { useScheduledInventoryDeduction } from '../hooks/useScheduledInventoryDeduction';
 
 function aggregateStockByProduct(rows: FlowerInventoryStockRow[]): FlowerInventoryStockRow[] {
   const totals = new Map<string, FlowerInventoryStockRow>();
@@ -1111,6 +1112,12 @@ export default function FlowerInventoryPage() {
 
     void loadData();
   }, [selectedBranchId, activeTab, authLoading, staffBranchId]);
+
+  const loadDataRef = useRef(loadData);
+  loadDataRef.current = loadData;
+  useScheduledInventoryDeduction(() => {
+    void loadDataRef.current();
+  });
 
   useEffect(() => {
     setColorFilter('all');

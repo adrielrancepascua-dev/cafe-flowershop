@@ -4,6 +4,7 @@ export {
   getFlowerDayCloseStatus,
   getFlowerOrder,
   listFlowerOrders,
+  runDueInventoryDeductions,
   updateFlowerOrder,
   updateFlowerOrderReadyPhoto,
   updateFlowerOrderStatus,

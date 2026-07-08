@@ -25,6 +25,7 @@ import {
   computeFlowerDayCloseStatus,
   getOrdersPendingInventoryDeduction,
   getPickupDateKey,
+  isInventoryDeductionDue,
 } from './flowers-order-day-close';
 import { assertOrderContentEditable } from '../../../modules/flowers/shared/utils/flower-order-edit-policy';
 import { computeOrderPaymentFields } from '../../../modules/flowers/shared/utils/flower-order-payment-fields';
@@ -283,9 +284,8 @@ async function maybeBatchDeductInventoryForClosedDay(
   branchId: string,
 ): Promise<void> {
   const dayOrders = await listOrdersForPickupDate(dateKey);
-  const closeStatus = computeFlowerDayCloseStatus(dayOrders, dateKey, branchId);
 
-  if (!closeStatus.is_closed) {
+  if (!isInventoryDeductionDue(dateKey)) {
     return;
   }
 
@@ -708,4 +708,36 @@ export async function getFlowerDayCloseStatusSupabase(
 }> {
   const orders = await listOrdersForPickupDate(dateKey);
   return computeFlowerDayCloseStatus(orders, dateKey, branchId);
+}
+
+export async function runDueInventoryDeductionsSupabase(): Promise<void> {
+  const supabase = await requireAuthenticatedSupabaseClient();
+  const { data, error } = await supabase
+    .from('flower_orders')
+    .select('id, scheduled_for, branch_id, status, inventory_deducted')
+    .eq('inventory_deducted', false)
+    .in('status', FLOWER_ORDER_TERMINAL_STATUSES);
+
+  if (error) {
+    throw toServiceError(error, 'Failed to check scheduled inventory deductions.');
+  }
+
+  const buckets = new Set<string>();
+  for (const row of data ?? []) {
+    const dateKey = getPickupDateKey(row.scheduled_for);
+    if (!isInventoryDeductionDue(dateKey)) {
+      continue;
+    }
+
+    buckets.add(`${dateKey}|${row.branch_id}`);
+  }
+
+  for (const bucket of buckets) {
+    const [dateKey, branchId] = bucket.split('|');
+    try {
+      await maybeBatchDeductInventoryForClosedDay(dateKey, branchId);
+    } catch (deductError) {
+      console.warn('Scheduled inventory deduction failed.', { dateKey, branchId, deductError });
+    }
+  }
 }

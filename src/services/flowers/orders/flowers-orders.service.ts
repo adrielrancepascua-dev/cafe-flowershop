@@ -13,6 +13,7 @@ import {
   getFlowerDayCloseStatusLocal,
   getFlowerOrderLocal,
   listFlowerOrdersLocal,
+  runDueInventoryDeductionsLocal,
   updateFlowerOrderLocal,
   updateFlowerOrderReadyPhotoLocal,
   updateFlowerOrderStatusLocal,
@@ -141,5 +142,15 @@ export async function getFlowerDayCloseStatus(dateKey: string, branchId?: string
       return getFlowerDayCloseStatusSupabase(dateKey, branchId);
     },
     () => getFlowerDayCloseStatusLocal(dateKey, branchId),
+  );
+}
+
+export async function runDueInventoryDeductions(): Promise<void> {
+  return withSupabaseOrders(
+    async () => {
+      const { runDueInventoryDeductionsSupabase } = await import('./flowers-orders.supabase');
+      return runDueInventoryDeductionsSupabase();
+    },
+    () => runDueInventoryDeductionsLocal(),
   );
 }
