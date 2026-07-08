@@ -1102,22 +1102,20 @@ export default function FlowerOrdersPage() {
           </div>
 
           <div className="mt-5 hidden overflow-x-auto rounded-2xl border border-brand-muted/40 md:block">
-          <table className="min-w-[72rem] w-full text-left text-sm">
+          <table className="w-full text-left text-sm">
             <thead className="bg-brand-beige/40 text-brand-brown">
               <tr>
                 <th className="px-3 py-2 whitespace-nowrap">Pickup</th>
-                <th className="min-w-[7rem] px-3 py-2">Receiver</th>
-                <th className="px-3 py-2 whitespace-nowrap">Branch</th>
-                <th className="min-w-[8rem] max-w-[12rem] px-3 py-2">Flowers</th>
+                <th className="px-3 py-2">Receiver</th>
+                <th className="max-w-[10rem] px-3 py-2">Branch</th>
+                <th className="max-w-[9rem] px-3 py-2">Flowers</th>
                 <th className="px-3 py-2 whitespace-nowrap">Status</th>
-                <th className="min-w-[7.5rem] px-3 py-2">Prep deadline</th>
+                <th className="px-3 py-2 whitespace-nowrap">Prep</th>
                 <th className="px-3 py-2 whitespace-nowrap">Total</th>
-                <th className="min-w-[5.5rem] px-3 py-2 whitespace-nowrap">By</th>
                 {isAdmin ? (
-                  <th className="min-w-[5.5rem] px-3 py-2 text-right whitespace-nowrap">
-                    Actions
-                  </th>
+                  <th className="px-3 py-2 text-center whitespace-nowrap">Delete</th>
                 ) : null}
+                <th className="px-3 py-2 whitespace-nowrap">By</th>
               </tr>
             </thead>
             <tbody>
@@ -1127,29 +1125,30 @@ export default function FlowerOrdersPage() {
                   className="group cursor-pointer border-t border-brand-muted/30 hover:bg-brand-beige/20"
                   onClick={() => openExistingOrder(order)}
                 >
-                  <td className="px-3 py-2 whitespace-nowrap">
+                  <td className="px-3 py-2 whitespace-nowrap text-xs sm:text-sm">
                     {formatPickupDateTimeLocal(order.scheduled_for)}
                   </td>
-                  <td className="min-w-[7rem] max-w-[10rem] truncate px-3 py-2" title={order.receiver}>
+                  <td className="max-w-[8rem] truncate px-3 py-2" title={order.receiver}>
                     {order.receiver}
                   </td>
-                  <td className="px-3 py-2 whitespace-nowrap">{order.branch_name}</td>
-                  <td className="max-w-[12rem] truncate px-3 py-2" title={summarizeFlowerLines(order.items)}>
+                  <td className="max-w-[10rem] truncate px-3 py-2 whitespace-nowrap" title={order.branch_name}>
+                    {order.branch_name}
+                  </td>
+                  <td className="max-w-[9rem] truncate px-3 py-2 text-xs" title={summarizeFlowerLines(order.items)}>
                     {summarizeFlowerLines(order.items)}
                   </td>
-                  <td className="px-3 py-2 whitespace-nowrap">{ORDER_STATUS_LABELS[order.status]}</td>
+                  <td className="px-3 py-2 whitespace-nowrap text-xs sm:text-sm">
+                    {ORDER_STATUS_LABELS[order.status]}
+                  </td>
                   <td className="px-3 py-2 align-top">
                     <OrderDeadlineBadge order={order} nowMs={nowMs} variant="table" flowerProductIds={flowerProductIds} />
                   </td>
-                  <td className="px-3 py-2 whitespace-nowrap">
+                  <td className="px-3 py-2 whitespace-nowrap font-medium">
                     {PRICE_FORMATTER.format(order.total_amount)}
-                  </td>
-                  <td className="min-w-[5.5rem] px-3 py-2 whitespace-nowrap" title={order.created_by_name}>
-                    {order.created_by_name}
                   </td>
                   {isAdmin ? (
                     <td
-                      className="px-3 py-2 text-right whitespace-nowrap"
+                      className="px-2 py-2 text-center whitespace-nowrap"
                       onClick={(event) => event.stopPropagation()}
                       onPointerDown={(event) => event.stopPropagation()}
                     >
@@ -1160,12 +1159,16 @@ export default function FlowerOrdersPage() {
                           requestDeleteOrder(order);
                         }}
                         onPointerDown={(event) => event.stopPropagation()}
-                        className="inline-flex whitespace-nowrap rounded-xl border border-red-200 px-3 py-1.5 text-xs font-semibold text-red-700 hover:bg-red-50"
+                        className="inline-flex whitespace-nowrap rounded-lg border border-red-200 px-2.5 py-1 text-xs font-semibold text-red-700 hover:bg-red-50"
+                        aria-label={`Delete order for ${order.receiver}`}
                       >
                         Delete
                       </button>
                     </td>
                   ) : null}
+                  <td className="max-w-[5rem] truncate px-3 py-2 text-xs" title={order.created_by_name}>
+                    {order.created_by_name}
+                  </td>
                 </tr>
               ))}
               {orders.length === 0 ? (
@@ -1189,6 +1192,14 @@ export default function FlowerOrdersPage() {
           onStatusChange={handleStatusChange}
           onReadyPhotoSubmit={handleReadyPhotoSubmit}
           onBalancePaid={handleBalancePaid}
+          onDelete={
+            isAdmin && selectedOrder
+              ? () => {
+                  requestDeleteOrder(selectedOrder);
+                  setFormOpen(false);
+                }
+              : undefined
+          }
           branches={branches}
           products={products}
           initialPickupIso={initialPickupIso}

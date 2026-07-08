@@ -114,6 +114,7 @@ type OrderFormProps = {
     balancePaymentMode: FlowerPaymentMode,
     balancePaymentReference: string,
   ) => Promise<void>;
+  onDelete?: () => void;
   branches: FlowerBranchOption[];
   products: FlowerProduct[];
   initialPickupIso?: string;
@@ -844,6 +845,7 @@ export default function FlowerOrderFormModal({
   onStatusChange,
   onReadyPhotoSubmit,
   onBalancePaid,
+  onDelete,
   branches,
   products,
   initialPickupIso,
@@ -2258,6 +2260,15 @@ export default function FlowerOrderFormModal({
             >
               {errorMessage}
             </p>
+          ) : null}
+          {isAdmin && existingOrder && onDelete ? (
+            <button
+              type="button"
+              onClick={onDelete}
+              className="w-full rounded-xl border border-red-300 px-4 py-2.5 text-sm font-semibold text-red-700 transition hover:bg-red-50"
+            >
+              Delete order
+            </button>
           ) : null}
           <div className="flex gap-2">
           {isViewMode ? (
