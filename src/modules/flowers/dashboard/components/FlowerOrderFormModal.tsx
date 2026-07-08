@@ -2261,15 +2261,6 @@ export default function FlowerOrderFormModal({
               {errorMessage}
             </p>
           ) : null}
-          {isAdmin && existingOrder && onDelete ? (
-            <button
-              type="button"
-              onClick={onDelete}
-              className="w-full rounded-xl border border-red-300 px-4 py-2.5 text-sm font-semibold text-red-700 transition hover:bg-red-50"
-            >
-              Delete order
-            </button>
-          ) : null}
           <div className="flex gap-2">
           {isViewMode ? (
             <>
@@ -2302,6 +2293,17 @@ export default function FlowerOrderFormModal({
             </>
           )}
           </div>
+          {isAdmin && existingOrder && onDelete ? (
+            <div className="flex justify-center border-t border-brand-muted/25 pt-2 sm:justify-start">
+              <button
+                type="button"
+                onClick={onDelete}
+                className="text-xs font-medium text-red-700/75 underline-offset-2 transition hover:text-red-800 hover:underline"
+              >
+                Delete order
+              </button>
+            </div>
+          ) : null}
         </div>
       </div>
     </div>
