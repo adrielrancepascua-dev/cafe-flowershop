@@ -640,7 +640,7 @@ export default function FlowerOrdersPage() {
 
   async function handleCreate(input: Parameters<typeof createFlowerOrder>[0]) {
     if (!user) {
-      return;
+      throw new Error('You must be signed in to save orders.');
     }
 
     setIsSubmitting(true);
@@ -655,8 +655,10 @@ export default function FlowerOrdersPage() {
         });
       }
 
-      setFormOpen(false);
       await loadData();
+      setFormOpen(false);
+      setSelectedOrder(null);
+      setInitialPickupIso(undefined);
     } finally {
       setIsSubmitting(false);
     }
@@ -1184,6 +1186,7 @@ export default function FlowerOrdersPage() {
           existingOrder={selectedOrder}
           staffId={user.id}
           staffName={user.display_name}
+          staffBranchId={staffBranchId}
           isAdmin={isAdmin}
           isSubmitting={isSubmitting}
         />

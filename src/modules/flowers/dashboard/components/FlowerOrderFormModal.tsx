@@ -3,6 +3,7 @@ import { ChevronDown, Minus, Plus, X } from 'lucide-react';
 import { listFlowerInventoryStock } from '../../../../services/flowers/inventory';
 import type { FlowerProduct } from '../../shared/types/flower-product';
 import type { FlowerBranchOption } from '../../shared/types/flower-inventory';
+import { extractSupabaseErrorMessage } from '../../../../lib/supabase/errors';
 import {
   FLOWER_ORDER_COMPLETE_STATUSES,
   formatFlowerClaimModeLabel,
@@ -119,6 +120,7 @@ type OrderFormProps = {
   existingOrder?: FlowerOrder | null;
   staffId: string;
   staffName: string;
+  staffBranchId?: string | null;
   isAdmin?: boolean;
   isSubmitting?: boolean;
 };
@@ -809,9 +811,10 @@ function emptyForm(
   pickupIso: string,
   staffId: string,
   staffName: string,
+  branchId = '',
 ): CreateFlowerOrderInput {
   return {
-    branch_id: '',
+    branch_id: branchId,
     receiver: '',
     customer_social: '',
     scheduled_for: pickupIso,
@@ -847,11 +850,17 @@ export default function FlowerOrderFormModal({
   existingOrder,
   staffId,
   staffName,
+  staffBranchId = null,
   isAdmin = false,
   isSubmitting = false,
 }: OrderFormProps) {
   const [form, setForm] = useState<CreateFlowerOrderInput>(() =>
-    emptyForm(initialPickupIso ?? new Date().toISOString(), staffId, staffName),
+    emptyForm(
+      initialPickupIso ?? new Date().toISOString(),
+      staffId,
+      staffName,
+      staffBranchId ?? '',
+    ),
   );
   const [productQuantities, setProductQuantities] = useState<ProductQuantities>({});
   const [flowerSearch, setFlowerSearch] = useState('');
@@ -872,6 +881,7 @@ export default function FlowerOrderFormModal({
   const [isSavingReadyPhoto, setIsSavingReadyPhoto] = useState(false);
   const [readyPhotoMessage, setReadyPhotoMessage] = useState('');
   const readyPhotoInputRef = useRef<HTMLInputElement>(null);
+  const errorBannerRef = useRef<HTMLParagraphElement>(null);
 
   // Staff view orders read-only until they tap Edit; admins edit inline anytime.
   const isViewMode = Boolean(existingOrder && !isEditMode && !isAdmin);
@@ -961,7 +971,14 @@ export default function FlowerOrderFormModal({
     }
 
     setIsEditMode(true);
-    setForm(emptyForm(initialPickupIso ?? new Date().toISOString(), staffId, staffName));
+    setForm(
+      emptyForm(
+        initialPickupIso ?? new Date().toISOString(),
+        staffId,
+        staffName,
+        staffBranchId ?? '',
+      ),
+    );
     setProductQuantities({});
     setFlowerSearch('');
     setMiscSearch('');
@@ -973,7 +990,7 @@ export default function FlowerOrderFormModal({
     setBalancePaymentMode('cash');
     setBalancePaymentReference('');
     setBalancePaidMessage('');
-  }, [open, existingOrder, initialPickupIso, staffId, staffName, isAdmin]);
+  }, [open, existingOrder, initialPickupIso, staffId, staffName, staffBranchId, isAdmin]);
 
   useEffect(() => {
     if (!open || !existingOrder || readyPhotoSaved) {
@@ -1310,32 +1327,32 @@ export default function FlowerOrderFormModal({
     const wrapper_color = formatWrapperColorSummary(miscProducts, productQuantities);
 
     if (!form.branch_id) {
-      setErrorMessage('Branch is required.');
+      showValidationError('Branch is required.');
       return null;
     }
 
     if (stockLoading) {
-      setErrorMessage('Branch stock is still loading. Please wait a moment.');
+      showValidationError('Branch stock is still loading. Please wait a moment.');
       return null;
     }
 
     if (!form.receiver.trim()) {
-      setErrorMessage('Receiver is required.');
+      showValidationError('Receiver is required.');
       return null;
     }
 
     if (!form.customer_social.trim()) {
-      setErrorMessage('FB/IG name is required.');
+      showValidationError('FB/IG name is required.');
       return null;
     }
 
     if (!form.scheduled_for) {
-      setErrorMessage('Pickup date and time is required.');
+      showValidationError('Pickup date and time is required.');
       return null;
     }
 
     if (items.length === 0) {
-      setErrorMessage('Add at least one item — flowers or miscellaneous.');
+      showValidationError('Add at least one item — flowers or miscellaneous.');
       return null;
     }
 
@@ -1345,34 +1362,34 @@ export default function FlowerOrderFormModal({
     const total_amount = Number(totalAmountDraft);
 
     if (trimmedDownpayment !== '' && !Number.isFinite(downpayment)) {
-      setErrorMessage('Downpayment must be a valid amount.');
+      showValidationError('Downpayment must be a valid amount.');
       return null;
     }
 
     if (!Number.isFinite(total_amount) || total_amount <= 0) {
-      setErrorMessage('Total amount must be greater than 0.');
+      showValidationError('Total amount must be greater than 0.');
       return null;
     }
 
     if (!Number.isFinite(downpayment) || downpayment < 0) {
-      setErrorMessage('Downpayment must be 0 or greater.');
+      showValidationError('Downpayment must be 0 or greater.');
       return null;
     }
 
     if (downpayment > total_amount) {
-      setErrorMessage('Downpayment cannot exceed total amount.');
+      showValidationError('Downpayment cannot exceed total amount.');
       return null;
     }
 
     const requiresProof = downpayment > 0;
 
     if (requiresProof && !form.payment_reference.trim()) {
-      setErrorMessage('Reference # is required when downpayment is greater than 0.');
+      showValidationError('Reference # is required when downpayment is greater than 0.');
       return null;
     }
 
     if (requiresProof && !form.proof_dp_data_url) {
-      setErrorMessage('Proof of DP is required when downpayment is greater than 0.');
+      showValidationError('Proof of DP is required when downpayment is greater than 0.');
       return null;
     }
 
@@ -1380,12 +1397,12 @@ export default function FlowerOrderFormModal({
       orderRequiresInspoPhoto(items, flowerProductIds, form.claim_mode) &&
       !form.photo_inspo_data_url.trim()
     ) {
-      setErrorMessage('Photo of order / inspo is required for flower orders.');
+      showValidationError('Photo of order / inspo is required for flower orders.');
       return null;
     }
 
     if (existingOrder && !canEditOrderContent) {
-      setErrorMessage(orderContentEditPolicy?.reason ?? 'This order can no longer be edited.');
+      showValidationError(orderContentEditPolicy?.reason ?? 'This order can no longer be edited.');
       return null;
     }
 
@@ -1411,7 +1428,8 @@ export default function FlowerOrderFormModal({
         setIsEditMode(false);
       }
     } catch (error) {
-      setErrorMessage(error instanceof Error ? error.message : 'Failed to save order.');
+      setErrorMessage(extractSupabaseErrorMessage(error, 'Failed to save order.'));
+      errorBannerRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
     }
   }
 
@@ -1501,6 +1519,15 @@ export default function FlowerOrderFormModal({
   const branchLabel =
     branches.find((branch) => branch.id === form.branch_id)?.name ?? form.branch_id;
   const claimModeLabel = formatFlowerClaimModeLabel(form.claim_mode);
+  const staffBranchLocked = Boolean(!isAdmin && staffBranchId);
+  const selectableBranches = staffBranchLocked
+    ? branches.filter((branch) => branch.id === staffBranchId)
+    : branches;
+
+  function showValidationError(message: string) {
+    setErrorMessage(message);
+    errorBannerRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  }
 
   return (
     <div className="fixed inset-0 z-[100] flex items-end justify-center bg-brand-dark/40 p-0 sm:items-center sm:p-4">
@@ -1519,7 +1546,11 @@ export default function FlowerOrderFormModal({
           </button>
         </div>
 
-        <form onSubmit={handleSubmit} className="flower-scroll min-h-0 flex-1 overflow-y-auto px-4 py-4 sm:px-6">
+        <form
+          id="flower-order-form"
+          onSubmit={handleSubmit}
+          className="flower-scroll min-h-0 flex-1 overflow-y-auto px-4 py-4 sm:px-6"
+        >
           {isViewMode ? (
             <p className="mb-4 rounded-xl border border-brand-muted/40 bg-brand-cream/30 px-3 py-2 text-sm text-brand-brown/80">
               Viewing only — tap <span className="font-semibold">Edit order</span> below to change
@@ -1874,7 +1905,7 @@ export default function FlowerOrderFormModal({
 
             <label className="block text-sm font-medium text-brand-brown">
               Branch
-              {isViewMode ? (
+              {isViewMode || staffBranchLocked ? (
                 <p className={`flower-input mt-1.5 ${readOnlyFieldClass}`}>{branchLabel}</p>
               ) : (
                 <select
@@ -1884,7 +1915,7 @@ export default function FlowerOrderFormModal({
                   required
                 >
                   <option value="">Select branch</option>
-                  {branches.map((branch) => (
+                  {selectableBranches.map((branch) => (
                     <option key={branch.id} value={branch.id}>
                       {branch.name}
                     </option>
@@ -2201,11 +2232,6 @@ export default function FlowerOrderFormModal({
             Input by: {form.created_by_name}
           </p>
 
-          {errorMessage ? (
-            <p className="mt-4 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
-              {errorMessage}
-            </p>
-          ) : null}
 
           {existingOrder && orderContentEditPolicy ? (
             isAdmin && orderContentEditPolicy.allowed ? (
@@ -2224,7 +2250,16 @@ export default function FlowerOrderFormModal({
           ) : null}
         </form>
 
-        <div className="flex shrink-0 gap-2 border-t border-brand-muted/40 bg-white px-4 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:px-6">
+        <div className="flex shrink-0 flex-col gap-2 border-t border-brand-muted/40 bg-white px-4 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:px-6">
+          {errorMessage && !isViewMode ? (
+            <p
+              ref={errorBannerRef}
+              className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700"
+            >
+              {errorMessage}
+            </p>
+          ) : null}
+          <div className="flex gap-2">
           {isViewMode ? (
             <>
               <button type="button" onClick={onClose} className="flower-btn-secondary flex-1">
@@ -2247,14 +2282,15 @@ export default function FlowerOrderFormModal({
               </button>
               <button
                 type="submit"
+                form="flower-order-form"
                 disabled={isSubmitting}
-                onClick={handleSubmit}
                 className="flower-btn-primary flex-1"
               >
                 {isSubmitting ? 'Saving...' : existingOrder ? 'Update order' : 'Save order'}
               </button>
             </>
           )}
+          </div>
         </div>
       </div>
     </div>

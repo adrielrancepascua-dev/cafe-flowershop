@@ -1,6 +1,7 @@
 import { currentFlowerUserIsAdmin } from '../../../lib/auth/flower-auth.service';
 import { requireSupabaseAuthSession } from '../../../lib/auth/flower-auth.service';
 import { getSupabaseClient } from '../../../lib/supabase/client';
+import { toServiceError } from '../../../lib/supabase/errors';
 import type {
   CreateFlowerOrderInput,
   FlowerClaimMode,
@@ -27,6 +28,11 @@ import {
 } from './flowers-order-day-close';
 import { assertOrderContentEditable } from '../../../modules/flowers/shared/utils/flower-order-edit-policy';
 import { computeOrderPaymentFields } from '../../../modules/flowers/shared/utils/flower-order-payment-fields';
+import {
+  isMissingProductKindColumnError,
+  markProductKindColumnMissing,
+  markProductKindColumnSupported,
+} from '../products/flowers-products-supabase.shared';
 import { validateOrderInspoPhotoForProductRows } from './flowers-order-validation';
 
 type OrderItemDbRow = {
@@ -127,16 +133,31 @@ async function validateOrderInspoPhotoSupabase(
     return;
   }
 
-  const { data, error } = await supabase
+  const withKind = await supabase
     .from('flower_products')
     .select('id, product_kind')
     .in('id', productIds);
 
-  if (error) {
-    throw error;
+  let productRows: Array<{ id: string; product_kind: string }>;
+
+  if (withKind.error && isMissingProductKindColumnError(withKind.error)) {
+    markProductKindColumnMissing();
+    const legacy = await supabase.from('flower_products').select('id').in('id', productIds);
+    if (legacy.error) {
+      throw toServiceError(legacy.error, 'Could not validate order items.');
+    }
+    productRows = ((legacy.data as Array<{ id: string }> | null) ?? []).map((row) => ({
+      id: row.id,
+      product_kind: 'flower',
+    }));
+  } else if (withKind.error) {
+    throw toServiceError(withKind.error, 'Could not validate order items.');
+  } else {
+    markProductKindColumnSupported();
+    productRows = (withKind.data as Array<{ id: string; product_kind: string }> | null) ?? [];
   }
 
-  validateOrderInspoPhotoForProductRows(items, photoInspoDataUrl, data ?? [], claimMode);
+  validateOrderInspoPhotoForProductRows(items, photoInspoDataUrl, productRows, claimMode);
 }
 
 function buildOrderId(): string {
@@ -401,7 +422,7 @@ export async function createFlowerOrderSupabase(
   const { error: orderError } = await supabase.from('flower_orders').insert(orderRow);
 
   if (orderError) {
-    throw orderError;
+    throw toServiceError(orderError, 'Failed to save order.');
   }
 
   const itemRows = input.items.map((item) => ({
@@ -415,7 +436,7 @@ export async function createFlowerOrderSupabase(
 
   if (itemsError) {
     await supabase.from('flower_orders').delete().eq('id', orderId);
-    throw itemsError;
+    throw toServiceError(itemsError, 'Failed to save order items.');
   }
 
   const created = await fetchOrderById(orderId);
@@ -504,7 +525,7 @@ export async function updateFlowerOrderSupabase(
     .eq('id', input.id);
 
   if (orderError) {
-    throw orderError;
+    throw toServiceError(orderError, 'Failed to save order.');
   }
 
   const { error: deleteItemsError } = await supabase
