@@ -873,7 +873,7 @@ export default function FlowerOrderFormModal({
   const [stockLoading, setStockLoading] = useState(false);
   const [statusDraft, setStatusDraft] = useState<FlowerOrderStatus>('not_started');
   const [statusMessage, setStatusMessage] = useState('');
-  const [balancePaymentMode, setBalancePaymentMode] = useState<FlowerPaymentMode>('cash');
+  const [balancePaymentMode, setBalancePaymentMode] = useState<FlowerPaymentMode | ''>('');
   const [balancePaymentReference, setBalancePaymentReference] = useState('');
   const [balancePaidMessage, setBalancePaidMessage] = useState('');
   const [isMarkingBalancePaid, setIsMarkingBalancePaid] = useState(false);
@@ -955,7 +955,7 @@ export default function FlowerOrderFormModal({
     setStatusMessage('');
     setErrorMessage('');
     setReadyPhotoMessage('');
-    setBalancePaymentMode('cash');
+    setBalancePaymentMode('');
     setBalancePaymentReference('');
     setBalancePaidMessage('');
   }
@@ -989,7 +989,7 @@ export default function FlowerOrderFormModal({
     setStatusDraft('not_started');
     setStatusMessage('');
     setErrorMessage('');
-    setBalancePaymentMode('cash');
+    setBalancePaymentMode('');
     setBalancePaymentReference('');
     setBalancePaidMessage('');
   }, [open, existingOrder, initialPickupIso, staffId, staffName, staffBranchId, isAdmin]);
@@ -1440,6 +1440,11 @@ export default function FlowerOrderFormModal({
       return;
     }
 
+    if (!balancePaymentMode) {
+      setBalancePaidMessage('Please choose a balance payment mode.');
+      return;
+    }
+
     if (requiresBalanceReference && !balancePaymentReference.trim()) {
       setBalancePaidMessage('Reference # is required for non-cash payments.');
       return;
@@ -1449,11 +1454,7 @@ export default function FlowerOrderFormModal({
     setBalancePaidMessage('');
 
     try {
-      await onBalancePaid(
-        existingOrder.id,
-        balancePaymentMode,
-        balancePaymentReference.trim(),
-      );
+      await onBalancePaid(existingOrder.id, balancePaymentMode, balancePaymentReference.trim());
       setBalancePaidMessage('Balance marked as paid.');
       setStatusMessage('');
     } catch (error) {
@@ -1656,7 +1657,7 @@ export default function FlowerOrderFormModal({
                           <select
                             value={balancePaymentMode}
                             onChange={(event) => {
-                              const nextMode = event.target.value as FlowerPaymentMode;
+                              const nextMode = event.target.value as FlowerPaymentMode | '';
                               setBalancePaymentMode(nextMode);
                               if (nextMode === 'cash') {
                                 setBalancePaymentReference('');
@@ -1664,6 +1665,7 @@ export default function FlowerOrderFormModal({
                             }}
                             className="flower-input mt-1.5 bg-white"
                           >
+                            <option value="">Select payment mode</option>
                             {branchPaymentModes.map((mode) => (
                               <option key={mode} value={mode}>
                                 {FLOWER_PAYMENT_MODE_LABELS[mode]}
@@ -1689,7 +1691,7 @@ export default function FlowerOrderFormModal({
                       <button
                         type="button"
                         onClick={() => void handleMarkBalancePaid()}
-                        disabled={isMarkingBalancePaid}
+                        disabled={isMarkingBalancePaid || !balancePaymentMode}
                         className="flower-btn-primary w-full sm:w-auto sm:self-start"
                       >
                         {isMarkingBalancePaid ? 'Saving...' : 'Mark balance paid'}
