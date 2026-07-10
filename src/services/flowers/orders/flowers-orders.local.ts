@@ -423,11 +423,25 @@ export async function markFlowerOrderBalancePaidLocal(
     throw new Error('This order has no remaining balance to collect.');
   }
 
+  if (!balancePaymentMode) {
+    throw new Error('Please choose a balance payment mode.');
+  }
+
+  const normalizedMode = normalizeFlowerPaymentMode(
+    balancePaymentMode,
+    current.branch_id,
+    current.branch_name,
+  );
+
+  if (normalizedMode !== 'cash' && !balancePaymentReference.trim()) {
+    throw new Error('Reference # is required for non-cash balance payments.');
+  }
+
   const updated: FlowerOrder = {
     ...current,
     balance: 0,
     balance_paid: true,
-    balance_payment_mode: balancePaymentMode,
+    balance_payment_mode: normalizedMode,
     balance_payment_reference: balancePaymentReference.trim(),
     items: current.items.map((item) => ({ ...item })),
   };

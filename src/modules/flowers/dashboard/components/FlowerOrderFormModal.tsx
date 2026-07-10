@@ -955,7 +955,17 @@ export default function FlowerOrderFormModal({
     setStatusMessage('');
     setErrorMessage('');
     setReadyPhotoMessage('');
-    setBalancePaymentMode('');
+    // For advance orders with GCash/bank DP, suggest the same mode for the remaining balance.
+    // Never auto-suggest cash — that caused silent misposts.
+    const normalizedDpMode =
+      order.downpayment > 0 && order.payment_mode
+        ? normalizeFlowerPaymentMode(order.payment_mode, order.branch_id, order.branch_name)
+        : '';
+    const suggestedBalanceMode =
+      order.balance > 0 && !order.balance_paid && normalizedDpMode && normalizedDpMode !== 'cash'
+        ? normalizedDpMode
+        : '';
+    setBalancePaymentMode(suggestedBalanceMode);
     setBalancePaymentReference('');
     setBalancePaidMessage('');
   }
@@ -1667,6 +1677,15 @@ export default function FlowerOrderFormModal({
                     {PRICE_FORMATTER.format(existingOrder!.balance)} remaining — collect before
                     marking picked up or delivered.
                   </p>
+                  {existingOrder!.downpayment > 0 && existingOrder!.payment_mode ? (
+                    <p className="mt-1 text-xs text-amber-900/80">
+                      Downpayment was via{' '}
+                      {formatFlowerPaymentModeLabel(existingOrder!.payment_mode)}
+                      {existingOrder!.payment_mode !== 'cash'
+                        ? ' — balance mode starts the same; change it if they paid differently.'
+                        : ' — choose how the remaining balance was paid.'}
+                    </p>
+                  ) : null}
                   {onBalancePaid ? (
                     <div className="mt-3 flex flex-col gap-3">
                       <div className="flex flex-col gap-3 sm:flex-row sm:items-end">

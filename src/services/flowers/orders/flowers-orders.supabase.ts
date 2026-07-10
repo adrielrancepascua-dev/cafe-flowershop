@@ -675,12 +675,26 @@ export async function markFlowerOrderBalancePaidSupabase(
     throw new Error('This order has no remaining balance to collect.');
   }
 
+  const normalizedMode = normalizeFlowerPaymentMode(
+    balancePaymentMode,
+    existing.branch_id,
+    existing.branch_name,
+  );
+
+  if (!balancePaymentMode || !normalizedMode) {
+    throw new Error('Please choose a balance payment mode.');
+  }
+
+  if (normalizedMode !== 'cash' && !balancePaymentReference.trim()) {
+    throw new Error('Reference # is required for non-cash balance payments.');
+  }
+
   const { error } = await supabase
     .from('flower_orders')
     .update({
       balance: 0,
       balance_paid: true,
-      balance_payment_mode: balancePaymentMode,
+      balance_payment_mode: normalizedMode,
       balance_payment_reference: balancePaymentReference.trim(),
     })
     .eq('id', orderId);

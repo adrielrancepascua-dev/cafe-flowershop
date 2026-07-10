@@ -56,7 +56,9 @@ export function allocateOrderSalesByPayment(order: FlowerReportOrderSnapshot): M
   const balance = Number(order.balance) || 0;
   const total = Number(order.total_amount) || 0;
 
-  if (order.balance_paid && order.balance_payment_mode) {
+  // Paid balance: always split DP vs remaining. If balance mode is missing (legacy rows),
+  // fall back to the downpayment mode — never invent cash.
+  if (order.balance_paid) {
     if (downpayment > 0) {
       addPaymentAmount(totals, order.payment_mode, downpayment, order.branch_id, order.branch_name);
     }
@@ -65,7 +67,7 @@ export function allocateOrderSalesByPayment(order: FlowerReportOrderSnapshot): M
     if (collectedAsBalance > 0) {
       addPaymentAmount(
         totals,
-        order.balance_payment_mode,
+        order.balance_payment_mode || order.payment_mode,
         collectedAsBalance,
         order.branch_id,
         order.branch_name,
