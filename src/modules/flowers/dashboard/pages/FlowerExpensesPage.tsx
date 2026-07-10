@@ -74,6 +74,7 @@ export default function FlowerExpensesPage() {
   const [expenses, setExpenses] = useState<FlowerStaffExpense[]>([]);
   const [branches, setBranches] = useState<FlowerBranchOption[]>([]);
   const [branchFilter, setBranchFilter] = useState('all');
+  const [staffViewDate, setStaffViewDate] = useState(() => toDateKey(new Date()));
   const [draft, setDraft] = useState<ExpenseDraft>(emptyDraft(''));
   const [editingExpenseId, setEditingExpenseId] = useState<string | null>(null);
   const [editDraft, setEditDraft] = useState<ExpenseDraft | null>(null);
@@ -84,12 +85,21 @@ export default function FlowerExpensesPage() {
   const staffBranchName = !isAdmin ? user?.branch_name ?? null : null;
 
   const visibleExpenses = useMemo(() => {
-    if (!isAdmin || branchFilter === 'all') {
-      return expenses;
+    let rows = expenses;
+
+    if (!isAdmin) {
+      rows = rows.filter((expense) => expense.expense_date === staffViewDate);
+    } else if (branchFilter !== 'all') {
+      rows = rows.filter((expense) => expense.branch_id === branchFilter);
     }
 
-    return expenses.filter((expense) => expense.branch_id === branchFilter);
-  }, [expenses, branchFilter, isAdmin]);
+    return rows;
+  }, [expenses, branchFilter, isAdmin, staffViewDate]);
+
+  const staffDayTotal = useMemo(
+    () => visibleExpenses.reduce((sum, expense) => sum + expense.amount, 0),
+    [visibleExpenses],
+  );
 
   const printableExpenseSections = useMemo((): FlowerThermalExpenseSection[] => {
     if (visibleExpenses.length === 0) {
@@ -159,7 +169,7 @@ export default function FlowerExpensesPage() {
     if (!isAdmin && staffBranchId) {
       setDraft((current) => ({
         ...emptyDraft(staffBranchId),
-        expense_date: current.expense_date || toDateKey(new Date()),
+        expense_date: staffViewDate || current.expense_date || toDateKey(new Date()),
       }));
     } else if (!draft.branch_id && branchList[0]) {
       setDraft(emptyDraft(branchList[0].id));
@@ -169,6 +179,18 @@ export default function FlowerExpensesPage() {
   useEffect(() => {
     void loadData();
   }, [user, isAdmin]);
+
+  useEffect(() => {
+    if (isAdmin || !staffBranchId) {
+      return;
+    }
+
+    setDraft((current) => ({
+      ...current,
+      branch_id: staffBranchId,
+      expense_date: staffViewDate,
+    }));
+  }, [isAdmin, staffBranchId, staffViewDate]);
 
   function parseAmount(value: string): number | null {
     const parsed = Number(value);
@@ -202,13 +224,13 @@ export default function FlowerExpensesPage() {
         branch_id: branchId,
         amount: parsedAmount,
         description: draft.description,
-        expense_date: draft.expense_date,
+        expense_date: isAdmin ? draft.expense_date : staffViewDate,
         payment_mode: draft.payment_mode,
       });
 
       setDraft((current) => ({
         ...emptyDraft(isAdmin ? current.branch_id : staffBranchId ?? current.branch_id),
-        expense_date: current.expense_date,
+        expense_date: isAdmin ? current.expense_date : staffViewDate,
       }));
       setMessage('Expense saved.');
       setErrorMessage('');
@@ -292,7 +314,7 @@ export default function FlowerExpensesPage() {
         description={
           isAdmin
             ? 'Staff log expenses here. Admins can edit or remove incorrect entries.'
-            : 'Log what you spent and whether it came from cash or GCash. Only cash expenses reduce expected cash on hand on Reports.'
+            : 'Daily view only — pick a date, log expenses for that day, and print/send just that day\'s list.'
         }
       />
 
@@ -323,29 +345,53 @@ export default function FlowerExpensesPage() {
             />
           ) : null}
         </div>
-      ) : staffBranchName ? (
+      ) : (
         <div className="mt-4 flex flex-wrap items-center gap-2">
-          <p className="inline-flex rounded-xl border border-brand-brown/20 bg-brand-beige/50 px-3 py-2 text-sm font-semibold text-brand-dark">
-            {staffBranchName} branch
+          {staffBranchName ? (
+            <p className="inline-flex rounded-xl border border-brand-brown/20 bg-brand-beige/50 px-3 py-2 text-sm font-semibold text-brand-dark">
+              {staffBranchName} branch
+            </p>
+          ) : null}
+          <label className="inline-flex items-center gap-2 text-sm font-medium text-brand-brown">
+            Day
+            <input
+              type="date"
+              value={staffViewDate}
+              onChange={(e) => setStaffViewDate(e.target.value)}
+              className="flower-input max-w-[170px]"
+            />
+          </label>
+          <p className="text-sm text-brand-brown/70">
+            {visibleExpenses.length} expense{visibleExpenses.length === 1 ? '' : 's'} ·{' '}
+            {PRICE_FORMATTER.format(staffDayTotal)}
           </p>
           {canPrintExpenses ? (
             <FlowerPrintControls
               onPrint={preparePrintExpenses}
-              label="Print expenses"
+              label="Print this day"
               showSizeHint={false}
             />
           ) : null}
         </div>
-      ) : null}
+      )}
 
       <form onSubmit={handleSubmit} className="mt-5 grid grid-cols-1 gap-3 rounded-2xl border border-brand-muted/40 bg-brand-cream/20 p-4 md:grid-cols-2">
-        <input
-          type="date"
-          value={draft.expense_date}
-          onChange={(e) => setDraft((current) => ({ ...current, expense_date: e.target.value }))}
-          className="flower-input"
-          required
-        />
+        {isAdmin ? (
+          <input
+            type="date"
+            value={draft.expense_date}
+            onChange={(e) => setDraft((current) => ({ ...current, expense_date: e.target.value }))}
+            className="flower-input"
+            required
+          />
+        ) : (
+          <div
+            className="flower-input flex items-center bg-brand-cream/40 text-brand-dark"
+            aria-readonly="true"
+          >
+            {staffViewDate}
+          </div>
+        )}
         {isAdmin ? (
           <select
             value={draft.branch_id}
@@ -399,7 +445,11 @@ export default function FlowerExpensesPage() {
         <FlowerMobileCardList
           items={visibleExpenses}
           emptyMessage={
-            branchFilter !== 'all' ? 'No expenses for this branch.' : 'No expenses logged yet.'
+            !isAdmin
+              ? 'No expenses for this day yet.'
+              : branchFilter !== 'all'
+                ? 'No expenses for this branch.'
+                : 'No expenses logged yet.'
           }
           getKey={(expense) => expense.id}
           renderCard={(expense) =>
@@ -528,7 +578,11 @@ export default function FlowerExpensesPage() {
                   colSpan={isAdmin ? 7 : 6}
                   className="border-t border-brand-muted/30 px-3 py-6 text-center text-brand-brown/60"
                 >
-                  {branchFilter !== 'all' ? 'No expenses for this branch.' : 'No expenses logged yet.'}
+                  {branchFilter !== 'all'
+                    ? 'No expenses for this branch.'
+                    : !isAdmin
+                      ? 'No expenses for this day yet.'
+                      : 'No expenses logged yet.'}
                 </td>
               </tr>
             ) : null}

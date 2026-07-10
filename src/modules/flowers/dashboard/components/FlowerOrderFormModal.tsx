@@ -824,7 +824,7 @@ function emptyForm(
     greeting_card: '',
     special_instructions: '',
     downpayment: 0,
-    payment_mode: 'cash',
+    payment_mode: '' as FlowerPaymentMode,
     payment_reference: '',
     total_amount: 0,
     notes: '',
@@ -1033,11 +1033,16 @@ export default function FlowerOrderFormModal({
       return;
     }
 
+    // Never silently fall back to cash — clear invalid modes so staff must re-select.
+    if (!form.payment_mode) {
+      return;
+    }
+
     const branchName =
       branches.find((branch) => branch.id === form.branch_id)?.name ?? form.branch_id;
     const modes = getFlowerPaymentModesForBranch(form.branch_id, branchName);
     if (!modes.includes(form.payment_mode)) {
-      setForm((previous) => ({ ...previous, payment_mode: modes[0] }));
+      setForm((previous) => ({ ...previous, payment_mode: '' as FlowerPaymentMode }));
     }
   }, [open, form.branch_id, form.payment_mode, isViewMode, branches]);
 
@@ -1385,6 +1390,11 @@ export default function FlowerOrderFormModal({
 
     const requiresProof = downpayment > 0;
 
+    if (requiresProof && !form.payment_mode) {
+      showValidationError('Please choose a downpayment payment mode (Cash, GCash, or bank).');
+      return null;
+    }
+
     if (requiresProof && !form.payment_reference.trim()) {
       showValidationError('Reference # is required when downpayment is greater than 0.');
       return null;
@@ -1409,7 +1419,15 @@ export default function FlowerOrderFormModal({
     }
 
     setErrorMessage('');
-    return { ...form, wrapper_color, downpayment, total_amount, items };
+    return {
+      ...form,
+      // When there is no DP yet, store a neutral placeholder; reports ignore DP mode at ₱0.
+      payment_mode: requiresProof ? form.payment_mode : form.payment_mode || 'cash',
+      wrapper_color,
+      downpayment,
+      total_amount,
+      items,
+    };
   }
 
   async function handleSubmit(event: React.FormEvent) {
@@ -2161,7 +2179,9 @@ export default function FlowerOrderFormModal({
                 }
                 className={`flower-input mt-1.5 ${hasDownpayment ? '' : 'cursor-not-allowed bg-brand-beige/40 text-brand-brown/50'}`}
                 disabled={!hasDownpayment}
+                required={hasDownpayment}
               >
+                <option value="">Select payment mode</option>
                 {branchPaymentModes.map((mode) => (
                   <option key={mode} value={mode}>
                     {FLOWER_PAYMENT_MODE_LABELS[mode]}
@@ -2172,6 +2192,10 @@ export default function FlowerOrderFormModal({
             {!isViewMode && !hasDownpayment ? (
               <span className="mt-1 block text-xs text-brand-brown/60">
                 Choose a downpayment amount first.
+              </span>
+            ) : !isViewMode && hasDownpayment ? (
+              <span className="mt-1 block text-xs text-brand-brown/60">
+                Required — pick Cash, GCash, or bank so reports stay accurate.
               </span>
             ) : null}
           </label>
