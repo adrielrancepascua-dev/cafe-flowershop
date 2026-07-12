@@ -238,6 +238,16 @@ export function formatInventoryOrderVoidNote(orderId: string, receiver: string):
   return `Order ${orderId} · ${trimmedReceiver} · void/delete restore`;
 }
 
+export function formatInventoryOrderEditDeductNote(orderId: string, receiver: string): string {
+  const trimmedReceiver = receiver.trim() || 'Unknown';
+  return `Order ${orderId} · ${trimmedReceiver} · order edit deduct`;
+}
+
+export function formatInventoryOrderEditRestoreNote(orderId: string, receiver: string): string {
+  const trimmedReceiver = receiver.trim() || 'Unknown';
+  return `Order ${orderId} · ${trimmedReceiver} · order edit restore`;
+}
+
 export function resolveInventoryMovementReceiver(
   note: string,
   orderReceiverById?: ReadonlyMap<string, string>,

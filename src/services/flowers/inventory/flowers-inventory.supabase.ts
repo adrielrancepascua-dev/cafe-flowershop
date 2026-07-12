@@ -553,13 +553,14 @@ export async function deductFlowerInventoryForOrderSupabase(input: {
   quantity: number;
   orderId: string;
   receiver: string;
+  note?: string;
 }): Promise<void> {
   await applyFlowerStockChangeSupabase({
     branchId: input.branchId,
     productId: input.productId,
     delta: -input.quantity,
     movementType: 'order_deduct',
-    note: formatInventoryOrderDeductNote(input.orderId, input.receiver),
+    note: input.note ?? formatInventoryOrderDeductNote(input.orderId, input.receiver),
     allowNegative: true,
   });
 }
@@ -570,13 +571,14 @@ export async function restoreFlowerInventoryForOrderSupabase(input: {
   quantity: number;
   orderId: string;
   receiver: string;
+  note?: string;
 }): Promise<void> {
   await applyFlowerStockChangeSupabase({
     branchId: input.branchId,
     productId: input.productId,
     delta: input.quantity,
     movementType: 'stock_in',
-    note: formatInventoryOrderVoidNote(input.orderId, input.receiver),
+    note: input.note ?? formatInventoryOrderVoidNote(input.orderId, input.receiver),
   });
 }
 

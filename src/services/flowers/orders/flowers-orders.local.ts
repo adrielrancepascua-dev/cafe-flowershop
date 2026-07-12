@@ -27,6 +27,10 @@ import {
 import { currentFlowerUserIsAdmin } from '../../../lib/auth/flower-auth.service';
 import { assertOrderContentEditable } from '../../../modules/flowers/shared/utils/flower-order-edit-policy';
 import { computeOrderPaymentFields } from '../../../modules/flowers/shared/utils/flower-order-payment-fields';
+import {
+  formatInventoryOrderEditDeductNote,
+  formatInventoryOrderEditRestoreNote,
+} from '../../../modules/flowers/shared/utils/flower-format';
 import { validateOrderInspoPhotoWithProducts } from './flowers-order-validation';
 import { listFlowerStemsLocal } from '../products/flowers-products.local';
 
@@ -295,6 +299,70 @@ export async function updateFlowerOrderLocal(input: UpdateFlowerOrderInput): Pro
       : {};
 
   await validateFlowerOrderStockLocal(input.branch_id, updated.items, creditByProductId);
+
+  if (existing.inventory_deducted) {
+    const orderId = existing.id;
+    const nextReceiver = updated.receiver;
+    const editRestoreNote = formatInventoryOrderEditRestoreNote(orderId, nextReceiver);
+    const editDeductNote = formatInventoryOrderEditDeductNote(orderId, nextReceiver);
+
+    if (existing.branch_id !== updated.branch_id) {
+      for (const item of existing.items) {
+        if (item.quantity <= 0) {
+          continue;
+        }
+        await restoreFlowerInventoryForOrderLocal({
+          branchId: existing.branch_id,
+          productId: item.product_id,
+          quantity: item.quantity,
+          orderId,
+          receiver: existing.receiver,
+          note: editRestoreNote,
+        });
+      }
+
+      for (const item of updated.items) {
+        if (item.quantity <= 0) {
+          continue;
+        }
+        await deductFlowerInventoryForOrderLocal({
+          branchId: updated.branch_id,
+          productId: item.product_id,
+          quantity: item.quantity,
+          orderId,
+          receiver: nextReceiver,
+          note: editDeductNote,
+        });
+      }
+    } else {
+      const previousQty = buildCreditFromOrderItems(existing.items);
+      const nextQty = buildCreditFromOrderItems(updated.items);
+      const productIds = new Set([...Object.keys(previousQty), ...Object.keys(nextQty)]);
+
+      for (const productId of productIds) {
+        const delta = (nextQty[productId] ?? 0) - (previousQty[productId] ?? 0);
+        if (delta > 0) {
+          await deductFlowerInventoryForOrderLocal({
+            branchId: updated.branch_id,
+            productId,
+            quantity: delta,
+            orderId,
+            receiver: nextReceiver,
+            note: editDeductNote,
+          });
+        } else if (delta < 0) {
+          await restoreFlowerInventoryForOrderLocal({
+            branchId: updated.branch_id,
+            productId,
+            quantity: Math.abs(delta),
+            orderId,
+            receiver: nextReceiver,
+            note: editRestoreNote,
+          });
+        }
+      }
+    }
+  }
 
   orders[index] = updated;
   writeOrdersToStorage(orders);
