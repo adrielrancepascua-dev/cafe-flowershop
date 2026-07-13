@@ -377,7 +377,8 @@ export async function adjustFlowerInventorySupabase(input: AdjustFlowerInventory
       delta,
       movementType,
       note,
-      allowNegative: false,
+      // Flower ops allow negative counts (orders/transfers already do); stock-out must match.
+      allowNegative: true,
     })
   ) {
     return;
@@ -399,10 +400,6 @@ export async function adjustFlowerInventorySupabase(input: AdjustFlowerInventory
     input.movementType === 'stock_in'
       ? previousOnHand + quantity
       : previousOnHand - quantity;
-
-  if (nextOnHand < 0) {
-    throw new Error('Insufficient stock. Stock out would result in negative balance.');
-  }
 
   const nowIso = new Date().toISOString();
 
@@ -972,6 +969,8 @@ async function resolveTransferRequest(
         delta: item.quantity,
         movementType: 'transfer_in',
         note: `Transfer received from ${request.from_branch_name}`,
+        // Receiving branch may already be negative from walk-in orders; still accept the transfer.
+        allowNegative: true,
       });
     }
   } else {

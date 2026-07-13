@@ -235,6 +235,7 @@ export async function adjustFlowerInventoryLocal(input: AdjustFlowerInventoryInp
     delta,
     movementType: input.movementType,
     note: input.note?.trim() ?? '',
+    allowNegative: true,
   });
 }
 
@@ -589,6 +590,7 @@ export async function confirmFlowerTransferRequestLocal(
       delta: item.quantity,
       movementType: 'transfer_in',
       note: `Transfer received from ${request.from_branch_name}`,
+      allowNegative: true,
     });
   }
 
