@@ -487,7 +487,8 @@ export async function markFlowerOrderBalancePaidLocal(
   }
 
   const current = orders[index];
-  if (current.balance <= 0 || current.balance_paid) {
+  const isCorrection = current.balance_paid;
+  if (!isCorrection && (current.balance <= 0 || current.balance_paid)) {
     throw new Error('This order has no remaining balance to collect.');
   }
 
@@ -505,12 +506,19 @@ export async function markFlowerOrderBalancePaidLocal(
     throw new Error('Reference # is required for non-cash balance payments.');
   }
 
+  const trimmedReference =
+    normalizedMode === 'cash' ? '' : balancePaymentReference.trim();
+
   const updated: FlowerOrder = {
     ...current,
-    balance: 0,
-    balance_paid: true,
+    ...(isCorrection
+      ? {}
+      : {
+          balance: 0,
+          balance_paid: true,
+        }),
     balance_payment_mode: normalizedMode,
-    balance_payment_reference: balancePaymentReference.trim(),
+    balance_payment_reference: trimmedReference,
     items: current.items.map((item) => ({ ...item })),
   };
 

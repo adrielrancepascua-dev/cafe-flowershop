@@ -754,7 +754,8 @@ export async function markFlowerOrderBalancePaidSupabase(
     throw new Error('Order not found.');
   }
 
-  if (existing.balance <= 0 || existing.balance_paid) {
+  const isCorrection = existing.balance_paid;
+  if (!isCorrection && (existing.balance <= 0 || existing.balance_paid)) {
     throw new Error('This order has no remaining balance to collect.');
   }
 
@@ -774,12 +775,21 @@ export async function markFlowerOrderBalancePaidSupabase(
 
   const { error } = await supabase
     .from('flower_orders')
-    .update({
-      balance: 0,
-      balance_paid: true,
-      balance_payment_mode: normalizedMode,
-      balance_payment_reference: balancePaymentReference.trim(),
-    })
+    .update(
+      isCorrection
+        ? {
+            balance_payment_mode: normalizedMode,
+            balance_payment_reference:
+              normalizedMode === 'cash' ? '' : balancePaymentReference.trim(),
+          }
+        : {
+            balance: 0,
+            balance_paid: true,
+            balance_payment_mode: normalizedMode,
+            balance_payment_reference:
+              normalizedMode === 'cash' ? '' : balancePaymentReference.trim(),
+          },
+    )
     .eq('id', orderId);
 
   if (error) {
@@ -788,7 +798,11 @@ export async function markFlowerOrderBalancePaidSupabase(
 
   const updated = await fetchOrderById(orderId);
   if (!updated) {
-    throw new Error('Balance was updated but the order could not be loaded.');
+    throw new Error(
+      isCorrection
+        ? 'Balance payment mode was updated but the order could not be loaded.'
+        : 'Balance was updated but the order could not be loaded.',
+    );
   }
 
   return updated;
