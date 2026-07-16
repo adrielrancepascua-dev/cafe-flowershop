@@ -127,7 +127,7 @@ export default function TransferRequestAdminBillingPanel({
           value={noteDraft}
           disabled={disabled || saving}
           onChange={(event) => setNoteDraft(event.target.value)}
-          placeholder="Example: Supplier: Dangwa Market. Paid via GCash on Jul 16."
+          placeholder="Enter note"
           className="flower-input mt-1.5 min-h-[84px]"
         />
       </label>
