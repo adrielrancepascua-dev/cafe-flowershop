@@ -582,6 +582,35 @@ function transferRequestSummary(request: FlowerTransferRequest): string {
   return `${request.items.length} products · ${transferRequestTotalUnits(request)} units`;
 }
 
+function groupTransferRequestItems(items: FlowerTransferRequestItem[]) {
+  const groups = new Map<string, FlowerTransferRequestItem[]>();
+
+  for (const item of items) {
+    const kind = normalizeFlowerProductKind(item.product_kind);
+    const fallbackType = item.product_name.split('·')[0]?.trim() || item.product_name;
+    const groupName =
+      kind === 'flower'
+        ? item.product_flower_type?.trim() || fallbackType
+        : item.product_flower_type?.trim() || 'Misc items';
+    const key = `${kind}:${groupName}`;
+    const existing = groups.get(key) ?? [];
+    existing.push(item);
+    groups.set(key, existing);
+  }
+
+  return [...groups.entries()]
+    .map(([key, groupedItems]) => {
+      const first = groupedItems[0];
+      const groupName =
+        normalizeFlowerProductKind(first?.product_kind) === 'flower'
+          ? first?.product_flower_type?.trim() || first?.product_name || 'Flowers'
+          : first?.product_flower_type?.trim() || 'Misc items';
+      const totalUnits = groupedItems.reduce((sum, item) => sum + item.quantity, 0);
+      return { key, groupName, items: groupedItems, totalUnits };
+    })
+    .sort((a, b) => a.groupName.localeCompare(b.groupName));
+}
+
 function TransferStatusBadge({ status }: { status: FlowerTransferRequest['status'] }) {
   const badge = TRANSFER_STATUS_BADGES[status];
 
@@ -1936,19 +1965,31 @@ export default function FlowerInventoryPage() {
                       <summary className="cursor-pointer text-xs font-semibold text-brand-brown/75">
                         View transferred items ({request.items.length})
                       </summary>
-                      <ul className="mt-2 space-y-1.5">
-                        {request.items.map((item) => (
-                          <li
-                            key={item.id}
-                            className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-brand-muted/25 bg-white px-2.5 py-1.5"
+                      <div className="mt-2 space-y-2">
+                        {groupTransferRequestItems(request.items).map((group) => (
+                          <details
+                            key={group.key}
+                            className="rounded-lg border border-brand-muted/25 bg-white px-2.5 py-2"
                           >
-                            <TransferRequestItemLabel item={item} />
-                            <span className="rounded-full border border-brand-muted/40 bg-brand-cream/20 px-2 py-0.5 text-xs font-semibold text-brand-dark">
-                              {item.quantity} units
-                            </span>
-                          </li>
+                            <summary className="cursor-pointer text-xs font-semibold text-brand-dark">
+                              {group.groupName} ({group.items.length}) · {group.totalUnits} units
+                            </summary>
+                            <ul className="mt-2 space-y-1.5">
+                              {group.items.map((item) => (
+                                <li
+                                  key={item.id}
+                                  className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-brand-muted/20 bg-brand-cream/15 px-2.5 py-1.5"
+                                >
+                                  <TransferRequestItemLabel item={item} />
+                                  <span className="rounded-full border border-brand-muted/40 bg-white px-2 py-0.5 text-xs font-semibold text-brand-dark">
+                                    {item.quantity} units
+                                  </span>
+                                </li>
+                              ))}
+                            </ul>
+                          </details>
                         ))}
-                      </ul>
+                      </div>
                     </details>
                     {isAdmin ? (
                       <TransferRequestAdminBillingPanel
