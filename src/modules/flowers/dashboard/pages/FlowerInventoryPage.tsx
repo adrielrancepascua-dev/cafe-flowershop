@@ -28,6 +28,7 @@ import { Minus, Plus, ArrowLeftRight, Package, ChevronDown, Check, X, Trash2, Se
 import {
   dedupeInventoryMovementRows,
   formatInventoryMovementTimestamp,
+  parseFlowerTimestamp,
   INVENTORY_MOVEMENT_TYPE_BADGES,
   INVENTORY_MOVEMENT_TYPE_LABELS,
   parseInventoryMovementOrderId,
@@ -543,6 +544,28 @@ function StockAdjustControls({
       </div>
     </div>
   );
+}
+
+type TransferHistoryTab = 'confirmed' | 'cancelled' | 'rejected' | 'paid';
+
+const TRANSFER_HISTORY_TABS: Array<{ id: TransferHistoryTab; label: string; adminOnly?: boolean }> = [
+  { id: 'confirmed', label: 'Confirmed' },
+  { id: 'cancelled', label: 'Cancelled' },
+  { id: 'rejected', label: 'Rejected' },
+  { id: 'paid', label: 'Paid', adminOnly: true },
+];
+
+function formatTransferDate(iso: string | null | undefined): string {
+  if (!iso) {
+    return '—';
+  }
+
+  return parseFlowerTimestamp(iso).toLocaleDateString('en-PH', {
+    timeZone: 'Asia/Manila',
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+  });
 }
 
 const TRANSFER_STATUS_BADGES: Record<
@@ -1095,6 +1118,7 @@ export default function FlowerInventoryPage() {
   const [transferRequestsLoading, setTransferRequestsLoading] = useState(false);
   const [pendingActionId, setPendingActionId] = useState<string | null>(null);
   const [billingSavingId, setBillingSavingId] = useState<string | null>(null);
+  const [transferHistoryTab, setTransferHistoryTab] = useState<TransferHistoryTab>('confirmed');
 
   async function loadData() {
     const isFirstLoad = isFirstLoadRef.current;
@@ -1285,6 +1309,48 @@ export default function FlowerInventoryPage() {
     () => transferRequests.filter((request) => request.status !== 'pending'),
     [transferRequests],
   );
+
+  const transferHistoryCounts = useMemo(() => {
+    const counts = { confirmed: 0, cancelled: 0, rejected: 0, paid: 0 };
+
+    for (const request of resolvedTransferRequests) {
+      if (request.status === 'confirmed') {
+        counts.confirmed += 1;
+      } else if (request.status === 'cancelled') {
+        counts.cancelled += 1;
+      } else if (request.status === 'rejected') {
+        counts.rejected += 1;
+      }
+
+      if (
+        request.status === 'confirmed' &&
+        request.cost_paid &&
+        request.total_cost !== null
+      ) {
+        counts.paid += 1;
+      }
+    }
+
+    return counts;
+  }, [resolvedTransferRequests]);
+
+  const visibleTransferHistoryTabs = useMemo(
+    () => TRANSFER_HISTORY_TABS.filter((tab) => !tab.adminOnly || isAdmin),
+    [isAdmin],
+  );
+
+  const filteredResolvedTransferRequests = useMemo(() => {
+    if (transferHistoryTab === 'paid') {
+      return resolvedTransferRequests.filter(
+        (request) =>
+          request.status === 'confirmed' &&
+          request.cost_paid &&
+          request.total_cost !== null,
+      );
+    }
+
+    return resolvedTransferRequests.filter((request) => request.status === transferHistoryTab);
+  }, [resolvedTransferRequests, transferHistoryTab]);
 
   const unpaidTransferBalances = useMemo(
     () => (isAdmin ? summarizeUnpaidTransferBalances(transferRequests) : []),
@@ -1944,9 +2010,32 @@ export default function FlowerInventoryPage() {
 
           <div className="mt-6">
             <h3 className="text-sm font-semibold text-brand-dark">Transfer request history</h3>
-            <ul className="mt-2 space-y-3 text-sm text-brand-brown/80">
-              {resolvedTransferRequests.length > 0 ? (
-                resolvedTransferRequests.map((request) => (
+            <div className="mt-3 inline-flex max-w-full flex-wrap rounded-xl border border-brand-muted/50 bg-white p-1">
+              {visibleTransferHistoryTabs.map((tab) => (
+                <button
+                  key={tab.id}
+                  type="button"
+                  onClick={() => setTransferHistoryTab(tab.id)}
+                  className={`flower-pill flex items-center gap-1.5 ${
+                    transferHistoryTab === tab.id ? 'flower-pill-active' : 'flower-pill-inactive'
+                  }`}
+                >
+                  {tab.label}
+                  <span
+                    className={`rounded-full px-1.5 py-0.5 text-[10px] font-bold ${
+                      transferHistoryTab === tab.id
+                        ? 'bg-white/20 text-white'
+                        : 'bg-brand-beige/70 text-brand-brown/75'
+                    }`}
+                  >
+                    {transferHistoryCounts[tab.id]}
+                  </span>
+                </button>
+              ))}
+            </div>
+            <ul className="mt-3 space-y-3 text-sm text-brand-brown/80">
+              {filteredResolvedTransferRequests.length > 0 ? (
+                filteredResolvedTransferRequests.map((request) => (
                   <li
                     key={request.id}
                     className="rounded-xl border border-brand-muted/30 bg-white px-3 py-3 sm:px-4"
@@ -1961,6 +2050,9 @@ export default function FlowerInventoryPage() {
                         <span className="text-xs text-brand-brown/60">by {request.resolved_by_name}</span>
                       ) : null}
                     </div>
+                    <p className="mt-1 text-xs text-brand-brown/65">
+                      Transfer date: {formatTransferDate(request.resolved_at ?? request.created_at)}
+                    </p>
                     <details className="mt-2 rounded-lg border border-brand-muted/30 bg-brand-cream/15 px-3 py-2">
                       <summary className="cursor-pointer text-xs font-semibold text-brand-brown/75">
                         View transferred items ({request.items.length})
@@ -2003,8 +2095,10 @@ export default function FlowerInventoryPage() {
                   </li>
                 ))
               ) : (
-                <li className="rounded-lg border border-brand-muted/30 px-3 py-2 text-brand-brown/60">
-                  No completed transfer requests yet.
+                <li className="rounded-lg border border-dashed border-brand-muted/40 px-3 py-6 text-center text-brand-brown/60">
+                  {transferHistoryTab === 'paid'
+                    ? 'No paid transfers yet.'
+                    : `No ${transferHistoryTab} transfer requests yet.`}
                 </li>
               )}
             </ul>
