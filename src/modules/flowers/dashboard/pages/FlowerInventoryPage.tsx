@@ -546,13 +546,11 @@ function StockAdjustControls({
   );
 }
 
-type TransferHistoryTab = 'confirmed' | 'cancelled' | 'rejected' | 'paid';
+type TransferHistoryTab = 'confirmed' | 'cancelled';
 
-const TRANSFER_HISTORY_TABS: Array<{ id: TransferHistoryTab; label: string; adminOnly?: boolean }> = [
+const TRANSFER_HISTORY_TABS: Array<{ id: TransferHistoryTab; label: string }> = [
   { id: 'confirmed', label: 'Confirmed' },
   { id: 'cancelled', label: 'Cancelled' },
-  { id: 'rejected', label: 'Rejected' },
-  { id: 'paid', label: 'Paid', adminOnly: true },
 ];
 
 function formatTransferDate(iso: string | null | undefined): string {
@@ -1311,46 +1309,23 @@ export default function FlowerInventoryPage() {
   );
 
   const transferHistoryCounts = useMemo(() => {
-    const counts = { confirmed: 0, cancelled: 0, rejected: 0, paid: 0 };
+    const counts = { confirmed: 0, cancelled: 0 };
 
     for (const request of resolvedTransferRequests) {
       if (request.status === 'confirmed') {
         counts.confirmed += 1;
       } else if (request.status === 'cancelled') {
         counts.cancelled += 1;
-      } else if (request.status === 'rejected') {
-        counts.rejected += 1;
-      }
-
-      if (
-        request.status === 'confirmed' &&
-        request.cost_paid &&
-        request.total_cost !== null
-      ) {
-        counts.paid += 1;
       }
     }
 
     return counts;
   }, [resolvedTransferRequests]);
 
-  const visibleTransferHistoryTabs = useMemo(
-    () => TRANSFER_HISTORY_TABS.filter((tab) => !tab.adminOnly || isAdmin),
-    [isAdmin],
+  const filteredResolvedTransferRequests = useMemo(
+    () => resolvedTransferRequests.filter((request) => request.status === transferHistoryTab),
+    [resolvedTransferRequests, transferHistoryTab],
   );
-
-  const filteredResolvedTransferRequests = useMemo(() => {
-    if (transferHistoryTab === 'paid') {
-      return resolvedTransferRequests.filter(
-        (request) =>
-          request.status === 'confirmed' &&
-          request.cost_paid &&
-          request.total_cost !== null,
-      );
-    }
-
-    return resolvedTransferRequests.filter((request) => request.status === transferHistoryTab);
-  }, [resolvedTransferRequests, transferHistoryTab]);
 
   const unpaidTransferBalances = useMemo(
     () => (isAdmin ? summarizeUnpaidTransferBalances(transferRequests) : []),
@@ -2011,7 +1986,7 @@ export default function FlowerInventoryPage() {
           <div className="mt-6">
             <h3 className="text-sm font-semibold text-brand-dark">Transfer request history</h3>
             <div className="mt-3 inline-flex max-w-full flex-wrap rounded-xl border border-brand-muted/50 bg-white p-1">
-              {visibleTransferHistoryTabs.map((tab) => (
+              {TRANSFER_HISTORY_TABS.map((tab) => (
                 <button
                   key={tab.id}
                   type="button"
@@ -2096,9 +2071,9 @@ export default function FlowerInventoryPage() {
                 ))
               ) : (
                 <li className="rounded-lg border border-dashed border-brand-muted/40 px-3 py-6 text-center text-brand-brown/60">
-                  {transferHistoryTab === 'paid'
-                    ? 'No paid transfers yet.'
-                    : `No ${transferHistoryTab} transfer requests yet.`}
+                  {transferHistoryTab === 'confirmed'
+                    ? 'No confirmed transfer requests yet.'
+                    : 'No cancelled transfer requests yet.'}
                 </li>
               )}
             </ul>
