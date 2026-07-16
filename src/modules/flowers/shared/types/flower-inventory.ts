@@ -145,4 +145,5 @@ export interface UpdateFlowerTransferRequestBillingInput {
   requestId: string;
   total_cost: number | null;
   cost_paid: boolean;
+  note: string;
 }

@@ -7,7 +7,7 @@ type TransferRequestAdminBillingPanelProps = {
   request: FlowerTransferRequest;
   disabled?: boolean;
   saving?: boolean;
-  onSave: (input: { total_cost: number | null; cost_paid: boolean }) => Promise<void>;
+  onSave: (input: { total_cost: number | null; cost_paid: boolean; note: string }) => Promise<void>;
 };
 
 export default function TransferRequestAdminBillingPanel({
@@ -20,11 +20,13 @@ export default function TransferRequestAdminBillingPanel({
     request.total_cost === null ? '' : String(request.total_cost),
   );
   const [costPaid, setCostPaid] = useState(request.cost_paid);
+  const [noteDraft, setNoteDraft] = useState(request.note ?? '');
 
   useEffect(() => {
     setTotalCostDraft(request.total_cost === null ? '' : String(request.total_cost));
     setCostPaid(request.cost_paid);
-  }, [request.id, request.total_cost, request.cost_paid]);
+    setNoteDraft(request.note ?? '');
+  }, [request.id, request.total_cost, request.cost_paid, request.note]);
 
   async function handleSave() {
     const trimmed = totalCostDraft.trim();
@@ -34,7 +36,7 @@ export default function TransferRequestAdminBillingPanel({
       throw new Error('Total cost must be zero or greater.');
     }
 
-    await onSave({ total_cost, cost_paid: costPaid });
+    await onSave({ total_cost, cost_paid: costPaid, note: noteDraft.trim() });
   }
 
   const statusLabel = formatTransferBillingStatus({
@@ -119,6 +121,16 @@ export default function TransferRequestAdminBillingPanel({
           {saving ? 'Saving…' : 'Save billing'}
         </button>
       </div>
+      <label className="mt-3 block text-sm font-medium text-brand-brown">
+        Note (supplier / payment details)
+        <textarea
+          value={noteDraft}
+          disabled={disabled || saving}
+          onChange={(event) => setNoteDraft(event.target.value)}
+          placeholder="Example: Supplier: Dangwa Market. Paid via GCash on Jul 16."
+          className="flower-input mt-1.5 min-h-[84px]"
+        />
+      </label>
 
       {request.total_cost !== null ? (
         <p className="mt-2 text-xs text-brand-brown/60">

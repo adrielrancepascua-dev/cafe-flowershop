@@ -649,6 +649,7 @@ function TransferRequestCard({
     requestId: string;
     total_cost: number | null;
     cost_paid: boolean;
+    note: string;
   }) => Promise<void>;
 }) {
   const busy = pendingActionId === request.id;
@@ -752,6 +753,7 @@ function TransferRequestInbox({
     requestId: string;
     total_cost: number | null;
     cost_paid: boolean;
+    note: string;
   }) => Promise<void>;
 }) {
   return (
@@ -1438,6 +1440,7 @@ export default function FlowerInventoryPage() {
     requestId: string;
     total_cost: number | null;
     cost_paid: boolean;
+    note: string;
   }) {
     setBillingSavingId(input.requestId);
     setTransferErrorMessage('');
@@ -1929,6 +1932,24 @@ export default function FlowerInventoryPage() {
                         <span className="text-xs text-brand-brown/60">by {request.resolved_by_name}</span>
                       ) : null}
                     </div>
+                    <details className="mt-2 rounded-lg border border-brand-muted/30 bg-brand-cream/15 px-3 py-2">
+                      <summary className="cursor-pointer text-xs font-semibold text-brand-brown/75">
+                        View transferred items ({request.items.length})
+                      </summary>
+                      <ul className="mt-2 space-y-1.5">
+                        {request.items.map((item) => (
+                          <li
+                            key={item.id}
+                            className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-brand-muted/25 bg-white px-2.5 py-1.5"
+                          >
+                            <TransferRequestItemLabel item={item} />
+                            <span className="rounded-full border border-brand-muted/40 bg-brand-cream/20 px-2 py-0.5 text-xs font-semibold text-brand-dark">
+                              {item.quantity} units
+                            </span>
+                          </li>
+                        ))}
+                      </ul>
+                    </details>
                     {isAdmin ? (
                       <TransferRequestAdminBillingPanel
                         request={request}

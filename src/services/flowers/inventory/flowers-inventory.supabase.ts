@@ -1049,6 +1049,15 @@ export async function updateFlowerTransferRequestBillingSupabase(
     throw toServiceError(error, 'Failed to update transfer billing.');
   }
 
+  const { error: noteError } = await supabase
+    .from('flower_inventory_transfers')
+    .update({ note: input.note?.trim() ?? '' })
+    .eq('id', input.requestId);
+
+  if (noteError) {
+    throw toServiceError(noteError, 'Failed to save transfer note.');
+  }
+
   const { data, error: loadError } = await supabase
     .from('flower_inventory_transfers')
     .select(transferRequestSelectColumns(true))

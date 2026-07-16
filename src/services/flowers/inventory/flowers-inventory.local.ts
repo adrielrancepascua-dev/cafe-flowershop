@@ -685,6 +685,7 @@ export async function updateFlowerTransferRequestBillingLocal(
     ...requests[index],
     total_cost: totalCost,
     cost_paid: Boolean(input.cost_paid),
+    note: input.note?.trim() ?? '',
   };
 
   requests[index] = updated;
