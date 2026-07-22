@@ -2,6 +2,7 @@ export const FLOWER_PAYMENT_MODE_LABELS = {
   cash: 'Cash',
   gcash: 'GCash',
   metrobank: 'Metrobank',
+  metrobank_card: 'Debit/Credit Card (Metrobank)',
   bpi: 'BPI',
   eastwest: 'Eastwest',
   /** @deprecated Legacy value from before branch-specific bank options. */
@@ -15,9 +16,9 @@ export const FLOWER_PAYMENT_MODES = Object.keys(
 ) as FlowerPaymentMode[];
 
 const BRANCH_PAYMENT_MODES_BY_ID: Record<string, FlowerPaymentMode[]> = {
-  'branch-dagupan': ['cash', 'gcash', 'metrobank', 'bpi'],
-  'branch-san-carlos': ['cash', 'gcash', 'eastwest'],
-  'branch-urdaneta': ['cash', 'gcash'],
+  'branch-dagupan': ['cash', 'gcash', 'metrobank', 'metrobank_card', 'bpi'],
+  'branch-san-carlos': ['cash', 'gcash', 'metrobank_card', 'eastwest'],
+  'branch-urdaneta': ['cash', 'gcash', 'metrobank_card'],
 };
 
 function resolveBranchKey(branchId: string, branchName?: string): string {

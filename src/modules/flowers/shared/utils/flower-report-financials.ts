@@ -26,6 +26,7 @@ const PAYMENT_BREAKDOWN_ORDER: FlowerPaymentMode[] = [
   'cash',
   'gcash',
   'metrobank',
+  'metrobank_card',
   'bpi',
   'eastwest',
   'bank',
