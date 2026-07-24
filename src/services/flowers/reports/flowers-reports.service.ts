@@ -63,20 +63,61 @@ export async function getFlowerPrintableSalesReport(options: {
   return report;
 }
 
-export async function canStaffAccessReports(
+export type StaffReportsAccessResult = {
+  allowed: boolean;
+  pendingIncomingTransfers: number;
+  openOrders: number;
+  totalOrders: number;
+};
+
+/** Staff can open reports only after confirming incoming transfers and closing the day. */
+export async function getStaffReportsAccess(
   reportDate: string,
   branchId?: string,
-): Promise<boolean> {
+): Promise<StaffReportsAccessResult> {
+  const denied = {
+    allowed: false,
+    pendingIncomingTransfers: 0,
+    openOrders: 0,
+    totalOrders: 0,
+  };
+
   const todayKey = toDateKey(new Date());
-  if (reportDate !== todayKey) {
-    return false;
+  if (reportDate !== todayKey || !branchId) {
+    return denied;
   }
 
-  if (!branchId) {
-    return false;
+  const { listFlowerTransferRequests } = await import('../inventory/flowers-inventory.service');
+  const pendingTransfers = await listFlowerTransferRequests({
+    branchId,
+    status: 'pending',
+  });
+  const pendingIncomingTransfers = pendingTransfers.filter(
+    (request) => request.to_branch_id === branchId,
+  ).length;
+
+  if (pendingIncomingTransfers > 0) {
+    return {
+      ...denied,
+      pendingIncomingTransfers,
+    };
   }
 
   const { getFlowerDayCloseStatus } = await import('../orders/flowers-orders.service');
   const status = await getFlowerDayCloseStatus(reportDate, branchId);
-  return status.is_closed;
+
+  return {
+    allowed: status.is_closed,
+    pendingIncomingTransfers: 0,
+    openOrders: status.open_orders,
+    totalOrders: status.total_orders,
+  };
+}
+
+export async function canStaffAccessReports(
+  reportDate: string,
+  branchId?: string,
+): Promise<boolean> {
+  const access = await getStaffReportsAccess(reportDate, branchId);
+  return access.allowed;
 }

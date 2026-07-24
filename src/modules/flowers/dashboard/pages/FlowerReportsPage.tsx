@@ -1,7 +1,6 @@
 import { useEffect, useState } from 'react';
 import { listFlowerBranches } from '../../../../services/flowers/inventory';
-import { getFlowerDayCloseStatus } from '../../../../services/flowers/orders';
-import { canStaffAccessReports, getFlowerReports } from '../../../../services/flowers/reports';
+import { getFlowerReports, getStaffReportsAccess } from '../../../../services/flowers/reports';
 import {
   createFlowerSupplierCost,
   deleteFlowerSupplierCost,
@@ -102,15 +101,22 @@ export default function FlowerReportsPage() {
           return;
         }
 
-        const allowed = await canStaffAccessReports(effectiveReportDate, staffBranchId);
-        if (!allowed) {
-          const closeStatus = await getFlowerDayCloseStatus(effectiveReportDate, staffBranchId);
+        const access = await getStaffReportsAccess(effectiveReportDate, staffBranchId);
+        if (!access.allowed) {
           const branchLabel = staffBranchName ? `${staffBranchName} branch` : 'your branch';
-          setBlockedMessage(
-            closeStatus.total_orders === 0
-              ? `Reports unlock after today (${formatReportDateLabel(effectiveReportDate)}) once ${branchLabel} has scheduled orders and all are marked picked up or delivered.`
-              : `Reports locked — ${closeStatus.open_orders} open order(s) left for ${branchLabel} today. Mark all as picked up or delivered first.`,
-          );
+          if (access.pendingIncomingTransfers > 0) {
+            setBlockedMessage(
+              `Reports locked — ${access.pendingIncomingTransfers} incoming branch transfer request(s) still need confirmation for ${branchLabel}. Confirm them under Inventory → Inter-branch transfer first.`,
+            );
+          } else if (access.totalOrders === 0) {
+            setBlockedMessage(
+              `Reports unlock after today (${formatReportDateLabel(effectiveReportDate)}) once ${branchLabel} has scheduled orders and all are marked picked up or delivered.`,
+            );
+          } else {
+            setBlockedMessage(
+              `Reports locked — ${access.openOrders} open order(s) left for ${branchLabel} today. Mark all as picked up or delivered first.`,
+            );
+          }
           setReportsData(emptyReports());
           return;
         }
