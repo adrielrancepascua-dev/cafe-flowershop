@@ -38,7 +38,7 @@ export async function requireFlowerAdmin(token) {
     .eq('id', userData.user.id)
     .single();
 
-  if (profileError || !adminProfile || adminProfile.role !== 'admin' || adminProfile.is_active === false) {
+  if (profileError || !adminProfile || !['admin', 'co_admin'].includes(adminProfile.role) || adminProfile.is_active === false) {
     const error = new Error('Admin access required.');
     error.statusCode = 403;
     throw error;

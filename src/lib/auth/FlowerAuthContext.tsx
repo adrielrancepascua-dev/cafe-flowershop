@@ -11,6 +11,7 @@ import type { FlowerAuthSession, FlowerUser } from '../../modules/flowers/shared
 import {
   getStoredFlowerSession,
   isAdminUser,
+  canViewOwnerReportMetrics as checkCanViewOwnerReportMetrics,
   needsFlowerOnboarding,
   refreshFlowerSession,
   restoreFlowerSession,
@@ -23,6 +24,7 @@ interface FlowerAuthContextValue {
   user: FlowerUser | null;
   isLoading: boolean;
   isAdmin: boolean;
+  canViewOwnerReportMetrics: boolean;
   needsOnboarding: boolean;
   signIn: (email: string, password: string) => Promise<void>;
   signOut: () => Promise<void>;
@@ -82,6 +84,7 @@ export function FlowerAuthProvider({ children }: { children: ReactNode }) {
       user: session?.user ?? null,
       isLoading,
       isAdmin: isAdminUser(session?.user),
+      canViewOwnerReportMetrics: checkCanViewOwnerReportMetrics(session?.user),
       needsOnboarding: needsFlowerOnboarding(session?.user),
       signIn,
       signOut,

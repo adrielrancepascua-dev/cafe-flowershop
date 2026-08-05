@@ -8,6 +8,7 @@ import {
   setFlowerTeamMemberActive,
 } from '../../../../services/flowers/team';
 import type { CreateFlowerStaffResult, FlowerTeamMember } from '../../shared/types/auth';
+import { formatFlowerRoleLabel } from '../../shared/types/auth';
 import { useFlowerAuth } from '../../../../lib/auth/FlowerAuthContext';
 import { RequireFlowerAdmin } from '../components/RequireFlowerAuth';
 
@@ -247,7 +248,7 @@ export default function FlowerTeamPage() {
                         <p className="font-semibold text-brand-dark">{member.display_name}</p>
                         <p className="mt-0.5 break-all text-sm text-brand-brown/75">{member.email}</p>
                         <p className="mt-1 text-xs text-brand-brown/60">
-                          {member.role === 'admin' ? 'Admin' : 'Staff'}
+                          {formatFlowerRoleLabel(member.role)}
                           {member.branch_name ? ` · ${member.branch_name}` : ''}
                         </p>
                       </div>

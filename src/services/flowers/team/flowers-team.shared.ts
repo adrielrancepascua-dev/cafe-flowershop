@@ -27,7 +27,10 @@ export function mapFlowerProfileRow(row: {
     id: row.id,
     email: row.email,
     display_name: row.display_name,
-    role: row.role === 'admin' ? 'admin' : 'staff',
+    role:
+      row.role === 'admin' || row.role === 'co_admin'
+        ? row.role
+        : 'staff',
     branch_id: row.branch_id ?? null,
     branch_name: branchNameValue ?? branchNameFromId(row.branch_id ?? null),
     onboarding_completed: row.onboarding_completed ?? true,

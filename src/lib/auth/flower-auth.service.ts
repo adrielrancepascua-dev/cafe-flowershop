@@ -317,6 +317,11 @@ export function getStoredFlowerSession(): FlowerAuthSession | null {
 }
 
 export function isAdminUser(user: FlowerUser | null | undefined): boolean {
+  return user?.role === 'admin' || user?.role === 'co_admin';
+}
+
+/** Owner-only report metrics (COGS / Net sales). Co-admin sees admin reports without these. */
+export function canViewOwnerReportMetrics(user: FlowerUser | null | undefined): boolean {
   return user?.role === 'admin';
 }
 
@@ -329,7 +334,12 @@ export function needsStaffOnboarding(user: FlowerUser | null | undefined): boole
 }
 
 export function needsAdminOnboarding(user: FlowerUser | null | undefined): boolean {
-  return Boolean(user && user.role === 'admin' && !user.onboarding_completed && user.is_active);
+  return Boolean(
+    user &&
+      (user.role === 'admin' || user.role === 'co_admin') &&
+      !user.onboarding_completed &&
+      user.is_active,
+  );
 }
 
 export function needsFlowerOnboarding(user: FlowerUser | null | undefined): boolean {

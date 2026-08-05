@@ -14,7 +14,7 @@ export default function StaffOnboardingModal() {
 
   const { user, refreshUser, signOut } = useFlowerAuth();
 
-  const isAdmin = user?.role === 'admin';
+  const isAdmin = user?.role === 'admin' || user?.role === 'co_admin';
 
   const [branches, setBranches] = useState<FlowerBranchOption[]>([]);
 

@@ -10,6 +10,7 @@ import { FlowerThermalSalesReportDocument } from '../../shared/components/Flower
 type FlowerPrintableSalesReportPanelProps = {
   anchorDate: string;
   isAdmin: boolean;
+  showProfitDetails?: boolean;
   branchId?: string;
   disabled?: boolean;
   disabledMessage?: string;
@@ -24,6 +25,7 @@ const PERIOD_OPTIONS: Array<{ value: FlowerSalesReportPeriod; label: string }> =
 export default function FlowerPrintableSalesReportPanel({
   anchorDate,
   isAdmin,
+  showProfitDetails = isAdmin,
   branchId,
   disabled = false,
   disabledMessage,
@@ -105,7 +107,7 @@ export default function FlowerPrintableSalesReportPanel({
       </section>
 
       {report ? (
-        <FlowerThermalSalesReportDocument report={report} showProfitDetails={isAdmin} />
+        <FlowerThermalSalesReportDocument report={report} showProfitDetails={showProfitDetails} />
       ) : null}
     </>
   );

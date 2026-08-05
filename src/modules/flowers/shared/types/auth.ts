@@ -1,4 +1,4 @@
-export type FlowerUserRole = 'staff' | 'admin';
+export type FlowerUserRole = 'staff' | 'admin' | 'co_admin';
 
 export interface FlowerUser {
   id: string;
@@ -27,4 +27,14 @@ export interface FlowerAuthSession {
   user: FlowerUser;
   token: string;
   refresh_token?: string;
+}
+
+export function formatFlowerRoleLabel(role: FlowerUserRole | string): string {
+  if (role === 'admin') {
+    return 'Admin';
+  }
+  if (role === 'co_admin') {
+    return 'Co-admin';
+  }
+  return 'Staff';
 }

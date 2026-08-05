@@ -46,7 +46,7 @@ function emptyReports(): FlowerReportsData {
 }
 
 export default function FlowerReportsPage() {
-  const { user, isAdmin } = useFlowerAuth();
+  const { user, isAdmin, canViewOwnerReportMetrics } = useFlowerAuth();
   const [reportsData, setReportsData] = useState<FlowerReportsData>(emptyReports());
   const [branches, setBranches] = useState<FlowerBranchOption[]>([]);
   const [branchFilter, setBranchFilter] = useState('all');
@@ -250,7 +250,9 @@ export default function FlowerReportsPage() {
         title="Reports"
         description={
           isAdmin
-            ? 'Net income = total sales − staff expenses − supplier costs. Pick any date to review history.'
+            ? canViewOwnerReportMetrics
+              ? 'Net income = total sales − staff expenses − supplier costs. Pick any date to review history.'
+              : 'Sales, expenses, and cash on hand across branches. Pick any date to review history.'
             : staffBranchName
               ? `Today's ${staffBranchName} sales and logged expenses. Supplier costs and net income are owner-only.`
               : `Today's sales and logged expenses for your branch. Supplier costs and net income are owner-only.`
@@ -297,17 +299,23 @@ export default function FlowerReportsPage() {
         <p className="mt-6 text-sm text-brand-brown/60">Loading reports...</p>
       ) : !blockedMessage ? (
         <>
-          <div className={`mt-5 grid grid-cols-2 gap-3 ${isAdmin ? 'lg:grid-cols-4' : 'lg:grid-cols-3'}`}>
+          <div
+            className={`mt-5 grid grid-cols-2 gap-3 ${
+              canViewOwnerReportMetrics ? 'lg:grid-cols-4' : isAdmin ? 'lg:grid-cols-2' : 'lg:grid-cols-3'
+            }`}
+          >
             <MetricCard label="Total sales" value={PRICE_FORMATTER.format(reportsData.financial.total_sales)} />
             <MetricCard label="Expenses" value={PRICE_FORMATTER.format(reportsData.financial.staff_expenses)} />
-            {isAdmin ? (
+            {canViewOwnerReportMetrics ? (
               <MetricCard label="COGS" value={PRICE_FORMATTER.format(reportsData.financial.cogs)} />
             ) : null}
-            <MetricCard
-              label="Net sales"
-              value={PRICE_FORMATTER.format(reportsData.financial.net_sales)}
-              accent
-            />
+            {canViewOwnerReportMetrics || !isAdmin ? (
+              <MetricCard
+                label="Net sales"
+                value={PRICE_FORMATTER.format(reportsData.financial.net_sales)}
+                accent
+              />
+            ) : null}
           </div>
 
           {reportsData.financial.sales_by_payment.length > 0 ? (
@@ -657,6 +665,7 @@ export default function FlowerReportsPage() {
         <FlowerPrintableSalesReportPanel
           anchorDate={effectiveReportDate}
           isAdmin={isAdmin}
+          showProfitDetails={canViewOwnerReportMetrics}
           branchId={effectiveBranchFilter}
           disabled={isAdmin && branchFilter === 'all'}
           disabledMessage={

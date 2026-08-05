@@ -153,7 +153,10 @@ export async function completeAdminOnboardingLocal(
     token: string;
   };
 
-  if (session.user.id !== userId || session.user.role !== 'admin') {
+  if (
+    session.user.id !== userId ||
+    (session.user.role !== 'admin' && session.user.role !== 'co_admin')
+  ) {
     throw new Error('Admin account not found in demo session.');
   }
 

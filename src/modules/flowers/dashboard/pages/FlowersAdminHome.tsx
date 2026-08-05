@@ -4,6 +4,7 @@ import { isFlowerDemoMode } from '../../../../app/app-mode';
 import { isSupabaseConfigured } from '../../../../lib/supabase/client';
 import { useFlowerAuth } from '../../../../lib/auth/FlowerAuthContext';
 import { getFlowerStorageMode, shouldUseFlowerSupabase } from '../../../../services/flowers/storage-mode';
+import { formatFlowerRoleLabel } from '../../shared/types/auth';
 import FlowerPageHeader from '../../shared/components/FlowerPageHeader';
 import FlowerStatCard from '../../shared/components/FlowerStatCard';
 
@@ -45,7 +46,12 @@ export default function FlowersAdminHome() {
 
       <div className="mt-5 grid grid-cols-2 gap-3 sm:grid-cols-3">
         <FlowerStatCard label="Branches" value={3} icon={ShoppingBag} />
-        <FlowerStatCard label="Role" value={isAdmin ? 'Admin' : 'Staff'} icon={Package} accent="warm" />
+        <FlowerStatCard
+          label="Role"
+          value={formatFlowerRoleLabel(user?.role ?? 'staff')}
+          icon={Package}
+          accent="warm"
+        />
         <FlowerStatCard label="System" value={getSystemModeLabel()} icon={CalendarDays} accent="green" />
       </div>
 
