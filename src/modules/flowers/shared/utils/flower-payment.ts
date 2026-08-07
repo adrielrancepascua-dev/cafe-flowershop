@@ -2,7 +2,7 @@ export const FLOWER_PAYMENT_MODE_LABELS = {
   cash: 'Cash',
   gcash: 'GCash',
   metrobank: 'Metrobank',
-  metrobank_card: 'Debit/Credit Card (Metrobank)',
+  metrobank_card: 'Maya Terminal',
   bpi: 'BPI',
   eastwest: 'Eastwest',
   /** @deprecated Legacy value from before branch-specific bank options. */
