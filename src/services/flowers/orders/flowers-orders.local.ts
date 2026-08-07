@@ -209,6 +209,7 @@ function buildOrderFromInput(
   existing?: FlowerOrder,
 ): FlowerOrder {
   const payment = computeOrderPaymentFields(input.total_amount, input.downpayment, {
+    balance_paid: existing?.balance_paid,
     balance_payment_mode: existing?.balance_payment_mode,
     balance_payment_reference: existing?.balance_payment_reference,
   });

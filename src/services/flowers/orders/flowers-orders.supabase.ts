@@ -554,6 +554,7 @@ export async function updateFlowerOrderSupabase(
   });
 
   const payment = computeOrderPaymentFields(input.total_amount, input.downpayment, {
+    balance_paid: existing.balance_paid,
     balance_payment_mode: existing.balance_payment_mode,
     balance_payment_reference: existing.balance_payment_reference,
   });
@@ -773,7 +774,7 @@ export async function markFlowerOrderBalancePaidSupabase(
     throw new Error('Reference # is required for non-cash balance payments.');
   }
 
-  const { error } = await supabase
+  const { data, error } = await supabase
     .from('flower_orders')
     .update(
       isCorrection
@@ -790,10 +791,20 @@ export async function markFlowerOrderBalancePaidSupabase(
               normalizedMode === 'cash' ? '' : balancePaymentReference.trim(),
           },
     )
-    .eq('id', orderId);
+    .eq('id', orderId)
+    .select('id')
+    .maybeSingle();
 
   if (error) {
     throw error;
+  }
+
+  if (!data) {
+    throw new Error(
+      isCorrection
+        ? 'Could not update balance payment mode. Please refresh and try again.'
+        : 'Could not mark balance as paid. Please refresh and try again.',
+    );
   }
 
   const updated = await fetchOrderById(orderId);
