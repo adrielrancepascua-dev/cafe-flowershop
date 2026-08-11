@@ -74,7 +74,7 @@ export async function getFlowerPrintableSalesReportLocal(options: {
         sales_total: salesTotal,
         staff_expenses: staffExpenses,
         supplier_costs: supplierCosts,
-        net_income: salesTotal - staffExpenses - supplierCosts,
+        net_income: Math.max(0, salesTotal - staffExpenses - supplierCosts),
         orders: branchOrders.map((order) => ({
           order_id: order.id,
           pickup_date: scheduledForToDateKey(order.scheduled_for),

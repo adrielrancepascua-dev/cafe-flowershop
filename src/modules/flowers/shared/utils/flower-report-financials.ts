@@ -195,19 +195,19 @@ export function buildFlowerReportFinancialSummary(input: {
   const cogs = calculateCogsForOrders(orders, reportDate, unitCostByProductId);
   const salesByPayment = sumSalesByPaymentForReportDate(orders, reportDate);
   const cashSales = salesByPayment.find((row) => row.payment_mode === 'cash')?.amount ?? 0;
-  const netSales = totalSales - staffExpenses - cogs;
+  const netSales = Math.max(0, totalSales - staffExpenses - cogs);
 
   return {
     total_sales: totalSales,
     staff_expenses: staffExpenses,
     staff_expenses_cash: staffExpensesCash,
     staff_expenses_gcash: staffExpensesGcash,
-    cash_on_hand: cashSales - staffExpensesCash,
+    cash_on_hand: Math.max(0, cashSales - staffExpensesCash),
     supplier_costs: supplierCosts,
     cogs,
     net_sales: netSales,
     sales_by_payment: salesByPayment,
-    net_income: totalSales - staffExpenses - supplierCosts,
+    net_income: Math.max(0, totalSales - staffExpenses - supplierCosts),
   };
 }
 
@@ -217,7 +217,8 @@ export function buildStaffFlowerReportFinancialSummary(
   return {
     ...financial,
     cogs: 0,
-    net_sales: financial.total_sales - financial.staff_expenses,
+    net_sales: Math.max(0, financial.total_sales - financial.staff_expenses),
+    cash_on_hand: Math.max(0, financial.cash_on_hand),
     supplier_costs: 0,
     net_income: 0,
   };
