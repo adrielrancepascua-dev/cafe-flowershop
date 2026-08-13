@@ -1,10 +1,10 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Printer, Settings2 } from 'lucide-react';
 import FlowerPrintSettingsModal from './FlowerPrintSettingsModal';
 import { describeFlowerPrintSettings, readFlowerPrintSettings, scheduleFlowerCouponPrint } from '../utils/flower-print-settings';
 
 type FlowerPrintControlsProps = {
-  onPrint?: () => void;
+  onPrint?: () => void | Promise<void>;
   disabled?: boolean;
   label?: string;
   className?: string;
@@ -21,11 +21,25 @@ export default function FlowerPrintControls({
   compact = false,
 }: FlowerPrintControlsProps) {
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [printNonce, setPrintNonce] = useState(0);
   const sizeHint = useMemo(() => describeFlowerPrintSettings(readFlowerPrintSettings()), [settingsOpen]);
 
-  function handlePrint() {
-    onPrint?.();
+  useEffect(() => {
+    if (printNonce === 0) {
+      return;
+    }
+
     scheduleFlowerCouponPrint();
+  }, [printNonce]);
+
+  async function handlePrint() {
+    try {
+      await onPrint?.();
+    } catch {
+      return;
+    }
+
+    setPrintNonce((current) => current + 1);
   }
 
   return (

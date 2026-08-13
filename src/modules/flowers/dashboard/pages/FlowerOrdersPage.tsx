@@ -20,7 +20,6 @@ import FlowerPageHeader from '../../shared/components/FlowerPageHeader';
 import FlowerMobileCardList from '../../shared/components/FlowerMobileCardList';
 import { FlowerThermalDailyOrdersDocument } from '../../shared/components/FlowerThermalPrint';
 import FlowerOrderPrintControls from '../../shared/components/FlowerOrderPrintControls';
-import { scheduleFlowerCouponPrint } from '../../shared/utils/flower-print-settings';
 import FlowerOrderFormModal from '../components/FlowerOrderFormModal';
 import FlowerConfirmDialog from '../components/FlowerConfirmDialog';
 import SupplierOrderSummaryPanel from '../components/SupplierOrderSummaryPanel';
@@ -834,7 +833,6 @@ export default function FlowerOrdersPage() {
     }
 
     setOrdersForPrint(selected);
-    scheduleFlowerCouponPrint();
   }
 
   const ordersInPrintDocument = ordersForPrint;

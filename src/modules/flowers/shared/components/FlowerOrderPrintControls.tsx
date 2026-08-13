@@ -68,7 +68,7 @@ export default function FlowerOrderPrintControls({
           </select>
         </label>
         <FlowerPrintControls
-          onPrint={() => void onPrint(selectedOrderId)}
+          onPrint={() => onPrint(selectedOrderId)}
           disabled={disabled || !selectedOrderId}
           label={label}
           showSizeHint={showSizeHint}

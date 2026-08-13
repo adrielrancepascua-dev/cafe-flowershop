@@ -241,16 +241,72 @@ export function describeFlowerPrintSettings(settings: FlowerPrintSettings): stri
   return `${presetLabel} · ${settings.widthMm} mm wide · ${Math.round(settings.fontScale * 100)}% text · ${heightLabel}`;
 }
 
-export function printFlowerCoupon(): void {
-  applyFlowerPrintSettings(readFlowerPrintSettings());
+const FLOWER_PRINT_ROOT_SELECTOR = '.flower-thermal-print-root';
+const PRINT_READY_RETRY_MS = 50;
+const PRINT_READY_MAX_ATTEMPTS = 20;
+
+let pendingPrintTimer: ReturnType<typeof setTimeout> | null = null;
+let printDialogOpen = false;
+let printListenersBound = false;
+
+function ensureFlowerPrintListeners(): void {
+  if (printListenersBound || typeof window === 'undefined') {
+    return;
+  }
+
+  printListenersBound = true;
+  window.addEventListener('beforeprint', () => {
+    printDialogOpen = true;
+  });
+  window.addEventListener('afterprint', () => {
+    printDialogOpen = false;
+  });
+}
+
+function cancelScheduledFlowerCouponPrint(): void {
+  if (pendingPrintTimer != null) {
+    clearTimeout(pendingPrintTimer);
+    pendingPrintTimer = null;
+  }
+}
+
+function openFlowerPrintDialog(attempt = 0): void {
+  if (typeof window === 'undefined' || printDialogOpen) {
+    return;
+  }
+
+  if (!document.querySelector(FLOWER_PRINT_ROOT_SELECTOR)) {
+    if (attempt >= PRINT_READY_MAX_ATTEMPTS) {
+      return;
+    }
+
+    pendingPrintTimer = window.setTimeout(() => {
+      pendingPrintTimer = null;
+      openFlowerPrintDialog(attempt + 1);
+    }, PRINT_READY_RETRY_MS);
+    return;
+  }
+
   window.print();
 }
 
+export function printFlowerCoupon(): void {
+  scheduleFlowerCouponPrint();
+}
+
 export function scheduleFlowerCouponPrint(): void {
+  if (typeof window === 'undefined') {
+    return;
+  }
+
+  ensureFlowerPrintListeners();
   applyFlowerPrintSettings(readFlowerPrintSettings());
-  requestAnimationFrame(() => {
+  cancelScheduledFlowerCouponPrint();
+
+  pendingPrintTimer = window.setTimeout(() => {
+    pendingPrintTimer = null;
     requestAnimationFrame(() => {
-      window.print();
+      openFlowerPrintDialog();
     });
-  });
+  }, PRINT_READY_RETRY_MS);
 }
