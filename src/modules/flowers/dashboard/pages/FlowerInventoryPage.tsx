@@ -24,6 +24,7 @@ import type {
 import FlowerPageHeader from '../../shared/components/FlowerPageHeader';
 import FlowerInventoryStockPrint from '../components/FlowerPrintableInventoryStockPanel';
 import FlowerPrintControls from '../../shared/components/FlowerPrintControls';
+import { FlowerBranchTransferPrintDocument } from '../../shared/components/FlowerThermalPrint';
 import { Minus, Plus, ArrowLeftRight, Package, ChevronDown, Check, X, Trash2, Search } from 'lucide-react';
 import {
   dedupeInventoryMovementRows,
@@ -685,6 +686,7 @@ function TransferRequestCard({
   actions,
   pendingActionId,
   onResolve,
+  onPrint,
   isAdmin = false,
   billingSavingId = null,
   onBillingSave,
@@ -693,6 +695,7 @@ function TransferRequestCard({
   actions: Array<'confirm' | 'reject' | 'cancel'>;
   pendingActionId: string | null;
   onResolve: (request: FlowerTransferRequest, action: 'confirm' | 'reject' | 'cancel') => void;
+  onPrint?: (request: FlowerTransferRequest) => void;
   isAdmin?: boolean;
   billingSavingId?: string | null;
   onBillingSave?: (input: {
@@ -769,6 +772,14 @@ function TransferRequestCard({
               Cancel request
             </button>
           ) : null}
+          {onPrint ? (
+            <FlowerPrintControls
+              compact
+              label="Print slip"
+              showSizeHint={false}
+              onPrint={() => onPrint(request)}
+            />
+          ) : null}
         </div>
       </div>
       {isAdmin && onBillingSave ? (
@@ -790,6 +801,7 @@ function TransferRequestInbox({
   pendingActionId,
   billingSavingId,
   onResolve,
+  onPrint,
   onBillingSave,
 }: {
   incoming: FlowerTransferRequest[];
@@ -799,6 +811,7 @@ function TransferRequestInbox({
   pendingActionId: string | null;
   billingSavingId: string | null;
   onResolve: (request: FlowerTransferRequest, action: 'confirm' | 'reject' | 'cancel') => void;
+  onPrint?: (request: FlowerTransferRequest) => void;
   onBillingSave?: (input: {
     requestId: string;
     total_cost: number | null;
@@ -835,6 +848,7 @@ function TransferRequestInbox({
                 actions={['confirm', 'reject']}
                 pendingActionId={pendingActionId}
                 onResolve={onResolve}
+                onPrint={onPrint}
                 isAdmin={isAdmin}
                 billingSavingId={billingSavingId}
                 onBillingSave={onBillingSave}
@@ -870,6 +884,7 @@ function TransferRequestInbox({
                   actions={['cancel']}
                   pendingActionId={pendingActionId}
                   onResolve={onResolve}
+                  onPrint={onPrint}
                 />
               ))}
             </ul>
@@ -1117,6 +1132,7 @@ export default function FlowerInventoryPage() {
   const [pendingActionId, setPendingActionId] = useState<string | null>(null);
   const [billingSavingId, setBillingSavingId] = useState<string | null>(null);
   const [transferHistoryTab, setTransferHistoryTab] = useState<TransferHistoryTab>('confirmed');
+  const [printTransferRequest, setPrintTransferRequest] = useState<FlowerTransferRequest | null>(null);
 
   async function loadData() {
     const isFirstLoad = isFirstLoadRef.current;
@@ -1686,6 +1702,7 @@ export default function FlowerInventoryPage() {
             pendingActionId={pendingActionId}
             billingSavingId={billingSavingId}
             onResolve={handleResolveTransferRequest}
+            onPrint={setPrintTransferRequest}
             onBillingSave={isAdmin ? handleSaveTransferBilling : undefined}
           />
 
@@ -2015,19 +2032,29 @@ export default function FlowerInventoryPage() {
                     key={request.id}
                     className="rounded-xl border border-brand-muted/30 bg-white px-3 py-3 sm:px-4"
                   >
-                    <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
-                      <TransferStatusBadge status={request.status} />
-                      <span className="font-medium text-brand-dark">
-                        {request.from_branch_name} → {request.to_branch_name}
-                      </span>
-                      <span>· {transferRequestSummary(request)}</span>
-                      {request.resolved_by_name ? (
-                        <span className="text-xs text-brand-brown/60">by {request.resolved_by_name}</span>
-                      ) : null}
+                    <div className="flex flex-wrap items-start justify-between gap-3">
+                      <div className="min-w-0 flex-1">
+                        <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                          <TransferStatusBadge status={request.status} />
+                          <span className="font-medium text-brand-dark">
+                            {request.from_branch_name} → {request.to_branch_name}
+                          </span>
+                          <span>· {transferRequestSummary(request)}</span>
+                          {request.resolved_by_name ? (
+                            <span className="text-xs text-brand-brown/60">by {request.resolved_by_name}</span>
+                          ) : null}
+                        </div>
+                        <p className="mt-1 text-xs text-brand-brown/65">
+                          Transfer date: {formatTransferDate(request.resolved_at ?? request.created_at)}
+                        </p>
+                      </div>
+                      <FlowerPrintControls
+                        compact
+                        label="Print slip"
+                        showSizeHint={false}
+                        onPrint={() => setPrintTransferRequest(request)}
+                      />
                     </div>
-                    <p className="mt-1 text-xs text-brand-brown/65">
-                      Transfer date: {formatTransferDate(request.resolved_at ?? request.created_at)}
-                    </p>
                     <details className="mt-2 rounded-lg border border-brand-muted/30 bg-brand-cream/15 px-3 py-2">
                       <summary className="cursor-pointer text-xs font-semibold text-brand-brown/75">
                         View transferred items ({request.items.length})
@@ -2312,6 +2339,8 @@ export default function FlowerInventoryPage() {
           disabled={loading && stockRows.length === 0}
         />
       ) : null}
+
+      {printTransferRequest ? <FlowerBranchTransferPrintDocument request={printTransferRequest} /> : null}
     </div>
   );
 }

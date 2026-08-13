@@ -1,8 +1,13 @@
 import type { ReactNode } from 'react';
 import type { FlowerStaffExpense } from '../types/flower-expense';
 import type { FlowerOrder } from '../types/flower-order';
-import type { FlowerPrintableInventoryStockReport } from '../types/flower-inventory';
+import type {
+  FlowerPrintableInventoryStockReport,
+  FlowerTransferRequest,
+} from '../types/flower-inventory';
 import type { FlowerPrintableSalesReport } from '../types/flower-report';
+import { normalizeFlowerProductColor } from '../utils/flower-product-colors';
+import { normalizeFlowerProductKind } from '../utils/flower-product-kind';
 import {
   THERMAL_BRAND_NAME,
   formatThermalBulletLine,
@@ -416,6 +421,102 @@ export function FlowerSupplyTransferPrintDocument({
           TOTAL LIABILITY: {PRICE_FORMATTER.format(transfer.total_liability)}
         </p>
         <p className="flower-thermal-line">REF: {transfer.id.slice(0, 8).toUpperCase()}</p>
+      </section>
+    </FlowerThermalPrintRoot>
+  );
+}
+
+const TRANSFER_PRINT_STATUS_LABELS: Record<FlowerTransferRequest['status'], string> = {
+  pending: 'PENDING',
+  confirmed: 'CONFIRMED',
+  rejected: 'REJECTED',
+  cancelled: 'CANCELLED',
+};
+
+export function FlowerBranchTransferPrintDocument({
+  request,
+}: {
+  request: FlowerTransferRequest;
+}) {
+  const flowerItems = request.items.filter(
+    (item) => normalizeFlowerProductKind(item.product_kind) === 'flower',
+  );
+  const miscItems = request.items.filter(
+    (item) => normalizeFlowerProductKind(item.product_kind) === 'misc',
+  );
+  const totalUnits = request.items.reduce((sum, item) => sum + item.quantity, 0);
+  const dateLine = [formatThermalDateLine(request.created_at), formatThermalTimeLine(request.created_at)]
+    .filter(Boolean)
+    .join(' · ');
+  const note = request.note.trim();
+
+  return (
+    <FlowerThermalPrintRoot id="flower-branch-transfer-print">
+      <section className="flower-thermal-slip">
+        <p className="flower-thermal-brand">{THERMAL_BRAND_NAME.toUpperCase()}</p>
+        <p className="flower-thermal-section-title">BRANCH TRANSFER</p>
+        <p className="flower-thermal-line">PACKING LIST</p>
+        {dateLine ? <p className="flower-thermal-line">{dateLine}</p> : null}
+
+        <FlowerThermalDivider />
+
+        <p className="flower-thermal-line">FROM: {request.from_branch_name.toUpperCase()}</p>
+        <p className="flower-thermal-line">TO: {request.to_branch_name.toUpperCase()}</p>
+        <p className="flower-thermal-line">FILED BY: {request.requested_by_name.toUpperCase()}</p>
+        <p className="flower-thermal-line">
+          STATUS: {TRANSFER_PRINT_STATUS_LABELS[request.status]}
+        </p>
+        {request.resolved_by_name ? (
+          <p className="flower-thermal-line">
+            RESOLVED BY: {request.resolved_by_name.toUpperCase()}
+          </p>
+        ) : null}
+
+        {note ? (
+          <>
+            <FlowerThermalDivider />
+            <p className="flower-thermal-line flower-thermal-wrap">NOTE: {note.toUpperCase()}</p>
+          </>
+        ) : null}
+
+        <FlowerThermalDivider />
+
+        {flowerItems.length > 0 ? (
+          <>
+            <FlowerThermalSectionTitle>FLOWERS</FlowerThermalSectionTitle>
+            {flowerItems.map((item) => (
+              <p key={item.id} className="flower-thermal-line">
+                {formatThermalItemLine(
+                  item.quantity,
+                  `${item.product_name} · ${normalizeFlowerProductColor(item.product_color)}`,
+                )}
+              </p>
+            ))}
+          </>
+        ) : null}
+
+        {miscItems.length > 0 ? (
+          <>
+            <FlowerThermalSectionTitle>OTHER ITEMS</FlowerThermalSectionTitle>
+            {miscItems.map((item) => (
+              <p key={item.id} className="flower-thermal-line">
+                {formatThermalItemLine(item.quantity, item.product_name)}
+              </p>
+            ))}
+          </>
+        ) : null}
+
+        {request.items.length === 0 ? <p className="flower-thermal-line">NO ITEMS LISTED</p> : null}
+
+        <FlowerThermalDivider />
+
+        <p className="flower-thermal-line flower-thermal-bold">TOTAL UNITS: {totalUnits}</p>
+        <p className="flower-thermal-line">REF: {request.id.slice(0, 8).toUpperCase()}</p>
+
+        <FlowerThermalDivider />
+
+        <p className="flower-thermal-line">CHECKED BY: _______________</p>
+        <p className="flower-thermal-line">RECEIVED BY: _______________</p>
       </section>
     </FlowerThermalPrintRoot>
   );

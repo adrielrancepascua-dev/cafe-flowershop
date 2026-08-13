@@ -95,6 +95,7 @@ Pick a test day with 2+ orders (or create them for today).
 - [ ] **`supabase/add_inventory_transfer_items.sql` applied** — required; without it transfers fail with `product_id` not-null error
 - [ ] After a deploy that changes auth/inventory, staff **sign out and sign in once** if transfers fail with "session expired"
 - [ ] Staff/admin file a transfer request (e.g. Dagupan → Urdaneta); stock leaves the source branch immediately
+- [ ] Sending branch can **Print slip** (packing list: from/to, flower + color + qty) to put in the plastic for the receiving branch to check
 - [ ] Receiving branch sees the incoming request and taps **Confirm received**
 - [ ] Only after confirmation does the stock appear in the receiving branch's on-hand
 - [ ] Rejecting (receiver) or cancelling (sender) a pending request returns the stock to the source branch
