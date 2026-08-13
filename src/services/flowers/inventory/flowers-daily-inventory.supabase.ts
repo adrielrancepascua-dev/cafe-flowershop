@@ -161,38 +161,23 @@ export async function listDailyInventoryCountsSupabase(
   return attachLines((data as CountDbRow[] | null) ?? [], branchNames);
 }
 
-export async function saveDailyInventoryCountSupabase(input: {
-  branchId: string;
-  countDate: string;
-  submittedById: string;
-  submittedByName: string;
-  lines: Omit<FlowerDailyInventoryCountLine, 'id'>[];
-}): Promise<FlowerDailyInventoryCount> {
+async function replaceCountLines(
+  countId: string,
+  lines: Omit<FlowerDailyInventoryCountLine, 'id'>[],
+): Promise<void> {
   const supabase = await requireAuthenticatedSupabaseClient();
-  const { data, error } = await supabase
-    .from('flower_daily_inventory_counts')
-    .insert({
-      branch_id: input.branchId,
-      count_date: input.countDate,
-      status: 'submitted',
-      submitted_by_id: input.submittedById,
-      submitted_by_name: input.submittedByName,
-    })
-    .select('id, branch_id, count_date, status, submitted_by_id, submitted_by_name, submitted_at, created_at')
-    .single();
+  const { error: deleteError } = await supabase
+    .from('flower_daily_inventory_count_lines')
+    .delete()
+    .eq('count_id', countId);
 
-  if (error || !data) {
-    if (error?.code === '23505') {
-      throw new Error('Daily inventory already submitted for this branch and date.');
-    }
-
-    throw toServiceError(error, 'Failed to submit daily inventory. Run supabase/add_flower_daily_inventory.sql if this table is missing.');
+  if (deleteError) {
+    throw toServiceError(deleteError, 'Failed to update daily inventory lines.');
   }
 
-  const countRow = data as CountDbRow;
   const { error: linesError } = await supabase.from('flower_daily_inventory_count_lines').insert(
-    input.lines.map((line) => ({
-      count_id: countRow.id,
+    lines.map((line) => ({
+      count_id: countId,
       product_id: line.product_id,
       product_name: line.product_name,
       product_kind: line.product_kind,
@@ -207,8 +192,69 @@ export async function saveDailyInventoryCountSupabase(input: {
   );
 
   if (linesError) {
-    await supabase.from('flower_daily_inventory_counts').delete().eq('id', countRow.id);
     throw toServiceError(linesError, 'Failed to save daily inventory lines.');
+  }
+}
+
+export async function saveDailyInventoryCountSupabase(input: {
+  branchId: string;
+  countDate: string;
+  submittedById: string;
+  submittedByName: string;
+  lines: Omit<FlowerDailyInventoryCountLine, 'id'>[];
+}): Promise<FlowerDailyInventoryCount> {
+  const supabase = await requireAuthenticatedSupabaseClient();
+  const existing = await getDailyInventoryCountSupabase(input.branchId, input.countDate);
+
+  if (existing) {
+    const { data, error } = await supabase
+      .from('flower_daily_inventory_counts')
+      .update({
+        submitted_by_id: input.submittedById,
+        submitted_by_name: input.submittedByName,
+        submitted_at: new Date().toISOString(),
+      })
+      .eq('id', existing.id)
+      .select('id, branch_id, count_date, status, submitted_by_id, submitted_by_name, submitted_at, created_at')
+      .single();
+
+    if (error || !data) {
+      throw toServiceError(error, 'Failed to update daily inventory.');
+    }
+
+    await replaceCountLines(existing.id, input.lines);
+    const branches = await listFlowerBranchesSupabase();
+    const branchNames = new Map(branches.map((branch) => [branch.id, branch.name]));
+    const [count] = await attachLines([data as CountDbRow], branchNames);
+    if (!count) {
+      throw new Error('Failed to update daily inventory.');
+    }
+
+    return count;
+  }
+
+  const { data, error } = await supabase
+    .from('flower_daily_inventory_counts')
+    .insert({
+      branch_id: input.branchId,
+      count_date: input.countDate,
+      status: 'submitted',
+      submitted_by_id: input.submittedById,
+      submitted_by_name: input.submittedByName,
+    })
+    .select('id, branch_id, count_date, status, submitted_by_id, submitted_by_name, submitted_at, created_at')
+    .single();
+
+  if (error || !data) {
+    throw toServiceError(error, 'Failed to submit daily inventory. Run supabase/add_flower_daily_inventory.sql if this table is missing.');
+  }
+
+  const countRow = data as CountDbRow;
+  try {
+    await replaceCountLines(countRow.id, input.lines);
+  } catch (lineError) {
+    await supabase.from('flower_daily_inventory_counts').delete().eq('id', countRow.id);
+    throw lineError;
   }
 
   const branches = await listFlowerBranchesSupabase();

@@ -166,6 +166,43 @@ function worksheetLineFromSubmitted(
   };
 }
 
+export function parseDailyInventoryCountInput(value: string | number | null | undefined): number {
+  if (typeof value === 'number') {
+    if (!Number.isInteger(value) || value < 0) {
+      throw new Error('Count must be a whole number of 0 or more.');
+    }
+
+    return value;
+  }
+
+  const trimmed = String(value ?? '').trim();
+  if (trimmed === '') {
+    return 0;
+  }
+
+  const parsed = Number(trimmed);
+  if (!Number.isInteger(parsed) || parsed < 0) {
+    throw new Error('Count must be a whole number of 0 or more.');
+  }
+
+  return parsed;
+}
+
+export function matchesDailyInventorySearch(
+  line: FlowerDailyInventoryWorksheetLine,
+  query: string,
+): boolean {
+  const needle = query.trim().toLowerCase();
+  if (!needle) {
+    return true;
+  }
+
+  return [line.product_name, line.product_color, line.product_flower_type]
+    .join(' ')
+    .toLowerCase()
+    .includes(needle);
+}
+
 export function buildDailyInventoryWorksheet(input: {
   branchId: string;
   branchName: string;
@@ -174,27 +211,77 @@ export function buildDailyInventoryWorksheet(input: {
   orders: FlowerOrder[];
   submitted: FlowerDailyInventoryCount | null;
 }): FlowerDailyInventoryWorksheet {
-  if (input.submitted) {
+  const soldPending = soldPendingDeductionByProductId(input.orders, input.countDate, input.branchId);
+  const liveLines = input.stockRows
+    .filter((row) => row.branch_id === input.branchId && shouldIncludeWorksheetRow(row, soldPending))
+    .sort(compareInventoryStockRows)
+    .map((row) => worksheetLineFromStockRow(row, soldPending));
+
+  if (!input.submitted) {
     return {
       branch_id: input.branchId,
       branch_name: input.branchName,
       count_date: input.countDate,
-      submitted: input.submitted,
-      lines: input.submitted.lines.map(worksheetLineFromSubmitted),
+      submitted: null,
+      lines: liveLines,
     };
   }
 
-  const soldPending = soldPendingDeductionByProductId(input.orders, input.countDate, input.branchId);
-  const lines = input.stockRows
-    .filter((row) => row.branch_id === input.branchId && shouldIncludeWorksheetRow(row, soldPending))
-    .sort(compareInventoryStockRows)
-    .map((row) => worksheetLineFromStockRow(row, soldPending));
+  const submittedByProductId = new Map(input.submitted.lines.map((line) => [line.product_id, line]));
+  const liveProductIds = new Set(liveLines.map((line) => line.product_id));
+  const lines = liveLines.map((line) => {
+    const submittedLine = submittedByProductId.get(line.product_id);
+    if (!submittedLine) {
+      return line;
+    }
+
+    return {
+      ...line,
+      actual_count: submittedLine.actual_count,
+      variance: computeDailyInventoryVariance(submittedLine.actual_count, line.expected_on_hand),
+    };
+  });
+
+  for (const submittedLine of input.submitted.lines) {
+    if (!liveProductIds.has(submittedLine.product_id)) {
+      lines.push(worksheetLineFromSubmitted(submittedLine));
+    }
+  }
+
+  lines.sort((left, right) =>
+    compareInventoryStockRows(
+      {
+        branch_id: input.branchId,
+        branch_name: input.branchName,
+        product_id: left.product_id,
+        product_name: left.product_name,
+        product_kind: left.product_kind,
+        product_color: left.product_color,
+        product_flower_type: left.product_flower_type,
+        product_is_active: true,
+        on_hand: left.expected_on_hand,
+        last_updated: null,
+      },
+      {
+        branch_id: input.branchId,
+        branch_name: input.branchName,
+        product_id: right.product_id,
+        product_name: right.product_name,
+        product_kind: right.product_kind,
+        product_color: right.product_color,
+        product_flower_type: right.product_flower_type,
+        product_is_active: true,
+        on_hand: right.expected_on_hand,
+        last_updated: null,
+      },
+    ),
+  );
 
   return {
     branch_id: input.branchId,
     branch_name: input.branchName,
     count_date: input.countDate,
-    submitted: null,
+    submitted: input.submitted,
     lines,
   };
 }

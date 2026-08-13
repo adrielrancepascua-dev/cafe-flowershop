@@ -9,6 +9,7 @@ import {
   buildDailyInventoryBranchSummary,
   buildDailyInventoryWorksheet,
   computeDailyInventoryVariance,
+  parseDailyInventoryCountInput,
 } from '../../../modules/flowers/shared/utils/flower-daily-inventory';
 import { getFlowerStorageMode, shouldUseFlowerSupabase } from '../storage-mode';
 import { listFlowerOrders } from '../orders/flowers-orders.service';
@@ -127,17 +128,15 @@ export async function submitDailyInventoryCount(
     countDate: input.countDate,
   });
 
-  if (worksheet.submitted) {
-    throw new Error('Daily inventory already submitted for this branch and date.');
-  }
-
   if (worksheet.lines.length === 0) {
     throw new Error('No flowers or gift items to count for this branch.');
   }
 
   const lines = worksheet.lines.map((line) => {
-    const actualCount = input.actualCounts[line.product_id];
-    if (!Number.isInteger(actualCount) || actualCount < 0) {
+    let actualCount: number;
+    try {
+      actualCount = parseDailyInventoryCountInput(input.actualCounts[line.product_id]);
+    } catch {
       throw new Error(`Enter a whole number count for ${line.product_name}.`);
     }
 

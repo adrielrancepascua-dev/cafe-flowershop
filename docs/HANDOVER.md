@@ -112,9 +112,10 @@ Pick a test day with 2+ orders (or create them for today).
 ### 5c. Daily inventory count
 
 - [ ] **`supabase/add_flower_daily_inventory.sql` applied**
-- [ ] Staff open **Daily count** / **Count** and enter actual qty per flower color + gift item (wrappers skipped)
+- [ ] Staff open **Daily count** / **Count**, expand a flower, search if needed, and enter actual qty (blank variants save as 0)
 - [ ] After submit, variance = actual − expected remaining after today’s completed sales (even before 7:00 PM deduct)
-- [ ] Submit does **not** change stock; admin reviews short/extra at night and adjusts Inventory manually if confirmed
+- [ ] Submit does **not** change stock; staff can **Edit counts** if it was submitted too early
+- [ ] Admin reviews short/extra at night and adjusts Inventory manually if confirmed
 - [ ] Staff **Reports** stay locked until today’s count is submitted (in addition to day close + incoming transfers)
 
 ### 6. Supplies (admin)

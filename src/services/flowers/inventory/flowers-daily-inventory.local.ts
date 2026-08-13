@@ -76,14 +76,10 @@ export async function saveDailyInventoryCountLocal(input: {
   lines: Omit<FlowerDailyInventoryCountLine, 'id'>[];
 }): Promise<FlowerDailyInventoryCount> {
   const existing = await getDailyInventoryCountLocal(input.branchId, input.countDate);
-  if (existing) {
-    throw new Error('Daily inventory already submitted for this branch and date.');
-  }
-
   const branches = await listFlowerBranchesLocal();
   const branchName = branches.find((branch) => branch.id === input.branchId)?.name ?? input.branchId;
   const now = new Date().toISOString();
-  const countId = `daily-count-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+  const countId = existing?.id ?? `daily-count-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 
   const count: FlowerDailyInventoryCount = {
     id: countId,
@@ -94,13 +90,18 @@ export async function saveDailyInventoryCountLocal(input: {
     submitted_by_id: input.submittedById,
     submitted_by_name: input.submittedByName,
     submitted_at: now,
-    created_at: now,
+    created_at: existing?.created_at ?? now,
     lines: input.lines.map((line, index) => ({
       ...line,
       id: `${countId}-line-${index + 1}`,
     })),
   };
 
-  writeCountsToStorage([count, ...readCountsFromStorage()]);
+  writeCountsToStorage([
+    count,
+    ...readCountsFromStorage().filter(
+      (row) => !(row.branch_id === input.branchId && row.count_date === input.countDate),
+    ),
+  ]);
   return count;
 }

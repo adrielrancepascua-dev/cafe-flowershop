@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
+import { ChevronDown, Search } from 'lucide-react';
 import { listFlowerBranches } from '../../../../services/flowers/inventory';
 import {
   getDailyInventoryWorksheet,
@@ -19,6 +20,8 @@ import FlowerConfirmDialog from '../components/FlowerConfirmDialog';
 import {
   formatDailyInventoryVariance,
   groupDailyInventoryWorksheetLines,
+  matchesDailyInventorySearch,
+  parseDailyInventoryCountInput,
 } from '../../shared/utils/flower-daily-inventory';
 import {
   flowerProductColorSwatchClass,
@@ -91,6 +94,9 @@ export default function FlowerDailyInventoryPage() {
   const [summaries, setSummaries] = useState<FlowerDailyInventoryBranchSummary[]>([]);
   const [worksheet, setWorksheet] = useState<FlowerDailyInventoryWorksheet | null>(null);
   const [actualCounts, setActualCounts] = useState<Record<string, string>>({});
+  const [searchQuery, setSearchQuery] = useState('');
+  const [expandedGroups, setExpandedGroups] = useState<Set<string>>(() => new Set());
+  const [isEditing, setIsEditing] = useState(false);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [message, setMessage] = useState('');
@@ -100,6 +106,7 @@ export default function FlowerDailyInventoryPage() {
   const effectiveDate = isAdmin ? countDate : todayKey;
   const effectiveBranchId = isAdmin ? selectedBranchId : staffBranchId ?? '';
   const showAllBranches = isAdmin && selectedBranchId === 'all';
+  const showInputs = Boolean(worksheet && (!worksheet.submitted || isEditing));
 
   useEffect(() => {
     if (authLoading) {
@@ -135,6 +142,7 @@ export default function FlowerDailyInventoryPage() {
       if (showAllBranches) {
         setSummaries(await listDailyInventoryBranchSummaries({ countDate: effectiveDate }));
         setWorksheet(null);
+        setIsEditing(false);
         return;
       }
 
@@ -143,13 +151,14 @@ export default function FlowerDailyInventoryPage() {
         countDate: effectiveDate,
       });
       setWorksheet(nextWorksheet);
-      setActualCounts((current) => {
+      setIsEditing(false);
+      setSearchQuery('');
+      setExpandedGroups(new Set());
+      setActualCounts(() => {
         const next: Record<string, string> = {};
         for (const line of nextWorksheet.lines) {
           if (line.actual_count != null) {
             next[line.product_id] = String(line.actual_count);
-          } else if (current[line.product_id] != null) {
-            next[line.product_id] = current[line.product_id];
           }
         }
         return next;
@@ -170,18 +179,71 @@ export default function FlowerDailyInventoryPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [authLoading, effectiveBranchId, effectiveDate, showAllBranches]);
 
-  const groupedLines = useMemo(
-    () => (worksheet ? groupDailyInventoryWorksheetLines(worksheet.lines) : []),
-    [worksheet],
-  );
+  const groupedLines = useMemo(() => {
+    if (!worksheet) {
+      return [];
+    }
 
-  const missingCount = worksheet
-    ? worksheet.lines.filter((line) => actualCounts[line.product_id] === undefined || actualCounts[line.product_id] === '').length
+    const visibleLines = worksheet.lines.filter((line) => matchesDailyInventorySearch(line, searchQuery));
+    return groupDailyInventoryWorksheetLines(visibleLines);
+  }, [worksheet, searchQuery]);
+
+  const enteredCount = worksheet
+    ? worksheet.lines.filter((line) => (actualCounts[line.product_id] ?? '') !== '').length
     : 0;
-  const canSubmit = Boolean(worksheet && !worksheet.submitted && worksheet.lines.length > 0 && missingCount === 0 && user);
+  const canSave = Boolean(worksheet && worksheet.lines.length > 0 && user && showInputs);
+
+  function toggleGroup(key: string) {
+    setExpandedGroups((current) => {
+      const next = new Set(current);
+      if (next.has(key)) {
+        next.delete(key);
+      } else {
+        next.add(key);
+      }
+      return next;
+    });
+  }
+
+  function isGroupExpanded(key: string): boolean {
+    return searchQuery.trim().length > 0 || expandedGroups.has(key);
+  }
+
+  function startEditing() {
+    if (!worksheet) {
+      return;
+    }
+
+    setActualCounts(() => {
+      const next: Record<string, string> = {};
+      for (const line of worksheet.lines) {
+        next[line.product_id] = line.actual_count == null ? '' : String(line.actual_count);
+      }
+      return next;
+    });
+    setIsEditing(true);
+    setMessage('');
+  }
+
+  function cancelEditing() {
+    if (!worksheet) {
+      return;
+    }
+
+    setActualCounts(() => {
+      const next: Record<string, string> = {};
+      for (const line of worksheet.lines) {
+        if (line.actual_count != null) {
+          next[line.product_id] = String(line.actual_count);
+        }
+      }
+      return next;
+    });
+    setIsEditing(false);
+  }
 
   async function handleSubmit() {
-    if (!user || !worksheet || !canSubmit) {
+    if (!user || !worksheet || !canSave) {
       return;
     }
 
@@ -192,7 +254,7 @@ export default function FlowerDailyInventoryPage() {
     try {
       const counts: Record<string, number> = {};
       for (const line of worksheet.lines) {
-        counts[line.product_id] = Number(actualCounts[line.product_id]);
+        counts[line.product_id] = parseDailyInventoryCountInput(actualCounts[line.product_id]);
       }
 
       await submitDailyInventoryCount({
@@ -203,10 +265,15 @@ export default function FlowerDailyInventoryPage() {
         actualCounts: counts,
       });
       setConfirmOpen(false);
-      setMessage('Daily inventory submitted. Reports can unlock after day close.');
+      setIsEditing(false);
+      setMessage(
+        worksheet.submitted
+          ? 'Daily inventory updated. Stock was not changed.'
+          : 'Daily inventory submitted. Blank items were saved as 0. You can still edit this if needed.',
+      );
       await loadData();
     } catch (error) {
-      setErrorMessage(extractSupabaseErrorMessage(error, 'Failed to submit daily inventory.'));
+      setErrorMessage(extractSupabaseErrorMessage(error, 'Failed to save daily inventory.'));
       setConfirmOpen(false);
     } finally {
       setSubmitting(false);
@@ -221,7 +288,7 @@ export default function FlowerDailyInventoryPage() {
         description={
           isAdmin
             ? 'Staff count flowers and gift items each day. This does not change stock — review variances here, then adjust Inventory manually if needed.'
-            : 'Count each flower color and gift item. Wrappers are skipped. This does not change system stock.'
+            : 'Count each flower color and gift item. Wrappers are skipped. Blank counts save as 0. This does not change system stock.'
         }
       />
 
@@ -329,84 +396,141 @@ export default function FlowerDailyInventoryPage() {
                 Expected already subtracts today’s completed sales even if 7:00 PM deduct has not run. Stock is not
                 changed automatically — use Inventory to adjust after you confirm a variance.
               </p>
-              {isAdmin ? (
-                <Link to="/dashboard/flowers/inventory" className="mt-3 inline-flex text-sm font-semibold text-brand-brown">
-                  Open Inventory to adjust →
-                </Link>
-              ) : null}
+              <div className="mt-3 flex flex-wrap gap-2">
+                {isEditing ? (
+                  <button type="button" className="flower-btn-secondary text-sm" onClick={cancelEditing}>
+                    Cancel edit
+                  </button>
+                ) : (
+                  <button type="button" className="flower-btn-secondary text-sm" onClick={startEditing}>
+                    Edit counts
+                  </button>
+                )}
+                {isAdmin ? (
+                  <Link to="/dashboard/flowers/inventory" className="inline-flex items-center text-sm font-semibold text-brand-brown">
+                    Open Inventory to adjust →
+                  </Link>
+                ) : null}
+              </div>
             </div>
           ) : (
             <p className="mt-5 text-sm text-brand-brown/70">
-              Type the actual count only. Expected vs actual appears after submit, so the 6:00 PM count stays fair
-              against sales that deduct at 7:00 PM.
+              Tap a flower to expand its colors. Leave a variant blank if it is 0 — it still submits. You can edit after
+              submit if someone sent it too early.
             </p>
           )}
 
-          <div className="mt-4 space-y-4">
-            {groupedLines.map((group) => (
-              <section key={group.key} className="rounded-2xl border border-brand-muted/40 bg-white p-4">
-                <h3 className="text-sm font-semibold text-brand-dark">{group.title}</h3>
-                <ul className="mt-3 space-y-2">
-                  {group.lines.map((line) => (
-                    <li
-                      key={line.product_id}
-                      className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-brand-muted/30 bg-brand-cream/15 px-3 py-2.5"
+          <label className="relative mt-4 block">
+            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-brand-brown/50" />
+            <input
+              type="search"
+              value={searchQuery}
+              onChange={(event) => setSearchQuery(event.target.value)}
+              placeholder="Search flower, color, or gift item"
+              className="flower-input pl-9"
+            />
+          </label>
+
+          <div className="mt-4 space-y-3">
+            {groupedLines.length === 0 ? (
+              <p className="rounded-xl border border-dashed border-brand-muted/40 px-3 py-6 text-center text-sm text-brand-brown/60">
+                No flowers or gift items match that search.
+              </p>
+            ) : (
+              groupedLines.map((group) => {
+                const expanded = isGroupExpanded(group.key);
+                const panelId = `daily-count-${group.key.replace(/[^a-z0-9]+/gi, '-').toLowerCase()}`;
+                const enteredInGroup = group.lines.filter((line) => (actualCounts[line.product_id] ?? '') !== '').length;
+
+                return (
+                  <section key={group.key} className="rounded-2xl border border-brand-muted/40 bg-white">
+                    <button
+                      type="button"
+                      aria-expanded={expanded}
+                      aria-controls={panelId}
+                      onClick={() => toggleGroup(group.key)}
+                      className="flex w-full items-start gap-2 px-4 py-3 text-left"
                     >
+                      <ChevronDown
+                        className={`mt-0.5 h-4 w-4 shrink-0 text-brand-brown/70 transition-transform ${
+                          expanded ? 'rotate-0' : '-rotate-90'
+                        }`}
+                        aria-hidden
+                      />
                       <div className="min-w-0 flex-1">
-                        <WorksheetLineLabel line={line} />
-                        {worksheet.submitted ? (
-                          <p className="mt-1 text-xs text-brand-brown/65">
-                            Expected {line.expected_on_hand}
-                            {line.sold_pending_deduction > 0 ? ` · ${line.sold_pending_deduction} sold pending deduct` : ''}
-                          </p>
-                        ) : null}
+                        <p className="font-semibold text-brand-dark">{group.title}</p>
+                        <p className="mt-0.5 text-xs text-brand-brown/65">
+                          {group.lines.length} variant{group.lines.length === 1 ? '' : 's'}
+                          {showInputs ? ` · ${enteredInGroup} entered` : ''}
+                          {expanded ? ' · tap to collapse' : ' · tap to expand'}
+                        </p>
                       </div>
-                      {worksheet.submitted ? (
-                        <div className="text-right">
-                          <p className="text-lg font-bold text-brand-dark">{line.actual_count}</p>
-                          <p className={`text-xs font-semibold ${varianceClass(line.variance)}`}>
-                            {line.variance == null ? '' : formatDailyInventoryVariance(line.variance)}
-                          </p>
-                        </div>
-                      ) : (
-                        <label className="w-24 shrink-0 text-xs font-medium text-brand-brown">
-                          Count
-                          <input
-                            type="text"
-                            inputMode="numeric"
-                            value={actualCounts[line.product_id] ?? ''}
-                            onChange={(event) =>
-                              setActualCounts((current) => ({
-                                ...current,
-                                [line.product_id]: sanitizeCountInput(event.target.value),
-                              }))
-                            }
-                            className="flower-input mt-1 text-center text-base font-semibold"
-                            placeholder="0"
-                          />
-                        </label>
-                      )}
-                    </li>
-                  ))}
-                </ul>
-              </section>
-            ))}
+                    </button>
+                    {expanded ? (
+                      <ul id={panelId} className="space-y-2 border-t border-brand-muted/30 px-4 py-3">
+                        {group.lines.map((line) => (
+                          <li
+                            key={line.product_id}
+                            className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-brand-muted/30 bg-brand-cream/15 px-3 py-2.5"
+                          >
+                            <div className="min-w-0 flex-1">
+                              <WorksheetLineLabel line={line} />
+                              {worksheet.submitted && !isEditing ? (
+                                <p className="mt-1 text-xs text-brand-brown/65">
+                                  Expected {line.expected_on_hand}
+                                  {line.sold_pending_deduction > 0
+                                    ? ` · ${line.sold_pending_deduction} sold pending deduct`
+                                    : ''}
+                                </p>
+                              ) : null}
+                            </div>
+                            {showInputs ? (
+                              <label className="w-24 shrink-0 text-xs font-medium text-brand-brown">
+                                Count
+                                <input
+                                  type="text"
+                                  inputMode="numeric"
+                                  value={actualCounts[line.product_id] ?? ''}
+                                  onChange={(event) =>
+                                    setActualCounts((current) => ({
+                                      ...current,
+                                      [line.product_id]: sanitizeCountInput(event.target.value),
+                                    }))
+                                  }
+                                  className="flower-input mt-1 text-center text-base font-semibold"
+                                  placeholder="0"
+                                />
+                              </label>
+                            ) : (
+                              <div className="text-right">
+                                <p className="text-lg font-bold text-brand-dark">{line.actual_count}</p>
+                                <p className={`text-xs font-semibold ${varianceClass(line.variance)}`}>
+                                  {line.variance == null ? '' : formatDailyInventoryVariance(line.variance)}
+                                </p>
+                              </div>
+                            )}
+                          </li>
+                        ))}
+                      </ul>
+                    ) : null}
+                  </section>
+                );
+              })
+            )}
           </div>
 
-          {!worksheet.submitted ? (
+          {showInputs ? (
             <div className="mt-5 flex flex-wrap items-center justify-between gap-3">
               <p className="text-sm text-brand-brown/70">
-                {missingCount > 0
-                  ? `${missingCount} item${missingCount === 1 ? '' : 's'} still need a count.`
-                  : `${worksheet.lines.length} items ready to submit.`}
+                {enteredCount} of {worksheet.lines.length} entered. Blank variants save as 0.
               </p>
               <button
                 type="button"
-                disabled={!canSubmit || submitting}
+                disabled={!canSave || submitting}
                 onClick={() => setConfirmOpen(true)}
                 className="flower-btn-primary"
               >
-                Submit daily count
+                {worksheet.submitted ? 'Save edited count' : 'Submit daily count'}
               </button>
             </div>
           ) : null}
@@ -417,9 +541,13 @@ export default function FlowerDailyInventoryPage() {
 
       <FlowerConfirmDialog
         open={confirmOpen}
-        title="Submit daily count?"
-        message="You can’t edit this after submit. Actual counts will be compared with expected remaining after today’s completed sales. Stock will not change automatically."
-        confirmLabel={submitting ? 'Submitting…' : 'Submit count'}
+        title={worksheet?.submitted ? 'Save edited count?' : 'Submit daily count?'}
+        message={
+          worksheet?.submitted
+            ? 'This updates the submitted count. Blank items will be saved as 0. Stock will not change automatically.'
+            : 'Blank items will be saved as 0. You can edit this later if it was submitted too early. Stock will not change automatically.'
+        }
+        confirmLabel={submitting ? 'Saving…' : worksheet?.submitted ? 'Save count' : 'Submit count'}
         cancelLabel="Go back"
         busy={submitting}
         onConfirm={() => void handleSubmit()}
