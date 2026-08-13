@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { listFlowerBranches } from '../../../../services/flowers/inventory';
 import { getFlowerReports, getStaffReportsAccess } from '../../../../services/flowers/reports';
 import {
@@ -53,6 +54,7 @@ export default function FlowerReportsPage() {
   const [reportDate, setReportDate] = useState(toDateKey(new Date()));
   const [loading, setLoading] = useState(true);
   const [blockedMessage, setBlockedMessage] = useState('');
+  const [showDailyCountLink, setShowDailyCountLink] = useState(false);
   const [supplierAmount, setSupplierAmount] = useState('');
   const [supplierDescription, setSupplierDescription] = useState('');
   const [supplierBranchId, setSupplierBranchId] = useState('');
@@ -92,6 +94,7 @@ export default function FlowerReportsPage() {
 
     setLoading(true);
     setBlockedMessage('');
+    setShowDailyCountLink(false);
 
     try {
       if (!isAdmin) {
@@ -112,10 +115,15 @@ export default function FlowerReportsPage() {
             setBlockedMessage(
               `Reports unlock after today (${formatReportDateLabel(effectiveReportDate)}) once ${branchLabel} has scheduled orders and all are marked picked up or delivered.`,
             );
-          } else {
+          } else if (access.openOrders > 0) {
             setBlockedMessage(
               `Reports locked — ${access.openOrders} open order(s) left for ${branchLabel} today. Mark all as picked up or delivered first.`,
             );
+          } else {
+            setBlockedMessage(
+              `Reports locked — submit today’s daily inventory count for ${branchLabel} first.`,
+            );
+            setShowDailyCountLink(true);
           }
           setReportsData(emptyReports());
           return;
@@ -292,6 +300,14 @@ export default function FlowerReportsPage() {
       {blockedMessage ? (
         <p className="mt-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
           {blockedMessage}
+          {showDailyCountLink ? (
+            <>
+              {' '}
+              <Link to="/dashboard/flowers/daily-count" className="font-semibold underline underline-offset-2">
+                Open Daily count
+              </Link>
+            </>
+          ) : null}
         </p>
       ) : null}
 

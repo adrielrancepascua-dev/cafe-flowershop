@@ -1,11 +1,12 @@
 import { NavLink } from 'react-router-dom';
-import { BarChart3, CalendarDays, ClipboardList, Home, Package, Receipt, Sprout, Users } from 'lucide-react';
+import { BarChart3, CalendarDays, ClipboardCheck, ClipboardList, Home, Package, Receipt, Sprout, Users } from 'lucide-react';
 import { useFlowerAuth } from '../../../../lib/auth/FlowerAuthContext';
 import FlowerBrandLogo from './FlowerBrandLogo';
 const BASE_LINKS = [
   { label: 'Home', to: '/dashboard/flowers', icon: Home, end: true, adminOnly: false },
   { label: 'Orders', to: '/dashboard/flowers/orders', icon: CalendarDays, end: false, adminOnly: false },
   { label: 'Inventory', to: '/dashboard/flowers/inventory', icon: Package, end: false, adminOnly: false },
+  { label: 'Count', to: '/dashboard/flowers/daily-count', icon: ClipboardCheck, end: false, adminOnly: false },
   { label: 'Expenses', to: '/dashboard/flowers/expenses', icon: Receipt, end: false, adminOnly: false },
   { label: 'Reports', to: '/dashboard/flowers/reports', icon: BarChart3, end: false, adminOnly: false },
   { label: 'Supplies', to: '/dashboard/flowers/supplies', icon: ClipboardList, end: false, adminOnly: true },

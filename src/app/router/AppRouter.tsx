@@ -4,6 +4,7 @@ import FlowersAdminHome from '../../modules/flowers/dashboard/pages/FlowersAdmin
 import FlowerOrdersPage from '../../modules/flowers/dashboard/pages/FlowerOrdersPage';
 import FlowerProductsPage from '../../modules/flowers/dashboard/pages/FlowerProductsPage';
 import FlowerInventoryPage from '../../modules/flowers/dashboard/pages/FlowerInventoryPage';
+import FlowerDailyInventoryPage from '../../modules/flowers/dashboard/pages/FlowerDailyInventoryPage';
 import FlowerSuppliesPage from '../../modules/flowers/dashboard/pages/FlowerSuppliesPage';
 import FlowerExpensesPage from '../../modules/flowers/dashboard/pages/FlowerExpensesPage';
 import FlowerReportsPage from '../../modules/flowers/dashboard/pages/FlowerReportsPage';
@@ -33,6 +34,7 @@ export default function AppRouter() {
           <Route path="flowers/orders" element={<FlowerOrdersPage />} />
           <Route path="flowers/products" element={<FlowerProductsPage />} />
           <Route path="flowers/inventory" element={<FlowerInventoryPage />} />
+          <Route path="flowers/daily-count" element={<FlowerDailyInventoryPage />} />
           <Route path="flowers/supplies" element={<FlowerSuppliesPage />} />
           <Route path="flowers/expenses" element={<FlowerExpensesPage />} />
           <Route path="flowers/reports" element={<FlowerReportsPage />} />

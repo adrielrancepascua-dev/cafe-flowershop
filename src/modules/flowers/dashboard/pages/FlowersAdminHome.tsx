@@ -1,5 +1,5 @@
 import { Link } from 'react-router-dom';
-import { CalendarDays, ClipboardList, Package, Receipt, ShoppingBag, Sprout, BarChart3 } from 'lucide-react';
+import { CalendarDays, ClipboardCheck, ClipboardList, Package, Receipt, ShoppingBag, Sprout, BarChart3 } from 'lucide-react';
 import { isFlowerDemoMode } from '../../../../app/app-mode';
 import { isSupabaseConfigured } from '../../../../lib/supabase/client';
 import { useFlowerAuth } from '../../../../lib/auth/FlowerAuthContext';
@@ -24,8 +24,9 @@ function getSystemModeLabel(): string {
 const STAFF_LINKS = [
   { label: 'Orders', to: '/dashboard/flowers/orders', icon: CalendarDays, description: 'Calendar & list order entry' },
   { label: 'Inventory', to: '/dashboard/flowers/inventory', icon: Package, description: 'View branch stock levels' },
+  { label: 'Daily count', to: '/dashboard/flowers/daily-count', icon: ClipboardCheck, description: 'Submit today’s flower + gift item count' },
   { label: 'My Expenses', to: '/dashboard/flowers/expenses', icon: Receipt, description: 'Log your daily expenses' },
-  { label: 'Reports', to: '/dashboard/flowers/reports', icon: BarChart3, description: "Today's sales & net income after all orders are closed" },
+  { label: 'Reports', to: '/dashboard/flowers/reports', icon: BarChart3, description: "Today's sales after day close and daily count" },
 ];
 
 const ADMIN_LINKS = [

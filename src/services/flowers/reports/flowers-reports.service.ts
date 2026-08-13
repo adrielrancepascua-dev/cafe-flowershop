@@ -68,9 +68,10 @@ export type StaffReportsAccessResult = {
   pendingIncomingTransfers: number;
   openOrders: number;
   totalOrders: number;
+  dailyInventorySubmitted: boolean;
 };
 
-/** Staff can open reports only after confirming incoming transfers and closing the day. */
+/** Staff can open reports only after confirming incoming transfers, closing the day, and submitting daily inventory. */
 export async function getStaffReportsAccess(
   reportDate: string,
   branchId?: string,
@@ -80,6 +81,7 @@ export async function getStaffReportsAccess(
     pendingIncomingTransfers: 0,
     openOrders: 0,
     totalOrders: 0,
+    dailyInventorySubmitted: false,
   };
 
   const todayKey = toDateKey(new Date());
@@ -106,11 +108,23 @@ export async function getStaffReportsAccess(
   const { getFlowerDayCloseStatus } = await import('../orders/flowers-orders.service');
   const status = await getFlowerDayCloseStatus(reportDate, branchId);
 
+  if (!status.is_closed) {
+    return {
+      ...denied,
+      openOrders: status.open_orders,
+      totalOrders: status.total_orders,
+    };
+  }
+
+  const { isDailyInventorySubmitted } = await import('../inventory/flowers-daily-inventory.service');
+  const dailyInventorySubmitted = await isDailyInventorySubmitted(branchId, reportDate);
+
   return {
-    allowed: status.is_closed,
+    allowed: dailyInventorySubmitted,
     pendingIncomingTransfers: 0,
     openOrders: status.open_orders,
     totalOrders: status.total_orders,
+    dailyInventorySubmitted,
   };
 }
 

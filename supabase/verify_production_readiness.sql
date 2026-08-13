@@ -30,6 +30,13 @@ where table_schema = 'public'
   and table_name in ('flower_supply_transfers', 'flower_supply_transfer_items')
 order by table_name;
 
+-- 3b) Daily inventory tables exist
+select table_name
+from information_schema.tables
+where table_schema = 'public'
+  and table_name in ('flower_daily_inventory_counts', 'flower_daily_inventory_count_lines')
+order by table_name;
+
 -- 4) Active staff/admin profiles (should match your live users)
 select id, email, display_name, role, branch_id, is_active
 from public.flower_profiles

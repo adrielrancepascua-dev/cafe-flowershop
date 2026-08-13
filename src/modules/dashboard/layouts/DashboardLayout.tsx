@@ -11,6 +11,7 @@ const FLOWER_LINKS = [
   { label: 'Home', to: '/dashboard/flowers' },
   { label: 'Orders', to: '/dashboard/flowers/orders' },
   { label: 'Inventory', to: '/dashboard/flowers/inventory' },
+  { label: 'Daily count', to: '/dashboard/flowers/daily-count' },
   { label: 'Expenses', to: '/dashboard/flowers/expenses' },
   { label: 'Reports', to: '/dashboard/flowers/reports' },
   { label: 'Supplies', to: '/dashboard/flowers/supplies', adminOnly: true },

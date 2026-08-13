@@ -24,6 +24,7 @@ Use this before collecting the ₱30k balance. Run on the **production** deploy 
 - [ ] `supabase/add_flower_transfer_billing.sql` applied (admin-only transfer cost + paid/unpaid tracking)
 - [ ] `supabase/add_flower_order_content_edit_policy.sql` applied (one staff edit until 6 PM on order day)
 - [ ] `supabase/add_flower_expense_payment_mode.sql` applied (cash vs GCash on staff expenses)
+- [ ] `supabase/add_flower_daily_inventory.sql` applied (daily flower + gift item counts; report lock)
 - [ ] Optional: run `supabase/verify_production_readiness.sql` — all checks pass
 
 ### Create the first admin (one-time)
@@ -78,7 +79,7 @@ Use two phones (or one phone + laptop) logged in as **different staff** accounts
 Pick a test day with 2+ orders (or create them for today).
 
 - [ ] Mark all non-cancelled orders for that pickup day as **Picked up**, **Delivered**, or **Completed**
-- [ ] Reports for that day unlock for staff (day is closed)
+- [ ] Reports for that day unlock for staff only after day close **and** daily inventory submit
 - [ ] Inventory deducts **once** when the last order on that day reaches a terminal status — not before
 - [ ] Stock levels match expected counts after day close
 
@@ -108,6 +109,14 @@ Pick a test day with 2+ orders (or create them for today).
 - [ ] **Unpaid branch balances** summary lists what one branch still owes another (e.g. San Carlos → Dagupan)
 - [ ] Billing can be updated on pending requests and in transfer history after confirmation
 
+### 5c. Daily inventory count
+
+- [ ] **`supabase/add_flower_daily_inventory.sql` applied**
+- [ ] Staff open **Daily count** / **Count** and enter actual qty per flower color + gift item (wrappers skipped)
+- [ ] After submit, variance = actual − expected remaining after today’s completed sales (even before 7:00 PM deduct)
+- [ ] Submit does **not** change stock; admin reviews short/extra at night and adjusts Inventory manually if confirmed
+- [ ] Staff **Reports** stay locked until today’s count is submitted (in addition to day close + incoming transfers)
+
 ### 6. Supplies (admin)
 
 - [ ] Admin opens **Supplies** → New arrivals voucher saves and updates inventory
@@ -125,10 +134,11 @@ Pick a test day with 2+ orders (or create them for today).
 
 1. **Orders** — calendar vs list; create order; upload photos; status workflow (not started → ready → picked up/delivered)
 2. **Inventory** — view stock; stock in/out; inter-branch transfer requests (file a request; receiving branch confirms before stock is added)
-3. **Expenses** — log petty cash; admin can fix typos
-4. **Reports** — locked until all today’s orders are done; screenshot printable report for Messenger
-5. **Team** (admin) — add staff, copy login details, deactivate leavers
-6. **Day close rule** — stock comes out when every order for that pickup day is finished, not when each order is marked ready
+3. **Daily count** — enter actual flower + gift item counts before leaving; wrappers skipped; does not auto-adjust stock
+4. **Expenses** — log petty cash; admin can fix typos
+5. **Reports** — locked until today’s orders are closed **and** daily count is submitted; screenshot printable report for Messenger
+6. **Team** (admin) — add staff, copy login details, deactivate leavers
+7. **Day close rule** — stock comes out when every order for that pickup day is finished, not when each order is marked ready
 
 ## Rollback
 
