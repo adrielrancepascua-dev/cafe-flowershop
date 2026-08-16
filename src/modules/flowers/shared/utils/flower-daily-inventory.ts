@@ -1,4 +1,4 @@
-import type { FlowerInventoryStockRow } from '../types/flower-inventory';
+import type { FlowerInventoryMovementRow, FlowerInventoryStockRow } from '../types/flower-inventory';
 import { FLOWER_ORDER_TERMINAL_STATUSES, type FlowerOrder } from '../types/flower-order';
 import type {
   FlowerDailyInventoryBranchSummary,
@@ -8,6 +8,10 @@ import type {
   FlowerDailyInventoryWorksheetLine,
 } from '../types/flower-daily-inventory';
 import { scheduledForToDateKey } from './flower-format';
+import {
+  effectiveSoldPendingAfterStockOut,
+  sumUnattributedStockOutByProduct,
+} from './flower-inventory-deduct';
 import { miscCategoryFromFlowerType } from './flower-misc-category';
 import {
   compareFlowerTypeLabels,
@@ -131,8 +135,13 @@ function shouldIncludeWorksheetRow(
 function worksheetLineFromStockRow(
   row: FlowerInventoryStockRow,
   soldPending: Map<string, number>,
+  stockOutByProduct: Map<string, number> = new Map(),
 ): FlowerDailyInventoryWorksheetLine {
-  const soldPendingDeduction = soldPending.get(row.product_id) ?? 0;
+  const rawSoldPending = soldPending.get(row.product_id) ?? 0;
+  const soldPendingDeduction = effectiveSoldPendingAfterStockOut(
+    rawSoldPending,
+    stockOutByProduct.get(row.product_id) ?? 0,
+  );
   const expectedOnHand = computeExpectedOnHand(row.on_hand, soldPendingDeduction);
 
   return {
@@ -210,12 +219,18 @@ export function buildDailyInventoryWorksheet(input: {
   stockRows: FlowerInventoryStockRow[];
   orders: FlowerOrder[];
   submitted: FlowerDailyInventoryCount | null;
+  movements?: Array<Pick<FlowerInventoryMovementRow, 'movement_type' | 'product_id' | 'quantity' | 'branch_id' | 'note' | 'created_at'>>;
 }): FlowerDailyInventoryWorksheet {
   const soldPending = soldPendingDeductionByProductId(input.orders, input.countDate, input.branchId);
+  const stockOutByProduct = sumUnattributedStockOutByProduct(
+    input.movements ?? [],
+    input.branchId,
+    input.countDate,
+  );
   const liveLines = input.stockRows
     .filter((row) => row.branch_id === input.branchId && shouldIncludeWorksheetRow(row, soldPending))
     .sort(compareInventoryStockRows)
-    .map((row) => worksheetLineFromStockRow(row, soldPending));
+    .map((row) => worksheetLineFromStockRow(row, soldPending, stockOutByProduct));
 
   if (!input.submitted) {
     return {

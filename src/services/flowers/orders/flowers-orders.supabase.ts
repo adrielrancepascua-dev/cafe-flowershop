@@ -17,9 +17,14 @@ import type { FlowerPaymentMode } from '../../../modules/flowers/shared/types/fl
 import {
   deductFlowerInventoryForOrderSupabase,
   listFlowerBranchesSupabase,
+  listFlowerInventoryMovementsSupabase,
   restoreFlowerInventoryForOrderSupabase,
   validateFlowerOrderStockSupabase,
 } from '../inventory/flowers-inventory.supabase';
+import {
+  buildBatchStockOutCreditMap,
+  planOrderInventoryDeduction,
+} from '../../../modules/flowers/shared/utils/flower-inventory-deduct';
 import { resolveOrderAttachmentUrl, resolveOrderAttachments } from './flowers-order-attachments';
 import {
   computeFlowerDayCloseStatus,
@@ -341,10 +346,28 @@ async function listOrdersForPickupDate(dateKey: string): Promise<FlowerOrder[]> 
   });
 }
 
-async function deductInventoryForOrder(order: FlowerOrder): Promise<void> {
+async function deductInventoryForOrder(
+  order: FlowerOrder,
+  remainingAfterStockOutCredit?: Map<string, number>,
+): Promise<void> {
   await validateFlowerOrderStockSupabase(order.branch_id, order.items);
 
-  for (const item of order.items) {
+  const movements = await listFlowerInventoryMovementsSupabase({
+    branchId: order.branch_id,
+    fromDate: getPickupDateKey(order.scheduled_for),
+    toDate: getPickupDateKey(order.scheduled_for),
+    limit: 2000,
+  });
+
+  const planned = planOrderInventoryDeduction({
+    orderId: order.id,
+    branchId: order.branch_id,
+    items: order.items,
+    movements,
+    remainingAfterStockOutCredit,
+  });
+
+  for (const item of planned) {
     await deductFlowerInventoryForOrderSupabase({
       branchId: order.branch_id,
       productId: item.product_id,
@@ -370,6 +393,19 @@ async function maybeBatchDeductInventoryForClosedDay(
     return;
   }
 
+  const movements = await listFlowerInventoryMovementsSupabase({
+    branchId,
+    fromDate: dateKey,
+    toDate: dateKey,
+    limit: 2000,
+  });
+  const remainingAfterStockOutCredit = buildBatchStockOutCreditMap({
+    branchId,
+    dateKey,
+    pendingItems: pending.flatMap((order) => order.items),
+    movements,
+  });
+
   const supabase = await requireAuthenticatedSupabaseClient();
 
   for (const order of pending) {
@@ -390,7 +426,7 @@ async function maybeBatchDeductInventoryForClosedDay(
     }
 
     try {
-      await deductInventoryForOrder(order);
+      await deductInventoryForOrder(order, remainingAfterStockOutCredit);
     } catch (error) {
       await supabase
         .from('flower_orders')

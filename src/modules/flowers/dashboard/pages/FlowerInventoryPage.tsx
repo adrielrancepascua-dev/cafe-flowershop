@@ -496,6 +496,9 @@ function StockAdjustControls({
       >
         Stock out
       </button>
+      <p className="basis-full text-[11px] text-brand-brown/60">
+        Sales deduct at 7:00 PM. Stock out is for waste or corrections only.
+      </p>
     </div>
   ) : (
     <div className="flex w-full flex-col gap-2">
@@ -543,6 +546,9 @@ function StockAdjustControls({
           Stock out
         </button>
       </div>
+      <p className="text-[11px] text-brand-brown/60">
+        Sales deduct at 7:00 PM. Stock out is for waste or corrections only.
+      </p>
     </div>
   );
 }
@@ -1616,8 +1622,8 @@ export default function FlowerInventoryPage() {
                 ? 'Flower totals across Dagupan, San Carlos, and Urdaneta. Select a branch to adjust stock.'
                 : 'Miscellaneous totals by category. Select a branch to stock in wrappers or gift items.'
               : stockKindTab === 'flower'
-                ? 'Flower stock grouped by type with colors in order.'
-                : 'Stock in or out wrappers and gift items for this branch.'
+                ? 'Flower stock grouped by type with colors in order. Completed sales deduct at 7:00 PM — use Stock out only for waste, damage, or corrections.'
+                : 'Stock in or out wrappers and gift items for this branch. Sales deduct at 7:00 PM; Stock out is for waste or corrections only.'
             : isAllBranchesView
               ? stockKindTab === 'flower'
                 ? 'Combined flower totals across all branches.'

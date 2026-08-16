@@ -17,7 +17,7 @@ import type {
   TransferFlowerInventoryInput,
   UpdateFlowerTransferRequestBillingInput,
 } from '../../../modules/flowers/shared/types/flower-inventory';
-import { getLocalDayBoundsIso, formatInventoryOrderDeductNote, formatInventoryOrderVoidNote } from '../../../modules/flowers/shared/utils/flower-format';
+import { getLocalDayBoundsIso, formatInventoryOrderDeductNote, formatInventoryOrderVoidNote, parseInventoryMovementOrderId } from '../../../modules/flowers/shared/utils/flower-format';
 import {
   compareInventoryStockRows,
   normalizeFlowerProductColor,
@@ -149,7 +149,10 @@ async function runAtomicStockChange(
   throw toServiceError(error, 'Stock update failed.');
 }
 
-function toDisplayMovementType(value: string): FlowerInventoryMovementRow['movement_type'] {
+function toDisplayMovementType(
+  value: string,
+  note = '',
+): FlowerInventoryMovementRow['movement_type'] {
   if (value === 'stock_in' || value === 'in' || value === 'transfer_in') {
     return value === 'transfer_in' ? 'transfer_in' : 'stock_in';
   }
@@ -160,6 +163,10 @@ function toDisplayMovementType(value: string): FlowerInventoryMovementRow['movem
 
   if (value === 'transfer_out') {
     return 'transfer_out';
+  }
+
+  if ((value === 'stock_out' || value === 'out') && parseInventoryMovementOrderId(note)) {
+    return 'order_deduct';
   }
 
   return 'stock_out';
@@ -352,7 +359,7 @@ export async function listFlowerInventoryMovementsSupabase(
     branch_name: branchMap.get(row.branch_id) ?? row.branch_id,
     product_id: row.product_id,
     product_name: productMap.get(row.product_id) ?? row.product_id,
-    movement_type: toDisplayMovementType(row.movement_type),
+    movement_type: toDisplayMovementType(row.movement_type, row.note ?? ''),
     quantity: Number(row.quantity),
     previous_on_hand: Number(row.previous_on_hand),
     new_on_hand: Number(row.new_on_hand),

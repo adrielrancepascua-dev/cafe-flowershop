@@ -15,9 +15,14 @@ import { buildOrderId } from '../../orders/order-id';
 import {
   deductFlowerInventoryForOrderLocal,
   listFlowerBranchesLocal,
+  listFlowerInventoryMovementsLocal,
   restoreFlowerInventoryForOrderLocal,
   validateFlowerOrderStockLocal,
 } from '../inventory/flowers-inventory.local';
+import {
+  buildBatchStockOutCreditMap,
+  planOrderInventoryDeduction,
+} from '../../../modules/flowers/shared/utils/flower-inventory-deduct';
 import {
   computeFlowerDayCloseStatus,
   getOrdersPendingInventoryDeduction,
@@ -130,6 +135,18 @@ async function maybeBatchDeductInventoryForClosedDay(
   }
 
   const pending = getOrdersPendingInventoryDeduction(dayOrders, dateKey, branchId);
+  const movements = await listFlowerInventoryMovementsLocal({
+    branchId,
+    fromDate: dateKey,
+    toDate: dateKey,
+    limit: 2000,
+  });
+  const remainingAfterStockOutCredit = buildBatchStockOutCreditMap({
+    branchId,
+    dateKey,
+    pendingItems: pending.flatMap((order) => order.items),
+    movements,
+  });
 
   for (const order of pending) {
     const freshOrders = readOrdersFromStorage();
@@ -148,7 +165,21 @@ async function maybeBatchDeductInventoryForClosedDay(
     try {
       await validateFlowerOrderStockLocal(order.branch_id, order.items);
 
-      for (const item of order.items) {
+      const latestMovements = await listFlowerInventoryMovementsLocal({
+        branchId: order.branch_id,
+        fromDate: dateKey,
+        toDate: dateKey,
+        limit: 2000,
+      });
+      const planned = planOrderInventoryDeduction({
+        orderId: order.id,
+        branchId: order.branch_id,
+        items: order.items,
+        movements: latestMovements,
+        remainingAfterStockOutCredit,
+      });
+
+      for (const item of planned) {
         await deductFlowerInventoryForOrderLocal({
           branchId: order.branch_id,
           productId: item.product_id,
