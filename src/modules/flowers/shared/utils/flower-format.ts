@@ -276,6 +276,26 @@ export function formatInventoryMovementTimestamp(iso: string): string {
   });
 }
 
+export function formatInventoryMovementActor(
+  movement: { movement_type: string; created_by_name?: string | null },
+): string {
+  const name = movement.created_by_name?.trim() ?? '';
+
+  if (movement.movement_type === 'order_deduct') {
+    return name ? `7:00 PM deduct · ran on ${name}'s session` : '7:00 PM auto deduct';
+  }
+
+  if (movement.movement_type === 'transfer_in' || movement.movement_type === 'transfer_out') {
+    return name || 'Transfer';
+  }
+
+  if (name) {
+    return name;
+  }
+
+  return 'Unknown (before names were logged)';
+}
+
 /** Collapse duplicate day-close order deductions already stored before the deduct guard fix. */
 export function dedupeInventoryMovementRows<T extends {
   movement_type: string;

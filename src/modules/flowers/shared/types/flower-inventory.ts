@@ -37,6 +37,8 @@ export interface FlowerInventoryMovementRow {
   new_on_hand: number;
   note: string;
   created_at: string;
+  created_by_id: string;
+  created_by_name: string;
 }
 
 export interface ListFlowerInventoryOptions {
@@ -47,6 +49,7 @@ export interface ListFlowerInventoryMovementsOptions extends ListFlowerInventory
   limit?: number;
   fromDate?: string;
   toDate?: string;
+  productId?: string;
 }
 
 export type FlowerInventoryStockPrintLayout = 'combined' | 'by_branch';
@@ -75,6 +78,8 @@ export interface AdjustFlowerInventoryInput {
   movementType: FlowerInventoryAdjustmentType;
   quantity: number;
   note?: string;
+  createdById?: string;
+  createdByName?: string;
 }
 
 export interface TransferFlowerInventoryInput {

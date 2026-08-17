@@ -25,6 +25,7 @@ Use this before collecting the ₱30k balance. Run on the **production** deploy 
 - [ ] `supabase/add_flower_order_content_edit_policy.sql` applied (one staff edit until 6 PM on order day)
 - [ ] `supabase/add_flower_expense_payment_mode.sql` applied (cash vs GCash on staff expenses)
 - [ ] `supabase/add_flower_daily_inventory.sql` applied (daily flower + gift item counts; report lock)
+- [ ] `supabase/add_inventory_movement_actor.sql` applied (who did stock in/out on each movement; tap a color for its daily log)
 - [ ] Optional: run `supabase/verify_production_readiness.sql` — all checks pass
 
 ### Create the first admin (one-time)

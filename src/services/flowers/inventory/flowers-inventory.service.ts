@@ -9,6 +9,7 @@ import type {
 } from '../../../modules/flowers/shared/types/flower-inventory';
 import { getFlowerStorageMode, shouldUseFlowerSupabase } from '../storage-mode';
 import { toServiceError } from '../../../lib/supabase/errors';
+import { getStoredFlowerSession } from '../../../lib/auth/flower-auth.service';
 import {
   adjustFlowerInventoryLocal,
   cancelFlowerTransferRequestLocal,
@@ -79,12 +80,18 @@ export async function listFlowerInventoryMovements(
 }
 
 export async function adjustFlowerInventory(input: AdjustFlowerInventoryInput): Promise<void> {
+  const user = getStoredFlowerSession()?.user;
+  const withActor: AdjustFlowerInventoryInput = {
+    ...input,
+    createdById: input.createdById || user?.id || '',
+    createdByName: input.createdByName || user?.display_name || '',
+  };
   const mode = getFlowerStorageMode();
 
   if (shouldUseFlowerSupabase(mode)) {
     try {
       const { adjustFlowerInventorySupabase } = await import('./flowers-inventory.supabase');
-      return await adjustFlowerInventorySupabase(input);
+      return await adjustFlowerInventorySupabase(withActor);
     } catch (error) {
       if (mode === 'supabase') {
         throw error;
@@ -92,7 +99,7 @@ export async function adjustFlowerInventory(input: AdjustFlowerInventoryInput): 
     }
   }
 
-  return adjustFlowerInventoryLocal(input);
+  return adjustFlowerInventoryLocal(withActor);
 }
 
 export async function transferFlowerInventory(input: TransferFlowerInventoryInput): Promise<void> {

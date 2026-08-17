@@ -1,5 +1,5 @@
 import { getSupabaseClient } from '../../../lib/supabase/client';
-import { requireSupabaseAuthSession } from '../../../lib/auth/flower-auth.service';
+import { getStoredFlowerSession, requireSupabaseAuthSession } from '../../../lib/auth/flower-auth.service';
 import { extractSupabaseErrorMessage, toServiceError } from '../../../lib/supabase/errors';
 import { FLOWER_BRANCHES_MOCK } from '../../../modules/flowers/shared/data/flowers.mock';
 import type {
@@ -60,6 +60,8 @@ type InventoryMovementDbRow = {
   new_on_hand: number;
   note: string;
   created_at: string;
+  created_by_id?: string | null;
+  created_by_name?: string | null;
 };
 
 function requireSupabaseClient() {
@@ -85,6 +87,33 @@ function assertPositiveInteger(quantity: number): void {
 // Cached per session: once we learn the atomic RPC is missing we stop probing
 // for it and use the JS fallback for the rest of the session.
 let atomicStockRpcAvailable: boolean | undefined;
+let movementActorColumnsAvailable: boolean | undefined;
+
+const MOVEMENT_SELECT_BASE =
+  'id, branch_id, product_id, movement_type, quantity, previous_on_hand, new_on_hand, note, created_at';
+const MOVEMENT_SELECT_WITH_ACTOR = `${MOVEMENT_SELECT_BASE}, created_by_id, created_by_name`;
+
+function isMissingMovementActorColumnError(error: { message?: string } | null): boolean {
+  if (!error?.message) {
+    return false;
+  }
+
+  return /created_by_id|created_by_name/i.test(error.message);
+}
+
+function currentMovementActor(override?: { createdById?: string; createdByName?: string }): {
+  created_by_id: string | null;
+  created_by_name: string;
+} {
+  const user = getStoredFlowerSession()?.user;
+  const id = override?.createdById?.trim() || user?.id || '';
+  const name = override?.createdByName?.trim() || user?.display_name?.trim() || '';
+
+  return {
+    created_by_id: id || null,
+    created_by_name: name,
+  };
+}
 
 function isMissingFunctionError(error: { code?: string; message?: string } | null): boolean {
   if (!error) {
@@ -174,6 +203,45 @@ function toDisplayMovementType(
 
 function toMovementType(value: 'stock_in' | 'stock_out'): 'in' | 'out' {
   return value === 'stock_in' ? 'in' : 'out';
+}
+
+async function insertInventoryMovementRow(
+  supabase: ReturnType<typeof requireSupabaseClient>,
+  row: {
+    branch_id: string;
+    product_id: string;
+    movement_type: string;
+    quantity: number;
+    previous_on_hand: number;
+    new_on_hand: number;
+    note: string;
+    created_at: string;
+  },
+  actorOverride?: { createdById?: string; createdByName?: string },
+): Promise<{ message?: string } | null> {
+  const actor = currentMovementActor(actorOverride);
+  const withActor = {
+    ...row,
+    created_by_id: actor.created_by_id,
+    created_by_name: actor.created_by_name,
+  };
+
+  if (movementActorColumnsAvailable !== false) {
+    const { error } = await supabase.from('flower_inventory_movements').insert(withActor);
+    if (!error) {
+      movementActorColumnsAvailable = true;
+      return null;
+    }
+
+    if (!isMissingMovementActorColumnError(error)) {
+      return error;
+    }
+
+    movementActorColumnsAvailable = false;
+  }
+
+  const { error } = await supabase.from('flower_inventory_movements').insert(row);
+  return error;
 }
 
 async function listBranchesInternal(options: ListFlowerInventoryOptions = {}): Promise<BranchRow[]> {
@@ -293,28 +361,45 @@ export async function listFlowerInventoryMovementsSupabase(
   const supabase = await requireAuthenticatedSupabaseClient();
   const hasDateRange = Boolean(options.fromDate || options.toDate);
   const limit = options.limit ?? (hasDateRange ? 2000 : 40);
+  const selectColumns =
+    movementActorColumnsAvailable === false ? MOVEMENT_SELECT_BASE : MOVEMENT_SELECT_WITH_ACTOR;
 
-  let query = supabase
-    .from('flower_inventory_movements')
-    .select('id, branch_id, product_id, movement_type, quantity, previous_on_hand, new_on_hand, note, created_at')
-    .order('created_at', { ascending: false })
-    .limit(limit);
+  const runQuery = async (columns: string) => {
+    let query = supabase
+      .from('flower_inventory_movements')
+      .select(columns)
+      .order('created_at', { ascending: false })
+      .limit(limit);
 
-  if (options.branchId) {
-    query = query.eq('branch_id', options.branchId);
+    if (options.branchId) {
+      query = query.eq('branch_id', options.branchId);
+    }
+
+    if (options.productId) {
+      query = query.eq('product_id', options.productId);
+    }
+
+    if (options.fromDate) {
+      const { startIso } = getLocalDayBoundsIso(options.fromDate);
+      query = query.gte('created_at', startIso);
+    }
+
+    if (options.toDate) {
+      const { endIso } = getLocalDayBoundsIso(options.toDate);
+      query = query.lte('created_at', endIso);
+    }
+
+    return query;
+  };
+
+  let { data, error } = await runQuery(selectColumns);
+
+  if (error && movementActorColumnsAvailable !== false && isMissingMovementActorColumnError(error)) {
+    movementActorColumnsAvailable = false;
+    ({ data, error } = await runQuery(MOVEMENT_SELECT_BASE));
+  } else if (!error && selectColumns === MOVEMENT_SELECT_WITH_ACTOR) {
+    movementActorColumnsAvailable = true;
   }
-
-  if (options.fromDate) {
-    const { startIso } = getLocalDayBoundsIso(options.fromDate);
-    query = query.gte('created_at', startIso);
-  }
-
-  if (options.toDate) {
-    const { endIso } = getLocalDayBoundsIso(options.toDate);
-    query = query.lte('created_at', endIso);
-  }
-
-  const { data, error } = await query;
 
   if (error) {
     throw error;
@@ -365,6 +450,8 @@ export async function listFlowerInventoryMovementsSupabase(
     new_on_hand: Number(row.new_on_hand),
     note: row.note ?? '',
     created_at: row.created_at,
+    created_by_id: row.created_by_id ?? '',
+    created_by_name: row.created_by_name ?? '',
   }));
 }
 
@@ -426,9 +513,9 @@ export async function adjustFlowerInventorySupabase(input: AdjustFlowerInventory
     throw upsertError;
   }
 
-  const { error: movementError } = await supabase
-    .from('flower_inventory_movements')
-    .insert({
+  const movementError = await insertInventoryMovementRow(
+    supabase,
+    {
       branch_id: input.branchId,
       product_id: input.productId,
       movement_type: toMovementType(input.movementType),
@@ -437,7 +524,9 @@ export async function adjustFlowerInventorySupabase(input: AdjustFlowerInventory
       new_on_hand: nextOnHand,
       note: input.note?.trim() ?? '',
       created_at: nowIso,
-    });
+    },
+    { createdById: input.createdById, createdByName: input.createdByName },
+  );
 
   if (!movementError) {
     return;
@@ -455,7 +544,7 @@ export async function adjustFlowerInventorySupabase(input: AdjustFlowerInventory
       { onConflict: 'branch_id,product_id' },
     );
 
-  throw new Error(`Inventory movement logging failed: ${movementError.message}`);
+  throw new Error(`Inventory movement logging failed: ${movementError.message ?? 'Unknown error'}`);
 }
 
 async function applyFlowerStockChangeSupabase(input: {
@@ -521,7 +610,7 @@ async function applyFlowerStockChangeSupabase(input: {
     throw upsertError;
   }
 
-  const { error: movementError } = await supabase.from('flower_inventory_movements').insert({
+  const movementError = await insertInventoryMovementRow(supabase, {
     branch_id: input.branchId,
     product_id: input.productId,
     movement_type: input.movementType,
@@ -548,7 +637,7 @@ async function applyFlowerStockChangeSupabase(input: {
       { onConflict: 'branch_id,product_id' },
     );
 
-  throw new Error(`Inventory movement logging failed: ${movementError.message}`);
+  throw new Error(`Inventory movement logging failed: ${movementError.message ?? 'Unknown error'}`);
 }
 
 export async function deductFlowerInventoryForOrderSupabase(input: {
@@ -592,7 +681,9 @@ export async function validateFlowerOrderStockSupabase(
   _items: Array<{ product_id: string; item_name: string; quantity: number }>,
   _creditByProductId: Record<string, number> = {},
 ): Promise<void> {
-  return;
+  void _branchId;
+  void _items;
+  void _creditByProductId;
 }
 
 export async function transferFlowerInventorySupabase(

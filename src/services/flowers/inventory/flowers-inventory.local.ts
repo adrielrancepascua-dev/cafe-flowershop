@@ -25,6 +25,7 @@ import {
 } from '../../../modules/flowers/shared/utils/flower-product-colors';
 import { normalizeFlowerProductKind } from '../../../modules/flowers/shared/utils/flower-product-kind';
 import { formatInventoryOrderDeductNote, formatInventoryOrderVoidNote } from '../../../modules/flowers/shared/utils/flower-format';
+import { getStoredFlowerSession } from '../../../lib/auth/flower-auth.service';
 
 const INVENTORY_STORAGE_KEY = 'papers_petals_flower_inventory_v2';
 const MOVEMENTS_STORAGE_KEY = 'papers_petals_flower_inventory_movements_v2';
@@ -84,7 +85,13 @@ function readMovementsFromStorage(): FlowerInventoryMovementRow[] {
     }
 
     const parsed = JSON.parse(raw) as FlowerInventoryMovementRow[];
-    return Array.isArray(parsed) ? parsed : [];
+    return Array.isArray(parsed)
+      ? parsed.map((row) => ({
+          ...row,
+          created_by_id: row.created_by_id ?? '',
+          created_by_name: row.created_by_name ?? '',
+        }))
+      : [];
   } catch {
     return [];
   }
@@ -165,6 +172,10 @@ export async function listFlowerInventoryMovementsLocal(
       return false;
     }
 
+    if (options.productId && movement.product_id !== options.productId) {
+      return false;
+    }
+
     if (options.fromDate) {
       const fromMs = new Date(`${options.fromDate}T00:00:00`).getTime();
       if (new Date(movement.created_at).getTime() < fromMs) {
@@ -194,6 +205,8 @@ async function applyStockChange(input: {
   movementType: FlowerInventoryMovementRow['movement_type'];
   note: string;
   allowNegative?: boolean;
+  createdById?: string;
+  createdByName?: string;
 }): Promise<{ previousOnHand: number; newOnHand: number }> {
   const stock = readStockFromStorage();
   const branchStock = stock[input.branchId] ?? {};
@@ -210,6 +223,7 @@ async function applyStockChange(input: {
   stock[input.branchId] = branchStock;
   writeStockToStorage(stock);
 
+  const user = getStoredFlowerSession()?.user;
   appendMovement({
     branch_id: input.branchId,
     branch_name: getBranchName(input.branchId),
@@ -221,6 +235,8 @@ async function applyStockChange(input: {
     new_on_hand: newOnHand,
     note: input.note,
     created_at: new Date().toISOString(),
+    created_by_id: input.createdById || user?.id || '',
+    created_by_name: input.createdByName || user?.display_name || '',
   });
 
   return { previousOnHand, newOnHand };
@@ -236,6 +252,8 @@ export async function adjustFlowerInventoryLocal(input: AdjustFlowerInventoryInp
     movementType: input.movementType,
     note: input.note?.trim() ?? '',
     allowNegative: true,
+    createdById: input.createdById,
+    createdByName: input.createdByName,
   });
 }
 
@@ -280,7 +298,9 @@ export async function validateFlowerOrderStockLocal(
   _items: Array<{ product_id: string; item_name: string; quantity: number }>,
   _creditByProductId: Record<string, number> = {},
 ): Promise<void> {
-  return;
+  void _branchId;
+  void _items;
+  void _creditByProductId;
 }
 
 /** Inter-branch stock transfer between branches. */

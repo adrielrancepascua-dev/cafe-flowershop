@@ -37,7 +37,12 @@ where table_schema = 'public'
   and table_name in ('flower_daily_inventory_counts', 'flower_daily_inventory_count_lines')
 order by table_name;
 
--- 4) Active staff/admin profiles (should match your live users)
+-- 3c) Inventory movement actor columns (who did stock in/out)
+select column_name
+from information_schema.columns
+where table_schema = 'public'
+  and table_name = 'flower_inventory_movements'
+  and column_name in ('created_by_id', 'created_by_name');
 select id, email, display_name, role, branch_id, is_active
 from public.flower_profiles
 where is_active = true
