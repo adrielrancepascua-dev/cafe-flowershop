@@ -18,6 +18,10 @@ function isOutboundSaleMovementType(movementType: string): boolean {
   return movementType === 'order_deduct' || movementType === 'stock_out' || movementType === 'out';
 }
 
+function isInboundRestoreMovementType(movementType: string): boolean {
+  return movementType === 'stock_in' || movementType === 'in';
+}
+
 export function isUnattributedStockOut(movement: DeductibleInventoryMovement): boolean {
   if (movement.movement_type !== 'stock_out' && movement.movement_type !== 'out') {
     return false;
@@ -31,6 +35,17 @@ export function movementAlreadyDeductsOrder(
   orderId: string,
 ): boolean {
   if (!isOutboundSaleMovementType(movement.movement_type)) {
+    return false;
+  }
+
+  return parseInventoryMovementOrderId(movement.note) === orderId;
+}
+
+export function movementRestoresOrder(
+  movement: DeductibleInventoryMovement,
+  orderId: string,
+): boolean {
+  if (!isInboundRestoreMovementType(movement.movement_type)) {
     return false;
   }
 
@@ -77,22 +92,38 @@ export function alreadyDeductedQuantityForOrder(
   return total;
 }
 
-/**
- * If staff already stocked out the exact sold qty (same product, same day),
- * 7 PM order-deduct must not remove those stems again.
- */
-export function creditExactStockOutAgainstPending(
-  pendingByProduct: Map<string, number>,
-  stockOutByProduct: Map<string, number>,
+/** Net stems still removed for this order after deducts minus void/edit restores. */
+export function netOrderDeductedByProduct(
+  movements: DeductibleInventoryMovement[],
+  orderId: string,
 ): Map<string, number> {
-  const remaining = new Map<string, number>();
+  const totals = new Map<string, number>();
 
-  for (const [productId, pending] of pendingByProduct) {
-    const stockOut = stockOutByProduct.get(productId) ?? 0;
-    remaining.set(productId, stockOut === pending && pending > 0 ? 0 : pending);
+  for (const movement of movements) {
+    if (parseInventoryMovementOrderId(movement.note) !== orderId) {
+      continue;
+    }
+
+    const current = totals.get(movement.product_id) ?? 0;
+    if (movementAlreadyDeductsOrder(movement, orderId)) {
+      totals.set(movement.product_id, current + movement.quantity);
+      continue;
+    }
+
+    if (movementRestoresOrder(movement, orderId)) {
+      totals.set(movement.product_id, current - movement.quantity);
+    }
   }
 
-  return remaining;
+  for (const [productId, quantity] of totals) {
+    if (quantity <= 0) {
+      totals.delete(productId);
+    } else {
+      totals.set(productId, quantity);
+    }
+  }
+
+  return totals;
 }
 
 export function pendingQuantityByProduct(items: OrderDeductLine[]): Map<string, number> {
@@ -109,12 +140,16 @@ export function pendingQuantityByProduct(items: OrderDeductLine[]): Map<string, 
   return totals;
 }
 
+/**
+ * Plan 7 PM deduct lines for one order.
+ * Skips qty already written as order_deduct / order-attributed outbound for this order
+ * so a repeat poll cannot remove the same stems twice.
+ */
 export function planOrderInventoryDeduction(input: {
   orderId: string;
   branchId: string;
   items: OrderDeductLine[];
   movements: DeductibleInventoryMovement[];
-  remainingAfterStockOutCredit?: Map<string, number>;
 }): OrderDeductLine[] {
   const planned: OrderDeductLine[] = [];
 
@@ -128,46 +163,11 @@ export function planOrderInventoryDeduction(input: {
       input.orderId,
       item.product_id,
     );
-    let remaining = Math.max(0, item.quantity - alreadyDeducted);
-
-    if (input.remainingAfterStockOutCredit) {
-      const creditedRemaining = input.remainingAfterStockOutCredit.get(item.product_id);
-      if (creditedRemaining === 0) {
-        remaining = 0;
-      }
-    }
-
+    const remaining = Math.max(0, item.quantity - alreadyDeducted);
     if (remaining > 0) {
       planned.push({ product_id: item.product_id, quantity: remaining });
     }
   }
 
   return planned;
-}
-
-export function buildBatchStockOutCreditMap(input: {
-  branchId: string;
-  dateKey: string;
-  pendingItems: OrderDeductLine[];
-  movements: DeductibleInventoryMovement[];
-}): Map<string, number> {
-  const pendingByProduct = pendingQuantityByProduct(input.pendingItems);
-  const stockOutByProduct = sumUnattributedStockOutByProduct(
-    input.movements,
-    input.branchId,
-    input.dateKey,
-  );
-
-  return creditExactStockOutAgainstPending(pendingByProduct, stockOutByProduct);
-}
-
-export function effectiveSoldPendingAfterStockOut(
-  soldPending: number,
-  stockOutQuantity: number,
-): number {
-  if (soldPending > 0 && stockOutQuantity === soldPending) {
-    return 0;
-  }
-
-  return soldPending;
 }

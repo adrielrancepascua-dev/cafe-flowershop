@@ -27,11 +27,15 @@ import FlowerPrintControls from '../../shared/components/FlowerPrintControls';
 import { FlowerBranchTransferPrintDocument } from '../../shared/components/FlowerThermalPrint';
 import { Minus, Plus, ArrowLeftRight, Package, ChevronDown, Check, X, Trash2, Search } from 'lucide-react';
 import FlowerInventoryProductLogPanel from '../components/FlowerInventoryProductLogPanel';
+import FlowerConfirmDialog from '../components/FlowerConfirmDialog';
+import { listFlowerOrders } from '../../../../services/flowers/orders';
+import { soldPendingDeductionByProductId } from '../../shared/utils/flower-daily-inventory';
 import {
   dedupeInventoryMovementRows,
   formatInventoryMovementActor,
   formatInventoryMovementTimestamp,
   parseFlowerTimestamp,
+  toManilaDateKeyFromDate,
   INVENTORY_MOVEMENT_TYPE_BADGES,
   INVENTORY_MOVEMENT_TYPE_LABELS,
   parseInventoryMovementOrderId,
@@ -1174,6 +1178,14 @@ export default function FlowerInventoryPage() {
   const [transferHistoryTab, setTransferHistoryTab] = useState<TransferHistoryTab>('confirmed');
   const [printTransferRequest, setPrintTransferRequest] = useState<FlowerTransferRequest | null>(null);
   const [logRow, setLogRow] = useState<FlowerInventoryStockRow | null>(null);
+  const [stockOutConfirm, setStockOutConfirm] = useState<{
+    branchId: string;
+    productId: string;
+    productName: string;
+    quantity: number;
+    pendingSold: number;
+  } | null>(null);
+  const [stockOutConfirmBusy, setStockOutConfirmBusy] = useState(false);
 
   async function loadData() {
     const isFirstLoad = isFirstLoadRef.current;
@@ -1447,6 +1459,18 @@ export default function FlowerInventoryPage() {
     return String(Math.max(1, Number(digits)));
   }
 
+  async function applyStockAdjustment(
+    branchId: string,
+    productId: string,
+    movementType: 'stock_in' | 'stock_out',
+    quantity: number,
+  ) {
+    await adjustFlowerInventory({ branchId, productId, movementType, quantity });
+    setMessage(`${movementType === 'stock_in' ? 'Stock in' : 'Stock out'} recorded.`);
+    setErrorMessage('');
+    await loadData();
+  }
+
   async function handleAdjust(
     branchId: string,
     productId: string,
@@ -1454,12 +1478,55 @@ export default function FlowerInventoryPage() {
     quantity: number,
   ) {
     try {
-      await adjustFlowerInventory({ branchId, productId, movementType, quantity });
-      setMessage(`${movementType === 'stock_in' ? 'Stock in' : 'Stock out'} recorded.`);
-      setErrorMessage('');
-      await loadData();
+      if (movementType === 'stock_out') {
+        const todayKey = toManilaDateKeyFromDate();
+        const orders = await listFlowerOrders({
+          branchId,
+          scheduledFrom: todayKey,
+          scheduledTo: todayKey,
+        });
+        const pendingSold =
+          soldPendingDeductionByProductId(orders, todayKey, branchId).get(productId) ?? 0;
+
+        if (pendingSold > 0) {
+          const productName =
+            stockRows.find((row) => row.branch_id === branchId && row.product_id === productId)
+              ?.product_name ?? 'this item';
+          setStockOutConfirm({
+            branchId,
+            productId,
+            productName,
+            quantity,
+            pendingSold,
+          });
+          return;
+        }
+      }
+
+      await applyStockAdjustment(branchId, productId, movementType, quantity);
     } catch (error) {
       setErrorMessage(extractSupabaseErrorMessage(error, 'Adjustment failed.'));
+    }
+  }
+
+  async function confirmStockOutAnyway() {
+    if (!stockOutConfirm) {
+      return;
+    }
+
+    setStockOutConfirmBusy(true);
+    try {
+      await applyStockAdjustment(
+        stockOutConfirm.branchId,
+        stockOutConfirm.productId,
+        'stock_out',
+        stockOutConfirm.quantity,
+      );
+      setStockOutConfirm(null);
+    } catch (error) {
+      setErrorMessage(extractSupabaseErrorMessage(error, 'Adjustment failed.'));
+    } finally {
+      setStockOutConfirmBusy(false);
     }
   }
 
@@ -2402,6 +2469,28 @@ export default function FlowerInventoryPage() {
           onClose={() => setLogRow(null)}
         />
       ) : null}
+
+      <FlowerConfirmDialog
+        open={Boolean(stockOutConfirm)}
+        title="Stock out while sales are pending?"
+        message={
+          stockOutConfirm
+            ? `${stockOutConfirm.productName} still has ${stockOutConfirm.pendingSold} sold stem(s) waiting for the 7:00 PM auto deduct. Stock out is only for waste, damage, or corrections — not for sales. If you continue, 7:00 PM will still deduct the sale and stock can go down twice.`
+            : ''
+        }
+        confirmLabel="Stock out anyway"
+        cancelLabel="Cancel"
+        destructive
+        busy={stockOutConfirmBusy}
+        onConfirm={() => {
+          void confirmStockOutAnyway();
+        }}
+        onCancel={() => {
+          if (!stockOutConfirmBusy) {
+            setStockOutConfirm(null);
+          }
+        }}
+      />
     </div>
   );
 }

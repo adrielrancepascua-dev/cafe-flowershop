@@ -13,7 +13,7 @@ import {
 } from '../../../modules/flowers/shared/utils/flower-daily-inventory';
 import { getFlowerStorageMode, shouldUseFlowerSupabase } from '../storage-mode';
 import { listFlowerOrders } from '../orders/flowers-orders.service';
-import { listFlowerBranches, listFlowerInventoryMovements, listFlowerInventoryStock } from './flowers-inventory.service';
+import { listFlowerBranches, listFlowerInventoryStock } from './flowers-inventory.service';
 import {
   getDailyInventoryCountLocal,
   listDailyInventoryCountsLocal,
@@ -70,7 +70,7 @@ export async function getDailyInventoryWorksheet(options: {
   branchId: string;
   countDate: string;
 }): Promise<FlowerDailyInventoryWorksheet> {
-  const [branches, stockRows, orders, submitted, movements] = await Promise.all([
+  const [branches, stockRows, orders, submitted] = await Promise.all([
     listFlowerBranches(),
     listFlowerInventoryStock({ branchId: options.branchId }),
     listFlowerOrders({
@@ -79,12 +79,6 @@ export async function getDailyInventoryWorksheet(options: {
       scheduledTo: options.countDate,
     }),
     getDailyInventoryCount(options.branchId, options.countDate),
-    listFlowerInventoryMovements({
-      branchId: options.branchId,
-      fromDate: options.countDate,
-      toDate: options.countDate,
-      limit: 2000,
-    }),
   ]);
 
   const branchName = branches.find((branch) => branch.id === options.branchId)?.name ?? options.branchId;
@@ -96,7 +90,6 @@ export async function getDailyInventoryWorksheet(options: {
     stockRows,
     orders,
     submitted,
-    movements,
   });
 }
 

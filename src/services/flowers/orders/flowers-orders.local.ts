@@ -20,7 +20,7 @@ import {
   validateFlowerOrderStockLocal,
 } from '../inventory/flowers-inventory.local';
 import {
-  buildBatchStockOutCreditMap,
+  netOrderDeductedByProduct,
   planOrderInventoryDeduction,
 } from '../../../modules/flowers/shared/utils/flower-inventory-deduct';
 import {
@@ -135,18 +135,6 @@ async function maybeBatchDeductInventoryForClosedDay(
   }
 
   const pending = getOrdersPendingInventoryDeduction(dayOrders, dateKey, branchId);
-  const movements = await listFlowerInventoryMovementsLocal({
-    branchId,
-    fromDate: dateKey,
-    toDate: dateKey,
-    limit: 2000,
-  });
-  const remainingAfterStockOutCredit = buildBatchStockOutCreditMap({
-    branchId,
-    dateKey,
-    pendingItems: pending.flatMap((order) => order.items),
-    movements,
-  });
 
   for (const order of pending) {
     const freshOrders = readOrdersFromStorage();
@@ -176,7 +164,6 @@ async function maybeBatchDeductInventoryForClosedDay(
         branchId: order.branch_id,
         items: order.items,
         movements: latestMovements,
-        remainingAfterStockOutCredit,
       });
 
       for (const item of planned) {
@@ -337,16 +324,21 @@ export async function updateFlowerOrderLocal(input: UpdateFlowerOrderInput): Pro
     const nextReceiver = updated.receiver;
     const editRestoreNote = formatInventoryOrderEditRestoreNote(orderId, nextReceiver);
     const editDeductNote = formatInventoryOrderEditDeductNote(orderId, nextReceiver);
+    const movements = await listFlowerInventoryMovementsLocal({
+      branchId: existing.branch_id,
+      fromDate: getPickupDateKey(existing.scheduled_for),
+      toDate: getPickupDateKey(existing.scheduled_for),
+      limit: 2000,
+    });
+    const previousQtyMap = netOrderDeductedByProduct(movements, orderId);
+    const previousQty = Object.fromEntries(previousQtyMap);
 
     if (existing.branch_id !== updated.branch_id) {
-      for (const item of existing.items) {
-        if (item.quantity <= 0) {
-          continue;
-        }
+      for (const [productId, quantity] of previousQtyMap) {
         await restoreFlowerInventoryForOrderLocal({
           branchId: existing.branch_id,
-          productId: item.product_id,
-          quantity: item.quantity,
+          productId,
+          quantity,
           orderId,
           receiver: existing.receiver,
           note: editRestoreNote,
@@ -367,7 +359,6 @@ export async function updateFlowerOrderLocal(input: UpdateFlowerOrderInput): Pro
         });
       }
     } else {
-      const previousQty = buildCreditFromOrderItems(existing.items);
       const nextQty = buildCreditFromOrderItems(updated.items);
       const productIds = new Set([...Object.keys(previousQty), ...Object.keys(nextQty)]);
 
@@ -452,11 +443,19 @@ export async function deleteFlowerOrderLocal(orderId: string): Promise<void> {
   const existing = orders[index];
 
   if (existing.inventory_deducted) {
-    for (const item of existing.items) {
+    const movements = await listFlowerInventoryMovementsLocal({
+      branchId: existing.branch_id,
+      fromDate: getPickupDateKey(existing.scheduled_for),
+      toDate: getPickupDateKey(existing.scheduled_for),
+      limit: 2000,
+    });
+    const netDeducted = netOrderDeductedByProduct(movements, existing.id);
+
+    for (const [productId, quantity] of netDeducted) {
       await restoreFlowerInventoryForOrderLocal({
         branchId: existing.branch_id,
-        productId: item.product_id,
-        quantity: item.quantity,
+        productId,
+        quantity,
         orderId: existing.id,
         receiver: existing.receiver,
       });
