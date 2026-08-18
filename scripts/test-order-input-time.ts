@@ -9,7 +9,9 @@ import {
 import {
   buildSupplierOrderClipboardText,
   buildSupplierOrderSummary,
-  isOrderCreatedAfterCutoff,
+  getSupplierRangeStampState,
+  stampSupplierDateRange,
+  unstampSupplierDateRange,
 } from '../src/modules/flowers/shared/utils/flower-supplier-order-summary';
 
 function assertEqual<T>(actual: T, expected: T, message: string): void {
@@ -56,15 +58,31 @@ assertTrue(
 
 assertEqual(isOrderInputToday(twoPmManilaIso, now), true, '2 PM Manila today is new');
 assertEqual(isOrderInputToday(yesterdayIso, now), false, 'yesterday is not a new input');
+
 assertEqual(
-  isOrderCreatedAfterCutoff(twoPmManilaIso, yesterdayIso),
-  true,
-  'later input time counts as added after the cutoff',
+  getSupplierRangeStampState(['2026-08-18', '2026-08-19'], '2026-08-18', '2026-08-19').status,
+  'done',
+  '18-19 is DONE when those pickup days are stamped',
 );
 assertEqual(
-  isOrderCreatedAfterCutoff(yesterdayIso, twoPmManilaIso),
-  false,
-  'older input time is not a new addition',
+  getSupplierRangeStampState(['2026-08-18', '2026-08-19'], '2026-08-18', '2026-08-25').status,
+  'partial',
+  '18-25 is partial when only 18-19 are stamped',
+);
+assertEqual(
+  getSupplierRangeStampState(['2026-08-18', '2026-08-19'], '2026-08-20', '2026-08-25').status,
+  'open',
+  '20-25 stays open until stamped',
+);
+assertEqual(
+  stampSupplierDateRange(['2026-08-18', '2026-08-19'], '2026-08-20', '2026-08-21'),
+  ['2026-08-18', '2026-08-19', '2026-08-20', '2026-08-21'],
+  'stamping a later range keeps earlier DONE days',
+);
+assertEqual(
+  unstampSupplierDateRange(['2026-08-18', '2026-08-19', '2026-08-20'], '2026-08-18', '2026-08-19'),
+  ['2026-08-20'],
+  'Redo on 18-19 only unstamps those days',
 );
 
 function makeOrder(overrides: Partial<FlowerOrder> & Pick<FlowerOrder, 'id' | 'created_at'>): FlowerOrder {
@@ -73,7 +91,7 @@ function makeOrder(overrides: Partial<FlowerOrder> & Pick<FlowerOrder, 'id' | 'c
     branch_name: 'Dagupan',
     receiver: 'Alea',
     customer_social: '',
-    scheduled_for: '2026-08-20T02:00:00.000Z',
+    scheduled_for: '2026-08-20T04:00:00.000Z',
     status: 'not_started',
     claim_mode: 'pickup',
     wrapper_color: '',
@@ -124,67 +142,94 @@ const products: FlowerProduct[] = [
   },
 ];
 
-const oldOrder = makeOrder({
-  id: 'old',
-  receiver: 'Old order',
+const orderAug18 = makeOrder({
+  id: 'aug18',
+  receiver: 'Aug 18 order',
   created_at: yesterdayIso,
+  scheduled_for: '2026-08-18T04:00:00.000Z',
   items: [{ product_id: 'gerbera-pink', item_name: 'Pink Gerbera', quantity: 10 }],
 });
-const newOrder = makeOrder({
-  id: 'new',
-  receiver: 'New order',
+const orderAug19 = makeOrder({
+  id: 'aug19',
+  receiver: 'Aug 19 order',
   created_at: twoPmManilaIso,
+  scheduled_for: '2026-08-19T04:00:00.000Z',
+  items: [{ product_id: 'eucalyptus', item_name: 'Eucalyptus', quantity: 2 }],
+});
+const orderAug20 = makeOrder({
+  id: 'aug20',
+  receiver: 'Aug 20 order',
+  created_at: twoPmManilaIso,
+  scheduled_for: '2026-08-20T04:00:00.000Z',
   items: [
     { product_id: 'gerbera-pink', item_name: 'Pink Gerbera', quantity: 5 },
     { product_id: 'eucalyptus', item_name: 'Eucalyptus', quantity: 3 },
   ],
 });
-const cancelledNew = makeOrder({
+const cancelledAug20 = makeOrder({
   id: 'cancelled',
   status: 'cancelled',
   created_at: '2026-08-18T07:00:00.000Z',
+  scheduled_for: '2026-08-20T04:00:00.000Z',
   items: [{ product_id: 'gerbera-pink', item_name: 'Pink Gerbera', quantity: 99 }],
 });
 
-const allSummary = buildSupplierOrderSummary([oldOrder, newOrder, cancelledNew], products, {
-  dateFrom: '2026-08-20',
-  dateTo: '2026-08-20',
-});
+const allOrders = [orderAug18, orderAug19, orderAug20, cancelledAug20];
+const stamped1819 = ['2026-08-18', '2026-08-19'];
 
-assertEqual(allSummary.orderCount, 2, 'cancelled orders stay out of the full reserved total');
-assertEqual(allSummary.grandTotalFlowers[0]?.reservedQty, 15, 'full summary adds old + new gerbera');
-assertEqual(allSummary.grandTotalFlowers[0]?.newQty, 0, 'no cutoff means New is not split yet');
-assertEqual(allSummary.createdAfterIso, null, 'no cutoff means createdAfter is null');
-assertEqual(allSummary.newOrderCount, 0, 'no cutoff means there is no new-order split');
-
-const withLastLook = buildSupplierOrderSummary([oldOrder, newOrder, cancelledNew], products, {
-  dateFrom: '2026-08-20',
+const openRange = buildSupplierOrderSummary(allOrders, products, {
+  dateFrom: '2026-08-18',
   dateTo: '2026-08-20',
-  createdAfterIso: yesterdayIso,
   roundSettings: { flowerRoundStep: 1, miscRoundStep: 1 },
 });
 
-assertEqual(withLastLook.orderCount, 1, 'after already-ordered, only later inputted orders stay visible');
-assertEqual(withLastLook.totalReservedOrderCount, 2, 'full reserved count is kept for Redo');
-assertEqual(withLastLook.newOrderCount, 1, 'new count is only later inputted orders');
-assertEqual(withLastLook.grandTotalFlowers[0]?.reservedQty, 5, 'visible flower qty is only the additions');
-assertEqual(withLastLook.grandTotalFlowers[0]?.suggestedOrderQty, 5, 'to-order box is the new flower qty');
-assertEqual(withLastLook.grandTotalFillers[0]?.itemName, 'Eucalyptus', 'new fillers stay on the list');
-assertEqual(withLastLook.grandTotalFillers[0]?.reservedQty, 3, 'new misc qty is included, not dropped');
-assertEqual(withLastLook.newOrders.map((order) => order.id), ['new'], 'newOrders lists the additions');
-assertEqual(withLastLook.createdAfterIso, yesterdayIso, 'cutoff is stored on the summary');
+assertEqual(openRange.orderCount, 3, 'cancelled orders stay out of the full reserved total');
+assertEqual(openRange.stamp.status, 'open', 'unstamped range is open');
+assertEqual(openRange.grandTotalFlowers[0]?.reservedQty, 15, 'open range includes 18 and 20 gerbera');
+
+const done1819 = buildSupplierOrderSummary(allOrders, products, {
+  dateFrom: '2026-08-18',
+  dateTo: '2026-08-19',
+  stampedDates: stamped1819,
+  roundSettings: { flowerRoundStep: 1, miscRoundStep: 1 },
+});
+
+assertEqual(done1819.stamp.status, 'done', 'going back to 18-19 shows DONE');
+assertEqual(done1819.orderCount, 0, 'DONE range hides those pickup orders');
+assertEqual(done1819.stampedOrderCount, 2, 'the two 18-19 orders are counted as stamped');
+
+const wideAfterStamp = buildSupplierOrderSummary(allOrders, products, {
+  dateFrom: '2026-08-18',
+  dateTo: '2026-08-20',
+  stampedDates: stamped1819,
+  roundSettings: { flowerRoundStep: 1, miscRoundStep: 1 },
+});
+
+assertEqual(wideAfterStamp.stamp.status, 'partial', '18-20 is partial after 18-19 was stamped');
+assertEqual(wideAfterStamp.orderCount, 1, '18-19 stay void; 20 is still to order');
+assertEqual(wideAfterStamp.visibleOrders.map((order) => order.id), ['aug20'], 'only the unstamped day remains');
+assertEqual(wideAfterStamp.grandTotalFlowers[0]?.reservedQty, 5, 'only Aug 20 gerbera is still to order');
+assertEqual(wideAfterStamp.grandTotalFillers[0]?.reservedQty, 3, 'new fillers on unstamped days still copy');
+assertEqual(wideAfterStamp.grandTotalFillers[0]?.itemName, 'Eucalyptus', 'misc from the voided 19th is not mixed in');
 
 const clipboard = buildSupplierOrderClipboardText({
-  summary: withLastLook,
+  summary: wideAfterStamp,
   orderQuantities: new Map([
-    [withLastLook.grandTotalFlowers[0].key, withLastLook.grandTotalFlowers[0].suggestedOrderQty],
+    [wideAfterStamp.grandTotalFlowers[0].key, wideAfterStamp.grandTotalFlowers[0].suggestedOrderQty],
+    [wideAfterStamp.grandTotalFillers[0].key, wideAfterStamp.grandTotalFillers[0].suggestedOrderQty],
   ]),
 });
 
-assertTrue(clipboard.includes('NEW ADDITIONS after'), 'clipboard labels a reorder as new additions');
-assertTrue(clipboard.includes('5 stems pink gerbera'), 'clipboard to-order line is the new flower qty');
-assertTrue(clipboard.includes('3 eucalyptus'), 'clipboard also includes new fillers and misc');
-assertTrue(!clipboard.includes('15 pink gerbera'), 'clipboard must not include already-ordered stems');
-assertTrue(clipboard.includes('TO ORDER (new additions)'), 'clipboard to-order header is new-only');
+assertTrue(clipboard.includes('still to order'), 'clipboard says remaining orders are still to order');
+assertTrue(clipboard.includes('5 stems pink gerbera'), 'clipboard to-order is the unstamped flower qty');
+assertTrue(clipboard.includes('3 eucalyptus'), 'clipboard includes fillers and misc from unstamped days');
+assertTrue(!clipboard.includes('15 pink gerbera'), 'clipboard must not include DONE-range stems');
+
+const doneClipboard = buildSupplierOrderClipboardText({
+  summary: done1819,
+  orderQuantities: new Map(),
+});
+assertTrue(doneClipboard.includes('DONE'), 'clipboard for a stamped range says DONE');
+assertTrue(doneClipboard.includes('(none)'), 'DONE range copy has nothing left to order');
 
 console.log('order input time tests passed');

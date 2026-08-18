@@ -12,12 +12,15 @@ import {
   buildSupplierOrderClipboardText,
   buildSupplierOrderSummary,
   defaultSupplierDateRange,
+  formatSupplierSummaryDateLabel,
   formatSupplierSummaryDateRange,
-  readSupplierLastLookIso,
   readSupplierRoundSettings,
+  readSupplierStampedDates,
+  stampSupplierDateRange,
   SUPPLIER_ROUND_STEP_OPTIONS,
-  writeSupplierLastLookIso,
+  unstampSupplierDateRange,
   writeSupplierRoundSettings,
+  writeSupplierStampedDates,
   type SupplierSummaryLine,
 } from '../../shared/utils/flower-supplier-order-summary';
 
@@ -103,6 +106,18 @@ function EditableOrderLine({
   );
 }
 
+function formatStampedDaysLabel(keys: string[]): string {
+  if (keys.length === 0) {
+    return '';
+  }
+
+  if (keys.length === 1) {
+    return formatSupplierSummaryDateLabel(keys[0]);
+  }
+
+  return `${formatSupplierSummaryDateLabel(keys[0])} – ${formatSupplierSummaryDateLabel(keys[keys.length - 1])}`;
+}
+
 export default function SupplierOrderSummaryPanel({
   products,
 }: {
@@ -117,7 +132,7 @@ export default function SupplierOrderSummaryPanel({
   const [loadError, setLoadError] = useState('');
   const [copyMessage, setCopyMessage] = useState('');
   const [orderOverrides, setOrderOverrides] = useState<Record<string, number>>({});
-  const [lastLookIso, setLastLookIso] = useState(() => readSupplierLastLookIso());
+  const [stampedDates, setStampedDates] = useState(() => readSupplierStampedDates());
 
   useEffect(() => {
     let cancelled = false;
@@ -166,9 +181,7 @@ export default function SupplierOrderSummaryPanel({
 
   useEffect(() => {
     setOrderOverrides({});
-  }, [dateFrom, dateTo, roundSettings.flowerRoundStep, roundSettings.miscRoundStep, lastLookIso]);
-
-  const createdAfterIso = lastLookIso || null;
+  }, [dateFrom, dateTo, roundSettings.flowerRoundStep, roundSettings.miscRoundStep, stampedDates]);
 
   const summary = useMemo(
     () =>
@@ -176,9 +189,9 @@ export default function SupplierOrderSummaryPanel({
         dateFrom,
         dateTo,
         roundSettings,
-        createdAfterIso,
+        stampedDates,
       }),
-    [orders, products, dateFrom, dateTo, roundSettings, createdAfterIso],
+    [orders, products, dateFrom, dateTo, roundSettings, stampedDates],
   );
 
   const orderQuantities = useMemo(() => {
@@ -204,23 +217,24 @@ export default function SupplierOrderSummaryPanel({
     setOrderOverrides({});
   }
 
-  function markAlreadyOrdered() {
-    if (lastLookIso) {
+  function stampCurrentRange() {
+    if (summary.stamp.status === 'done') {
       return;
     }
 
-    const nowIso = new Date().toISOString();
-    writeSupplierLastLookIso(nowIso);
-    setLastLookIso(nowIso);
+    const next = stampSupplierDateRange(stampedDates, dateFrom, dateTo);
+    writeSupplierStampedDates(next);
+    setStampedDates(next);
   }
 
-  function redoShowAll() {
-    writeSupplierLastLookIso(null);
-    setLastLookIso('');
+  function redoCurrentRange() {
+    const next = unstampSupplierDateRange(stampedDates, dateFrom, dateTo);
+    writeSupplierStampedDates(next);
+    setStampedDates(next);
   }
 
   const grandTotalLines = [...summary.grandTotalFlowers, ...summary.grandTotalFillers];
-  const alreadyOrdered = Boolean(createdAfterIso);
+  const stampStatus = summary.stamp.status;
   const hasResults = summary.orderCount > 0;
 
   return (
@@ -230,10 +244,11 @@ export default function SupplierOrderSummaryPanel({
           <div>
             <h2 className="text-lg font-semibold text-brand-dark">Supplier order summary</h2>
             <p className="mt-1 text-sm text-brand-brown/70">
-              Copy the list and order from the supplier, then tap{' '}
-              <span className="font-semibold">Already ordered these</span>. Old orders hide. New
-              ones show up here as they get typed in — flowers, fillers, and misc.{' '}
-              <span className="font-semibold">Redo</span> brings everything back.
+              Pick the pickup dates, copy, then tap{' '}
+              <span className="font-semibold">Already ordered these</span> to stamp that range{' '}
+              <span className="font-semibold">DONE</span>. Those days stay void even if you open a
+              wider range. <span className="font-semibold">Redo</span> unstamps only the dates you
+              are looking at.
             </p>
           </div>
           <div className="flex flex-wrap items-end gap-3">
@@ -312,20 +327,17 @@ export default function SupplierOrderSummaryPanel({
             <ClipboardCopy className="mr-1.5 inline h-4 w-4" />
             Copy for supplier
           </button>
-          <button
-            type="button"
-            onClick={markAlreadyOrdered}
-            aria-pressed={alreadyOrdered}
-            className={
-              alreadyOrdered
-                ? 'flower-btn-primary ring-2 ring-brand-beige ring-offset-2 ring-offset-white'
-                : 'flower-btn-secondary'
-            }
-          >
-            Already ordered these
-          </button>
-          {alreadyOrdered ? (
-            <button type="button" onClick={redoShowAll} className="flower-btn-secondary">
+          {stampStatus === 'done' ? (
+            <span className="inline-flex min-h-[44px] items-center rounded-xl border border-brand-muted bg-brand-beige/50 px-4 text-sm font-semibold uppercase tracking-[0.16em] text-brand-brown">
+              Done
+            </span>
+          ) : (
+            <button type="button" onClick={stampCurrentRange} className="flower-btn-secondary">
+              Already ordered these
+            </button>
+          )}
+          {stampStatus !== 'open' ? (
+            <button type="button" onClick={redoCurrentRange} className="flower-btn-secondary">
               Redo
             </button>
           ) : null}
@@ -346,25 +358,31 @@ export default function SupplierOrderSummaryPanel({
         {!loading && !loadError ? (
           <p className="mt-3 text-sm text-brand-brown/70">
             {formatSupplierSummaryDateRange(dateFrom, dateTo)}
-            {alreadyOrdered && createdAfterIso
-              ? ` · Showing ${summary.orderCount} new order${summary.orderCount === 1 ? '' : 's'} after ${formatOrderInputTimestamp(createdAfterIso)}`
-              : ` · ${summary.orderCount} reserved order${summary.orderCount === 1 ? '' : 's'} · all branches`}
+            {stampStatus === 'done'
+              ? ' · DONE — this pickup range is already stamped'
+              : stampStatus === 'partial'
+                ? ` · ${formatStampedDaysLabel(summary.stamp.stampedKeys)} already DONE · showing ${
+                    summary.orderCount
+                  } remaining order${summary.orderCount === 1 ? '' : 's'}`
+                : ` · ${summary.orderCount} reserved order${summary.orderCount === 1 ? '' : 's'} · all branches`}
           </p>
         ) : null}
       </div>
 
-      {!loading && alreadyOrdered && summary.newOrders.length > 0 ? (
-        <section className="rounded-2xl border border-emerald-200 bg-emerald-50/60 p-4 sm:p-5">
-          <h3 className="text-base font-semibold text-brand-dark">New orders</h3>
+      {!loading && stampStatus !== 'done' && summary.visibleOrders.length > 0 ? (
+        <section className="rounded-2xl border border-brand-muted/40 bg-white p-4 sm:p-5">
+          <h3 className="text-base font-semibold text-brand-dark">
+            {stampStatus === 'partial' ? 'Still to order' : 'Orders in this range'}
+          </h3>
           <p className="mt-0.5 text-sm text-brand-brown/70">
-            Typed in after you marked already ordered.
+            Flowers, fillers, and misc. Input time is when staff typed the order in.
           </p>
-          <ul className="mt-3 divide-y divide-emerald-200/70">
-            {summary.newOrders.map((order) => (
+          <ul className="mt-3 divide-y divide-brand-muted/30">
+            {summary.visibleOrders.map((order) => (
               <li key={order.id} className="py-2.5 first:pt-0 last:pb-0">
                 <div className="flex flex-wrap items-baseline justify-between gap-2">
                   <p className="font-semibold text-brand-dark">{order.receiver}</p>
-                  <p className="text-xs font-medium text-emerald-800">
+                  <p className="text-xs text-brand-brown/65">
                     Input {formatOrderInputTimestamp(order.created_at)}
                     {order.created_by_name ? ` · ${order.created_by_name}` : ''}
                   </p>
@@ -381,13 +399,20 @@ export default function SupplierOrderSummaryPanel({
 
       {!loading && !hasResults && !loadError ? (
         <div className="rounded-2xl border border-dashed border-brand-muted/50 bg-brand-beige/20 px-4 py-10 text-center">
-          <p className="text-sm text-brand-brown/70">
-            {alreadyOrdered
-              ? `No new orders yet. New ones will show up here as they get typed in. Redo to see all ${summary.totalReservedOrderCount} reserved order${
-                  summary.totalReservedOrderCount === 1 ? '' : 's'
-                } again.`
-              : 'No reserved orders in this date range. Try widening the dates or check that orders are not cancelled.'}
-          </p>
+          {stampStatus === 'done' ? (
+            <div>
+              <p className="text-sm font-semibold uppercase tracking-[0.16em] text-brand-brown">Done</p>
+              <p className="mt-2 text-sm text-brand-brown/70">
+                {formatSupplierSummaryDateRange(dateFrom, dateTo)} is already stamped. Redo to
+                unstamp these dates.
+              </p>
+            </div>
+          ) : (
+            <p className="text-sm text-brand-brown/70">
+              No reserved orders in this date range. Try widening the dates or check that orders are
+              not cancelled.
+            </p>
+          )}
         </div>
       ) : null}
 
@@ -400,7 +425,7 @@ export default function SupplierOrderSummaryPanel({
             >
               <h3 className="text-base font-semibold text-brand-dark">{branch.branchName}</h3>
               <p className="mt-0.5 text-xs text-brand-brown/60">
-                {alreadyOrdered ? 'New additions only' : 'Exact reserved totals'}
+                {stampStatus === 'partial' ? 'Unstamped days only' : 'Exact reserved totals'}
               </p>
 
               {branch.flowers.length > 0 ? (
@@ -435,8 +460,8 @@ export default function SupplierOrderSummaryPanel({
             <div>
               <h3 className="text-base font-semibold text-brand-dark">To order (all branches)</h3>
               <p className="mt-0.5 text-sm text-brand-brown/65">
-                {alreadyOrdered
-                  ? 'Only new additions — flowers, fillers, and misc from orders typed in after you marked already ordered.'
+                {stampStatus === 'partial'
+                  ? 'Only unstamped pickup days — flowers, fillers, and misc.'
                   : 'Rounded totals — edit any quantity before copying to your supplier.'}
               </p>
             </div>

@@ -2,12 +2,7 @@ import type { FlowerOrder } from '../types/flower-order';
 import type { FlowerProduct } from '../types/flower-product';
 import type { FlowerProductKind } from './flower-product-kind';
 import { normalizeFlowerProductKind } from './flower-product-kind';
-import {
-  formatOrderInputTimestamp,
-  parseFlowerTimestamp,
-  scheduledForToDateKey,
-  toManilaDateKeyFromDate,
-} from './flower-format';
+import { scheduledForToDateKey, toManilaDateKeyFromDate } from './flower-format';
 
 export interface SupplierRoundSettings {
   flowerRoundStep: number;
@@ -20,7 +15,6 @@ export interface SupplierSummaryLine {
   itemName: string;
   kind: FlowerProductKind;
   reservedQty: number;
-  newQty: number;
   suggestedOrderQty: number;
 }
 
@@ -31,15 +25,24 @@ export interface SupplierBranchSummary {
   fillers: SupplierSummaryLine[];
 }
 
+export type SupplierStampStatus = 'open' | 'partial' | 'done';
+
+export interface SupplierRangeStampState {
+  status: SupplierStampStatus;
+  rangeKeys: string[];
+  stampedKeys: string[];
+  unstampedKeys: string[];
+}
+
 export interface SupplierOrderSummaryResult {
   branches: SupplierBranchSummary[];
   grandTotalFlowers: SupplierSummaryLine[];
   grandTotalFillers: SupplierSummaryLine[];
   orderCount: number;
-  newOrderCount: number;
+  stampedOrderCount: number;
   totalReservedOrderCount: number;
-  createdAfterIso: string | null;
-  newOrders: FlowerOrder[];
+  stamp: SupplierRangeStampState;
+  visibleOrders: FlowerOrder[];
   dateFrom: string;
   dateTo: string;
 }
@@ -48,6 +51,8 @@ const DEFAULT_ROUND_SETTINGS: SupplierRoundSettings = {
   flowerRoundStep: 10,
   miscRoundStep: 1,
 };
+
+const DATE_KEY_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
 
 function lineKey(productId: string | null | undefined, itemName: string): string {
   if (productId) {
@@ -114,27 +119,22 @@ function addToLineMap(
 
 function mapToSummaryLines(
   allMap: Map<string, QtyLineEntry>,
-  newQtyByKey: Map<string, number>,
   roundSettings: SupplierRoundSettings,
   roundQuantities: boolean,
-  suggestNew: boolean,
 ): { flowers: SupplierSummaryLine[]; fillers: SupplierSummaryLine[] } {
   const flowers: SupplierSummaryLine[] = [];
   const fillers: SupplierSummaryLine[] = [];
 
   for (const [key, entry] of allMap) {
-    const newQty = newQtyByKey.get(key) ?? 0;
     const step =
       entry.kind === 'misc' ? roundSettings.miscRoundStep : roundSettings.flowerRoundStep;
-    const sourceQty = suggestNew ? newQty : entry.qty;
     const line: SupplierSummaryLine = {
       key,
       productId: entry.productId,
       itemName: entry.itemName,
       kind: entry.kind,
       reservedQty: entry.qty,
-      newQty,
-      suggestedOrderQty: roundQuantities ? roundUpSupplierQuantity(sourceQty, step) : sourceQty,
+      suggestedOrderQty: roundQuantities ? roundUpSupplierQuantity(entry.qty, step) : entry.qty,
     };
 
     if (entry.kind === 'misc') {
@@ -150,17 +150,57 @@ function mapToSummaryLines(
   };
 }
 
-export function isOrderCreatedAfterCutoff(
-  createdAtIso: string,
-  createdAfterIso: string,
-): boolean {
-  const createdMs = parseFlowerTimestamp(createdAtIso).getTime();
-  const cutoffMs = parseFlowerTimestamp(createdAfterIso).getTime();
-  if (Number.isNaN(createdMs) || Number.isNaN(cutoffMs)) {
-    return false;
+export function listDateKeysInRange(dateFrom: string, dateTo: string): string[] {
+  if (!DATE_KEY_PATTERN.test(dateFrom) || !DATE_KEY_PATTERN.test(dateTo) || dateFrom > dateTo) {
+    return [];
   }
 
-  return createdMs > cutoffMs;
+  const keys: string[] = [];
+  let current = dateFrom;
+  while (current <= dateTo) {
+    keys.push(current);
+    const [year, month, day] = current.split('-').map(Number);
+    current = new Date(Date.UTC(year, month - 1, day + 1)).toISOString().slice(0, 10);
+  }
+
+  return keys;
+}
+
+export function getSupplierRangeStampState(
+  stampedDates: readonly string[],
+  dateFrom: string,
+  dateTo: string,
+): SupplierRangeStampState {
+  const stampedSet = new Set(stampedDates.filter((key) => DATE_KEY_PATTERN.test(key)));
+  const rangeKeys = listDateKeysInRange(dateFrom, dateTo);
+  const stampedKeys = rangeKeys.filter((key) => stampedSet.has(key));
+  const unstampedKeys = rangeKeys.filter((key) => !stampedSet.has(key));
+
+  let status: SupplierStampStatus = 'open';
+  if (rangeKeys.length > 0 && unstampedKeys.length === 0) {
+    status = 'done';
+  } else if (stampedKeys.length > 0) {
+    status = 'partial';
+  }
+
+  return { status, rangeKeys, stampedKeys, unstampedKeys };
+}
+
+export function stampSupplierDateRange(
+  stampedDates: readonly string[],
+  dateFrom: string,
+  dateTo: string,
+): string[] {
+  return [...new Set([...stampedDates, ...listDateKeysInRange(dateFrom, dateTo)])].sort();
+}
+
+export function unstampSupplierDateRange(
+  stampedDates: readonly string[],
+  dateFrom: string,
+  dateTo: string,
+): string[] {
+  const remove = new Set(listDateKeysInRange(dateFrom, dateTo));
+  return stampedDates.filter((key) => !remove.has(key));
 }
 
 export function filterOrdersForSupplierSummary(
@@ -168,9 +208,9 @@ export function filterOrdersForSupplierSummary(
   options: {
     dateFrom: string;
     dateTo: string;
-    createdAfterIso?: string | null;
+    stampedDates?: readonly string[];
   },
-): { reservedOrders: FlowerOrder[]; includedOrders: FlowerOrder[] } {
+): { reservedOrders: FlowerOrder[]; visibleOrders: FlowerOrder[] } {
   const reservedOrders = orders.filter((order) => {
     if (order.status === 'cancelled') {
       return false;
@@ -180,14 +220,15 @@ export function filterOrdersForSupplierSummary(
     return pickupKey >= options.dateFrom && pickupKey <= options.dateTo;
   });
 
-  const cutoff = options.createdAfterIso?.trim() || '';
-  const includedOrders = cutoff
-    ? reservedOrders.filter((order) => isOrderCreatedAfterCutoff(order.created_at, cutoff))
-    : reservedOrders;
+  const stampedSet = new Set(options.stampedDates ?? []);
+  const visibleOrders = reservedOrders.filter((order) => {
+    const pickupKey = scheduledForToDateKey(order.scheduled_for);
+    return !stampedSet.has(pickupKey);
+  });
 
   return {
     reservedOrders,
-    includedOrders: [...includedOrders].sort((left, right) =>
+    visibleOrders: [...visibleOrders].sort((left, right) =>
       right.created_at.localeCompare(left.created_at),
     ),
   };
@@ -213,24 +254,18 @@ export function buildSupplierOrderSummary(
     dateFrom: string;
     dateTo: string;
     roundSettings?: SupplierRoundSettings;
-    createdAfterIso?: string | null;
+    stampedDates?: readonly string[];
   },
 ): SupplierOrderSummaryResult {
   const roundSettings = options.roundSettings ?? DEFAULT_ROUND_SETTINGS;
   const productsById = new Map(products.map((product) => [product.id, product]));
-  const createdAfterIso = options.createdAfterIso?.trim() || null;
-  const { reservedOrders, includedOrders: newOrders } = filterOrdersForSupplierSummary(orders, {
+  const stampedDates = options.stampedDates ?? [];
+  const stamp = getSupplierRangeStampState(stampedDates, options.dateFrom, options.dateTo);
+  const { reservedOrders, visibleOrders } = filterOrdersForSupplierSummary(orders, {
     dateFrom: options.dateFrom,
     dateTo: options.dateTo,
-    createdAfterIso,
+    stampedDates,
   });
-  const visibleOrders = createdAfterIso ? newOrders : reservedOrders;
-  const newQtyByKey = new Map<string, number>();
-  if (createdAfterIso) {
-    for (const [key, entry] of collectLineMap(newOrders, productsById)) {
-      newQtyByKey.set(key, entry.qty);
-    }
-  }
 
   const branchMaps = new Map<
     string,
@@ -257,7 +292,7 @@ export function buildSupplierOrderSummary(
 
   const branches: SupplierBranchSummary[] = [...branchMaps.entries()]
     .map(([branchId, entry]) => {
-      const split = mapToSummaryLines(entry.lines, newQtyByKey, roundSettings, false, Boolean(createdAfterIso));
+      const split = mapToSummaryLines(entry.lines, roundSettings, false);
       return {
         branchId,
         branchName: entry.branchName,
@@ -267,23 +302,17 @@ export function buildSupplierOrderSummary(
     })
     .sort((left, right) => left.branchName.localeCompare(right.branchName));
 
-  const grandSplit = mapToSummaryLines(
-    collectLineMap(visibleOrders, productsById),
-    newQtyByKey,
-    roundSettings,
-    true,
-    Boolean(createdAfterIso),
-  );
+  const grandSplit = mapToSummaryLines(collectLineMap(visibleOrders, productsById), roundSettings, true);
 
   return {
     branches,
     grandTotalFlowers: grandSplit.flowers,
     grandTotalFillers: grandSplit.fillers,
     orderCount: visibleOrders.length,
-    newOrderCount: createdAfterIso ? newOrders.length : 0,
+    stampedOrderCount: reservedOrders.length - visibleOrders.length,
     totalReservedOrderCount: reservedOrders.length,
-    createdAfterIso,
-    newOrders: createdAfterIso ? newOrders : [],
+    stamp,
+    visibleOrders,
     dateFrom: options.dateFrom,
     dateTo: options.dateTo,
   };
@@ -297,7 +326,7 @@ export function formatSupplierSummaryDateRange(dateFrom: string, dateTo: string)
   return `${formatSupplierSummaryDateLabel(dateFrom)} – ${formatSupplierSummaryDateLabel(dateTo)}`;
 }
 
-function formatSupplierSummaryDateLabel(dateKey: string): string {
+export function formatSupplierSummaryDateLabel(dateKey: string): string {
   const [year, month, day] = dateKey.split('-').map(Number);
   const date = new Date(Date.UTC(year, month - 1, day, 12, 0, 0, 0));
   return date.toLocaleDateString('en-PH', {
@@ -330,15 +359,17 @@ export function buildSupplierOrderClipboardText(input: {
     formatSupplierSummaryDateRange(summary.dateFrom, summary.dateTo),
   ];
 
-  if (summary.createdAfterIso) {
+  if (summary.stamp.status === 'done') {
+    lines.push('DONE — this pickup range is already stamped');
+  } else if (summary.stamp.status === 'partial') {
     lines.push(
-      `NEW ADDITIONS after ${formatOrderInputTimestamp(summary.createdAfterIso)}`,
-      `${summary.orderCount} new order${summary.orderCount === 1 ? '' : 's'}`,
+      `${summary.orderCount} order${summary.orderCount === 1 ? '' : 's'} still to order`,
+      `${summary.stamp.stampedKeys.length} pickup day${
+        summary.stamp.stampedKeys.length === 1 ? '' : 's'
+      } already DONE and not included`,
     );
   } else {
-    lines.push(
-      `${summary.orderCount} reserved order${summary.orderCount === 1 ? '' : 's'}`,
-    );
+    lines.push(`${summary.orderCount} reserved order${summary.orderCount === 1 ? '' : 's'}`);
   }
 
   lines.push('');
@@ -357,7 +388,7 @@ export function buildSupplierOrderClipboardText(input: {
     lines.push('');
   }
 
-  lines.push(summary.createdAfterIso ? 'TO ORDER (new additions)' : 'TO ORDER');
+  lines.push(summary.stamp.status === 'done' ? 'TO ORDER (already done)' : 'TO ORDER');
   const allGrandLines = [...summary.grandTotalFlowers, ...summary.grandTotalFillers];
   let wroteOrderLine = false;
   for (const line of allGrandLines) {
@@ -406,32 +437,41 @@ export function writeSupplierRoundSettings(settings: SupplierRoundSettings): voi
   window.localStorage.setItem('pp_supplier_round_settings', JSON.stringify(settings));
 }
 
-const LAST_LOOK_STORAGE_KEY = 'pp_supplier_last_look_iso';
+const STAMPED_DATES_STORAGE_KEY = 'pp_supplier_stamped_dates';
+const LEGACY_LAST_LOOK_STORAGE_KEY = 'pp_supplier_last_look_iso';
 
-export function readSupplierLastLookIso(): string {
+export function readSupplierStampedDates(): string[] {
   if (typeof window === 'undefined') {
-    return '';
+    return [];
   }
 
   try {
-    return window.localStorage.getItem(LAST_LOOK_STORAGE_KEY)?.trim() ?? '';
+    window.localStorage.removeItem(LEGACY_LAST_LOOK_STORAGE_KEY);
+    const raw = window.localStorage.getItem(STAMPED_DATES_STORAGE_KEY);
+    if (!raw) {
+      return [];
+    }
+
+    const parsed = JSON.parse(raw) as unknown;
+    if (!Array.isArray(parsed)) {
+      return [];
+    }
+
+    return parsed.filter((value): value is string => typeof value === 'string' && DATE_KEY_PATTERN.test(value));
   } catch {
-    return '';
+    return [];
   }
 }
 
-export function writeSupplierLastLookIso(iso: string | null): void {
+export function writeSupplierStampedDates(dates: readonly string[]): void {
   if (typeof window === 'undefined') {
     return;
   }
 
-  const trimmed = iso?.trim() ?? '';
-  if (!trimmed) {
-    window.localStorage.removeItem(LAST_LOOK_STORAGE_KEY);
-    return;
-  }
-
-  window.localStorage.setItem(LAST_LOOK_STORAGE_KEY, trimmed);
+  window.localStorage.setItem(
+    STAMPED_DATES_STORAGE_KEY,
+    JSON.stringify([...new Set(dates.filter((key) => DATE_KEY_PATTERN.test(key)))].sort()),
+  );
 }
 
 export function defaultSupplierDateRange(): { from: string; to: string } {
