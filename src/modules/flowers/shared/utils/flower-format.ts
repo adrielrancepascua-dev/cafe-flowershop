@@ -437,6 +437,12 @@ export const PRICE_FORMATTER = new Intl.NumberFormat('en-PH', {
 
 export function summarizeFlowerLines(
   items: Array<{ item_name: string; quantity: number }>,
+  limit?: number,
 ): string {
-  return items.map((item) => `${item.item_name} x${item.quantity}`).join(', ');
+  const lines = items.map((item) => `${item.item_name} x${item.quantity}`);
+  if (!limit || lines.length <= limit) {
+    return lines.join(', ');
+  }
+
+  return `${lines.slice(0, limit).join(', ')} +${lines.length - limit} more`;
 }

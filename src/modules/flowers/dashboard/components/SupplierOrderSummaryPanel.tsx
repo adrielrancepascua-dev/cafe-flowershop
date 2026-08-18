@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { ClipboardCopy, RotateCcw } from 'lucide-react';
+import { ClipboardCopy, ChevronDown, RotateCcw } from 'lucide-react';
 import { listFlowerOrders } from '../../../../services/flowers/orders';
 import type { FlowerOrder } from '../../shared/types/flower-order';
 import type { FlowerProduct } from '../../shared/types/flower-product';
@@ -370,13 +370,23 @@ export default function SupplierOrderSummaryPanel({
       </div>
 
       {!loading && stampStatus !== 'done' && summary.visibleOrders.length > 0 ? (
-        <section className="rounded-2xl border border-brand-muted/40 bg-white p-4 sm:p-5">
-          <h3 className="text-base font-semibold text-brand-dark">
-            {stampStatus === 'partial' ? 'Still to order' : 'Orders in this range'}
-          </h3>
-          <p className="mt-0.5 text-sm text-brand-brown/70">
-            Flowers, fillers, and misc. Input time is when staff typed the order in.
-          </p>
+        <details className="group rounded-2xl border border-brand-muted/40 bg-white p-4 sm:p-5">
+          <summary className="cursor-pointer list-none [&::-webkit-details-marker]:hidden">
+            <div className="flex items-start justify-between gap-3">
+              <div className="min-w-0">
+                <h3 className="text-base font-semibold text-brand-dark">
+                  {stampStatus === 'partial' ? 'Still to order' : 'Orders in this range'}
+                  <span className="ml-2 text-sm font-normal text-brand-brown/60">
+                    {summary.visibleOrders.length}
+                  </span>
+                </h3>
+                <p className="mt-0.5 text-sm text-brand-brown/70">
+                  Tap to check which customer orders are in this copy. Collapsed so it stays short.
+                </p>
+              </div>
+              <ChevronDown className="mt-1 h-4 w-4 shrink-0 text-brand-brown/55 transition group-open:rotate-180" />
+            </div>
+          </summary>
           <ul className="mt-3 divide-y divide-brand-muted/30">
             {summary.visibleOrders.map((order) => (
               <li key={order.id} className="py-2.5 first:pt-0 last:pb-0">
@@ -390,11 +400,13 @@ export default function SupplierOrderSummaryPanel({
                 <p className="mt-0.5 text-xs text-brand-brown/65">
                   {order.branch_name} · pickup {formatPickupDateTimeLocal(order.scheduled_for)}
                 </p>
-                <p className="mt-1 text-sm text-brand-dark">{summarizeFlowerLines(order.items)}</p>
+                <p className="mt-1 truncate text-sm text-brand-dark" title={summarizeFlowerLines(order.items)}>
+                  {summarizeFlowerLines(order.items, 3)}
+                </p>
               </li>
             ))}
           </ul>
-        </section>
+        </details>
       ) : null}
 
       {!loading && !hasResults && !loadError ? (
