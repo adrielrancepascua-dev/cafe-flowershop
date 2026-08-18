@@ -29,7 +29,9 @@ import OrderDeadlineBadge from '../components/OrderDeadlineBadge';
 import {
   ORDER_STATUS_LABELS,
   PRICE_FORMATTER,
+  formatOrderInputTimestamp,
   formatPickupDateTimeLocal,
+  isOrderInputToday,
   scheduledForToDateKey,
   summarizeFlowerLines,
   toDateKey,
@@ -39,6 +41,31 @@ import { buildFlowerProductIdSet } from '../../shared/utils/flower-order-items';
 type ViewMode = 'calendar' | 'list' | 'supplier';
 
 const WEEKDAY_LABELS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+
+function OrderInputTimeLabel({
+  order,
+  nowMs,
+}: {
+  order: FlowerOrder;
+  nowMs: number;
+}) {
+  const now = new Date(nowMs);
+  const isNew = isOrderInputToday(order.created_at, now);
+
+  return (
+    <p className="mt-0.5 flex flex-wrap items-center gap-1.5 text-xs text-brand-brown/60">
+      {isNew ? (
+        <span className="rounded-full border border-emerald-200 bg-emerald-50 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-emerald-800">
+          New
+        </span>
+      ) : null}
+      <span>
+        Input {formatOrderInputTimestamp(order.created_at, now)}
+        {order.created_by_name ? ` · ${order.created_by_name}` : ''}
+      </span>
+    </p>
+  );
+}
 
 function getMonthMatrix(year: number, month: number) {
   const firstDay = new Date(year, month, 1);
@@ -95,6 +122,7 @@ function DayOrderList({
               <p className="mt-0.5 text-sm text-brand-brown/70">
                 {formatPickupDateTimeLocal(order.scheduled_for)} · {order.branch_name}
               </p>
+              <OrderInputTimeLabel order={order} nowMs={nowMs} />
               <p className="mt-1 truncate text-xs text-brand-brown/60">
                 {summarizeFlowerLines(order.items)}
               </p>
@@ -1096,6 +1124,7 @@ export default function FlowerOrdersPage() {
                         <p className="mt-1 text-xs text-brand-brown/60">
                           {formatPickupDateTimeLocal(order.scheduled_for)}
                         </p>
+                        <OrderInputTimeLabel order={order} nowMs={nowMs} />
                       </div>
                       <p className="shrink-0 font-semibold text-brand-dark">
                         {PRICE_FORMATTER.format(order.total_amount)}
@@ -1110,7 +1139,6 @@ export default function FlowerOrdersPage() {
                         {ORDER_STATUS_LABELS[order.status]}
                       </span>
                       <OrderDeadlineBadge order={order} nowMs={nowMs} flowerProductIds={flowerProductIds} />
-                      <span className="text-xs text-brand-brown/60">{order.created_by_name}</span>
                     </div>
                   </button>
                   {isAdmin ? (
@@ -1137,6 +1165,7 @@ export default function FlowerOrdersPage() {
             <thead className="bg-brand-beige/40 text-brand-brown">
               <tr>
                 <th className="px-3 py-2 whitespace-nowrap">Pickup</th>
+                <th className="px-3 py-2 whitespace-nowrap">Input</th>
                 <th className="px-3 py-2">Receiver</th>
                 <th className="max-w-[10rem] px-3 py-2">Branch</th>
                 <th className="max-w-[9rem] px-3 py-2">Flowers</th>
@@ -1158,6 +1187,18 @@ export default function FlowerOrdersPage() {
                 >
                   <td className="px-3 py-2 whitespace-nowrap text-xs sm:text-sm">
                     {formatPickupDateTimeLocal(order.scheduled_for)}
+                  </td>
+                  <td className="px-3 py-2 whitespace-nowrap text-xs">
+                    <div className="flex flex-col gap-1">
+                      {isOrderInputToday(order.created_at, new Date(nowMs)) ? (
+                        <span className="w-fit rounded-full border border-emerald-200 bg-emerald-50 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-emerald-800">
+                          New
+                        </span>
+                      ) : null}
+                      <span title={order.created_at}>
+                        {formatOrderInputTimestamp(order.created_at, new Date(nowMs))}
+                      </span>
+                    </div>
                   </td>
                   <td className="max-w-[8rem] truncate px-3 py-2" title={order.receiver}>
                     {order.receiver}
@@ -1204,7 +1245,7 @@ export default function FlowerOrdersPage() {
               ))}
               {orders.length === 0 ? (
                 <tr>
-                  <td colSpan={isAdmin ? 9 : 8} className="px-3 py-8 text-center text-brand-brown/60">
+                  <td colSpan={isAdmin ? 10 : 9} className="px-3 py-8 text-center text-brand-brown/60">
                     No orders yet.
                   </td>
                 </tr>

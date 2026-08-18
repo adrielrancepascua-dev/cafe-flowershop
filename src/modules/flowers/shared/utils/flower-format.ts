@@ -276,6 +276,100 @@ export function formatInventoryMovementTimestamp(iso: string): string {
   });
 }
 
+/** When the order was typed into the system (not pickup/delivery time). Manila clock. */
+export function formatOrderInputTimestamp(iso: string, now: Date = new Date()): string {
+  if (!iso) {
+    return '';
+  }
+
+  const date = parseFlowerTimestamp(iso);
+  if (Number.isNaN(date.getTime())) {
+    return '';
+  }
+
+  const timePart = date.toLocaleTimeString('en-PH', {
+    timeZone: FLOWER_BUSINESS_TIMEZONE,
+    hour: 'numeric',
+    minute: '2-digit',
+    hour12: true,
+  });
+
+  if (toManilaDateKeyFromDate(date) === toManilaDateKeyFromDate(now)) {
+    return `today, ${timePart}`;
+  }
+
+  const datePart = date.toLocaleDateString('en-PH', {
+    timeZone: FLOWER_BUSINESS_TIMEZONE,
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+  });
+
+  return `${datePart}, ${timePart}`;
+}
+
+export function isOrderInputToday(iso: string, now: Date = new Date()): boolean {
+  if (!iso) {
+    return false;
+  }
+
+  const date = parseFlowerTimestamp(iso);
+  if (Number.isNaN(date.getTime())) {
+    return false;
+  }
+
+  return toManilaDateKeyFromDate(date) === toManilaDateKeyFromDate(now);
+}
+
+/** `datetime-local` value for a timestamp in Philippines time. */
+export function toManilaDateTimeLocalValue(iso: string): string {
+  if (!iso) {
+    return '';
+  }
+
+  const date = parseFlowerTimestamp(iso);
+  if (Number.isNaN(date.getTime())) {
+    return '';
+  }
+
+  const parts = Object.fromEntries(
+    new Intl.DateTimeFormat('en-CA', {
+      timeZone: FLOWER_BUSINESS_TIMEZONE,
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      hourCycle: 'h23',
+    })
+      .formatToParts(date)
+      .filter((part) => part.type !== 'literal')
+      .map((part) => [part.type, part.value]),
+  );
+
+  return `${parts.year}-${parts.month}-${parts.day}T${parts.hour}:${parts.minute}`;
+}
+
+/** Parse a Manila `datetime-local` value (`YYYY-MM-DDTHH:mm`) into an ISO timestamp. */
+export function fromManilaDateTimeLocalValue(value: string): string {
+  const trimmed = value.trim();
+  if (!trimmed) {
+    return '';
+  }
+
+  const match = trimmed.match(/^(\d{4}-\d{2}-\d{2}T\d{2}:\d{2})(?::\d{2})?$/);
+  if (!match) {
+    return '';
+  }
+
+  const date = new Date(`${match[1]}:00+08:00`);
+  if (Number.isNaN(date.getTime())) {
+    return '';
+  }
+
+  return date.toISOString();
+}
+
 export function formatInventoryMovementActor(
   movement: { movement_type: string; created_by_name?: string | null },
 ): string {

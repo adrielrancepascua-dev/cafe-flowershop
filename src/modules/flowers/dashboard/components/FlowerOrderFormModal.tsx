@@ -28,6 +28,7 @@ import {
   ORDER_STATUS_LABELS,
   PRICE_FORMATTER,
   formatPickupDateTimeLocal,
+  formatOrderInputTimestamp,
   fromDateInputValue,
   readFileAsDataUrl,
   toDateInputValue,
@@ -1596,6 +1597,12 @@ export default function FlowerOrderFormModal({
             <h2 className="font-serif text-lg font-semibold text-brand-dark">
               Papers &amp; Petals — Daily Order
             </h2>
+            {existingOrder ? (
+              <p className="mt-1 text-xs text-brand-brown/70">
+                Input {formatOrderInputTimestamp(existingOrder.created_at)}
+                {existingOrder.created_by_name ? ` · ${existingOrder.created_by_name}` : ''}
+              </p>
+            ) : null}
           </div>
           <button type="button" onClick={onClose} className="rounded-lg p-2 hover:bg-brand-beige/60">
             <X className="h-5 w-5" />
@@ -2373,7 +2380,9 @@ export default function FlowerOrderFormModal({
           </div>
 
           <p className="mt-3 text-xs text-brand-brown/70">
-            Input by: {form.created_by_name}
+            {existingOrder
+              ? `Input ${formatOrderInputTimestamp(existingOrder.created_at)} · ${form.created_by_name}`
+              : `Input by: ${form.created_by_name}`}
           </p>
 
 

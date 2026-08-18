@@ -63,6 +63,15 @@ export function FlowerThermalOrderSlip({ order }: { order: FlowerOrder }) {
         <p className="flower-thermal-order-ref">{formatThermalOrderRef(order.id)}</p>
         <p className="flower-thermal-fulfillment">{formatThermalClaimMode(order.claim_mode)}</p>
         {scheduleLine ? <p className="flower-thermal-schedule">{scheduleLine}</p> : null}
+        {order.created_at ? (
+          <p className="flower-thermal-line">
+            <span className="flower-thermal-inline-label">INPUT:</span>{' '}
+            {[formatThermalDateLine(order.created_at), formatThermalTimeLine(order.created_at), order.created_by_name]
+              .filter(Boolean)
+              .join(' · ')
+              .toUpperCase()}
+          </p>
+        ) : null}
       </div>
 
       <FlowerThermalDivider />
