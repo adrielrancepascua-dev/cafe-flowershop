@@ -37,6 +37,7 @@ export interface SupplierOrderSummaryResult {
   grandTotalFillers: SupplierSummaryLine[];
   orderCount: number;
   newOrderCount: number;
+  totalReservedOrderCount: number;
   createdAfterIso: string | null;
   newOrders: FlowerOrder[];
   dateFrom: string;
@@ -223,11 +224,12 @@ export function buildSupplierOrderSummary(
     dateTo: options.dateTo,
     createdAfterIso,
   });
-  const suggestNew = Boolean(createdAfterIso);
-  const allMap = collectLineMap(reservedOrders, productsById);
+  const visibleOrders = createdAfterIso ? newOrders : reservedOrders;
   const newQtyByKey = new Map<string, number>();
-  for (const [key, entry] of collectLineMap(createdAfterIso ? newOrders : [], productsById)) {
-    newQtyByKey.set(key, entry.qty);
+  if (createdAfterIso) {
+    for (const [key, entry] of collectLineMap(newOrders, productsById)) {
+      newQtyByKey.set(key, entry.qty);
+    }
   }
 
   const branchMaps = new Map<
@@ -238,7 +240,7 @@ export function buildSupplierOrderSummary(
     }
   >();
 
-  for (const order of reservedOrders) {
+  for (const order of visibleOrders) {
     let branchEntry = branchMaps.get(order.branch_id);
     if (!branchEntry) {
       branchEntry = {
@@ -255,7 +257,7 @@ export function buildSupplierOrderSummary(
 
   const branches: SupplierBranchSummary[] = [...branchMaps.entries()]
     .map(([branchId, entry]) => {
-      const split = mapToSummaryLines(entry.lines, newQtyByKey, roundSettings, false, false);
+      const split = mapToSummaryLines(entry.lines, newQtyByKey, roundSettings, false, Boolean(createdAfterIso));
       return {
         branchId,
         branchName: entry.branchName,
@@ -265,14 +267,21 @@ export function buildSupplierOrderSummary(
     })
     .sort((left, right) => left.branchName.localeCompare(right.branchName));
 
-  const grandSplit = mapToSummaryLines(allMap, newQtyByKey, roundSettings, true, suggestNew);
+  const grandSplit = mapToSummaryLines(
+    collectLineMap(visibleOrders, productsById),
+    newQtyByKey,
+    roundSettings,
+    true,
+    Boolean(createdAfterIso),
+  );
 
   return {
     branches,
     grandTotalFlowers: grandSplit.flowers,
     grandTotalFillers: grandSplit.fillers,
-    orderCount: reservedOrders.length,
+    orderCount: visibleOrders.length,
     newOrderCount: createdAfterIso ? newOrders.length : 0,
+    totalReservedOrderCount: reservedOrders.length,
     createdAfterIso,
     newOrders: createdAfterIso ? newOrders : [],
     dateFrom: options.dateFrom,
@@ -319,13 +328,16 @@ export function buildSupplierOrderClipboardText(input: {
   const lines: string[] = [
     'PAPERS & PETALS — SUPPLIER ORDER',
     formatSupplierSummaryDateRange(summary.dateFrom, summary.dateTo),
-    `${summary.orderCount} reserved order${summary.orderCount === 1 ? '' : 's'}`,
   ];
 
   if (summary.createdAfterIso) {
     lines.push(
-      `New = inputted after ${formatOrderInputTimestamp(summary.createdAfterIso)}`,
-      `${summary.newOrderCount} new order${summary.newOrderCount === 1 ? '' : 's'} to add`,
+      `NEW ADDITIONS after ${formatOrderInputTimestamp(summary.createdAfterIso)}`,
+      `${summary.orderCount} new order${summary.orderCount === 1 ? '' : 's'}`,
+    );
+  } else {
+    lines.push(
+      `${summary.orderCount} reserved order${summary.orderCount === 1 ? '' : 's'}`,
     );
   }
 

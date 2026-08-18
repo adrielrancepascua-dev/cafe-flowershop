@@ -151,11 +151,11 @@ const withLastLook = buildSupplierOrderSummary([oldOrder, newOrder, cancelledNew
   roundSettings: { flowerRoundStep: 1, miscRoundStep: 1 },
 });
 
-assertEqual(withLastLook.orderCount, 2, 'full reserved list stays visible after a last look');
+assertEqual(withLastLook.orderCount, 1, 'after already-ordered, only later inputted orders stay visible');
+assertEqual(withLastLook.totalReservedOrderCount, 2, 'full reserved count is kept for Redo');
 assertEqual(withLastLook.newOrderCount, 1, 'new count is only later inputted orders');
-assertEqual(withLastLook.grandTotalFlowers[0]?.reservedQty, 15, 'All qty is still old + new gerbera');
-assertEqual(withLastLook.grandTotalFlowers[0]?.newQty, 5, 'New qty is only the additions');
-assertEqual(withLastLook.grandTotalFlowers[0]?.suggestedOrderQty, 5, 'to-order box defaults to New');
+assertEqual(withLastLook.grandTotalFlowers[0]?.reservedQty, 5, 'visible qty is only the additions');
+assertEqual(withLastLook.grandTotalFlowers[0]?.suggestedOrderQty, 5, 'to-order box is the new qty');
 assertEqual(withLastLook.newOrders.map((order) => order.id), ['new'], 'newOrders lists the additions');
 assertEqual(withLastLook.createdAfterIso, yesterdayIso, 'cutoff is stored on the summary');
 
@@ -166,12 +166,9 @@ const clipboard = buildSupplierOrderClipboardText({
   ]),
 });
 
-assertTrue(clipboard.includes('15 pink gerbera'), 'clipboard still shows full reserved branch totals');
-assertTrue(clipboard.includes('TO ORDER (new additions)'), 'clipboard labels to-order as new additions');
+assertTrue(clipboard.includes('NEW ADDITIONS after'), 'clipboard labels a reorder as new additions');
 assertTrue(clipboard.includes('5 stems pink gerbera'), 'clipboard to-order line is the new qty');
-assertTrue(
-  !clipboard.includes('older order already ordered'),
-  'clipboard should not talk about hiding older orders',
-);
+assertTrue(!clipboard.includes('15 pink gerbera'), 'clipboard must not include already-ordered stems');
+assertTrue(clipboard.includes('TO ORDER (new additions)'), 'clipboard to-order header is new-only');
 
 console.log('order input time tests passed');

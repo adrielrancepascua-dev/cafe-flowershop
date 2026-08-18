@@ -47,13 +47,11 @@ function SummaryLineList({
 function EditableOrderLine({
   line,
   orderQty,
-  showNew,
   onChange,
   onReset,
 }: {
   line: SupplierSummaryLine;
   orderQty: number;
-  showNew: boolean;
   onChange: (value: number) => void;
   onReset: () => void;
 }) {
@@ -65,21 +63,11 @@ function EditableOrderLine({
       <div className="min-w-0 flex-1">
         <p className="text-sm font-medium text-brand-dark">{line.itemName}</p>
         <p className="text-xs text-brand-brown/60">
-          All {line.reservedQty}
+          Reserved {line.reservedQty}
           {line.kind === 'flower' ? ' stems' : ''}
-          {showNew ? (
-            <>
-              {' · '}
-              New {line.newQty > 0 ? `+${line.newQty}` : '0'}
-              {line.kind === 'flower' ? ' stems' : ''}
-            </>
-          ) : (
-            <>
-              {' · '}
-              Suggested {line.suggestedOrderQty}
-              {line.kind === 'flower' ? ' stems' : ''}
-            </>
-          )}
+          {' · '}
+          Suggested {line.suggestedOrderQty}
+          {line.kind === 'flower' ? ' stems' : ''}
         </p>
       </div>
       <div className="flex items-center gap-2">
@@ -217,19 +205,23 @@ export default function SupplierOrderSummaryPanel({
   }
 
   function markAlreadyOrdered() {
+    if (lastLookIso) {
+      return;
+    }
+
     const nowIso = new Date().toISOString();
     writeSupplierLastLookIso(nowIso);
     setLastLookIso(nowIso);
   }
 
-  function undoLastLook() {
+  function redoShowAll() {
     writeSupplierLastLookIso(null);
     setLastLookIso('');
   }
 
   const grandTotalLines = [...summary.grandTotalFlowers, ...summary.grandTotalFillers];
+  const alreadyOrdered = Boolean(createdAfterIso);
   const hasResults = summary.orderCount > 0;
-  const showNew = Boolean(createdAfterIso);
 
   return (
     <div className="mt-5 space-y-5">
@@ -238,9 +230,10 @@ export default function SupplierOrderSummaryPanel({
           <div>
             <h2 className="text-lg font-semibold text-brand-dark">Supplier order summary</h2>
             <p className="mt-1 text-sm text-brand-brown/70">
-              Reserved flowers and fillers per branch. Copy the list, order from the supplier, then
-              tap <span className="font-semibold">Already ordered these</span>. Next time,{' '}
-              <span className="font-semibold">New</span> is only the extra stems to add.
+              Copy the list and order from the supplier, then tap{' '}
+              <span className="font-semibold">Already ordered these</span>. Old orders hide. New
+              ones show up here as they get typed in. <span className="font-semibold">Redo</span>{' '}
+              brings everything back.
             </p>
           </div>
           <div className="flex flex-wrap items-end gap-3">
@@ -319,12 +312,21 @@ export default function SupplierOrderSummaryPanel({
             <ClipboardCopy className="mr-1.5 inline h-4 w-4" />
             Copy for supplier
           </button>
-          <button type="button" onClick={markAlreadyOrdered} className="flower-btn-secondary">
+          <button
+            type="button"
+            onClick={markAlreadyOrdered}
+            aria-pressed={alreadyOrdered}
+            className={
+              alreadyOrdered
+                ? 'flower-btn-primary ring-2 ring-brand-beige ring-offset-2 ring-offset-white'
+                : 'flower-btn-secondary'
+            }
+          >
             Already ordered these
           </button>
-          {showNew ? (
-            <button type="button" onClick={undoLastLook} className="flower-btn-secondary">
-              Show all stems again
+          {alreadyOrdered ? (
+            <button type="button" onClick={redoShowAll} className="flower-btn-secondary">
+              Redo
             </button>
           ) : null}
           <button
@@ -343,21 +345,19 @@ export default function SupplierOrderSummaryPanel({
 
         {!loading && !loadError ? (
           <p className="mt-3 text-sm text-brand-brown/70">
-            {formatSupplierSummaryDateRange(dateFrom, dateTo)} · {summary.orderCount} reserved order
-            {summary.orderCount === 1 ? '' : 's'} · all branches
-            {showNew && createdAfterIso
-              ? ` · New = inputted after ${formatOrderInputTimestamp(createdAfterIso)}`
-              : ''}
+            {formatSupplierSummaryDateRange(dateFrom, dateTo)}
+            {alreadyOrdered && createdAfterIso
+              ? ` · Showing ${summary.orderCount} new order${summary.orderCount === 1 ? '' : 's'} after ${formatOrderInputTimestamp(createdAfterIso)}`
+              : ` · ${summary.orderCount} reserved order${summary.orderCount === 1 ? '' : 's'} · all branches`}
           </p>
         ) : null}
       </div>
 
-      {!loading && showNew && summary.newOrders.length > 0 ? (
+      {!loading && alreadyOrdered && summary.newOrders.length > 0 ? (
         <section className="rounded-2xl border border-emerald-200 bg-emerald-50/60 p-4 sm:p-5">
-          <h3 className="text-base font-semibold text-brand-dark">New orders to add</h3>
+          <h3 className="text-base font-semibold text-brand-dark">New orders</h3>
           <p className="mt-0.5 text-sm text-brand-brown/70">
-            {summary.newOrderCount} order{summary.newOrderCount === 1 ? '' : 's'} typed in after you
-            last ordered from the supplier.
+            Typed in after you marked already ordered.
           </p>
           <ul className="mt-3 divide-y divide-emerald-200/70">
             {summary.newOrders.map((order) => (
@@ -382,8 +382,11 @@ export default function SupplierOrderSummaryPanel({
       {!loading && !hasResults && !loadError ? (
         <div className="rounded-2xl border border-dashed border-brand-muted/50 bg-brand-beige/20 px-4 py-10 text-center">
           <p className="text-sm text-brand-brown/70">
-            No reserved orders in this date range. Try widening the dates or check that orders are
-            not cancelled.
+            {alreadyOrdered
+              ? `No new orders yet. New ones will show up here as they get typed in. Redo to see all ${summary.totalReservedOrderCount} reserved order${
+                  summary.totalReservedOrderCount === 1 ? '' : 's'
+                } again.`
+              : 'No reserved orders in this date range. Try widening the dates or check that orders are not cancelled.'}
           </p>
         </div>
       ) : null}
@@ -396,7 +399,9 @@ export default function SupplierOrderSummaryPanel({
               className="rounded-2xl border border-brand-muted/40 bg-white p-4 sm:p-5"
             >
               <h3 className="text-base font-semibold text-brand-dark">{branch.branchName}</h3>
-              <p className="mt-0.5 text-xs text-brand-brown/60">Exact reserved totals</p>
+              <p className="mt-0.5 text-xs text-brand-brown/60">
+                {alreadyOrdered ? 'New additions only' : 'Exact reserved totals'}
+              </p>
 
               {branch.flowers.length > 0 ? (
                 <div className="mt-4">
@@ -430,8 +435,8 @@ export default function SupplierOrderSummaryPanel({
             <div>
               <h3 className="text-base font-semibold text-brand-dark">To order (all branches)</h3>
               <p className="mt-0.5 text-sm text-brand-brown/65">
-                {showNew
-                  ? 'Boxes default to New — the extra stems since you last ordered. Edit before copying.'
+                {alreadyOrdered
+                  ? 'Only new additions — copy this list for the extra stems.'
                   : 'Rounded totals — edit any quantity before copying to your supplier.'}
               </p>
             </div>
@@ -445,7 +450,6 @@ export default function SupplierOrderSummaryPanel({
                 <EditableOrderLine
                   key={line.key}
                   line={line}
-                  showNew={showNew}
                   orderQty={orderQuantities.get(line.key) ?? line.suggestedOrderQty}
                   onChange={(value) =>
                     setOrderOverrides((current) => ({

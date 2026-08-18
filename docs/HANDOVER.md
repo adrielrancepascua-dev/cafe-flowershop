@@ -68,7 +68,7 @@ Use two phones (or one phone + laptop) logged in as **different staff** accounts
 - [ ] Device A: status update visible without clearing cache
 - [ ] Staff can **edit an order once until 6:00 PM** on the day it was created (e.g. update flowers after assembling a Thumbelina bouquet); after one save or after 6 PM, **Edit order** is hidden
 - [ ] **Admin can edit any order unlimited times**, any day — no 6 PM or once-only limit
-- [ ] Each order shows **input time** (when it was typed in, not pickup). Admin **Supplier** tab: copy the list, then tap **Already ordered these**. Next visit, **New** is only the extra stems to add.
+- [ ] Each order shows **input time** (when it was typed in, not pickup). Admin **Supplier** tab: copy the list, tap **Already ordered these** (stays highlighted). Old orders hide; new ones appear as they are typed. Copy then sends only the new stems. **Redo** brings the full list back.
 
 ### 2. Photo uploads
 
@@ -135,7 +135,7 @@ Pick a test day with 2+ orders (or create them for today).
 
 ## Staff training (15 minutes)
 
-1. **Orders** — calendar vs list; create order; upload photos; status workflow (not started → ready → picked up/delivered). **Input time** is when the order was typed in (not pickup). Admin **Supplier** tab: copy, order from the supplier, tap **Already ordered these**. Next time **New** is the extra stems.
+1. **Orders** — calendar vs list; create order; upload photos; status workflow (not started → ready → picked up/delivered). **Input time** is when the order was typed in (not pickup). Admin **Supplier** tab: copy, tap **Already ordered these** (highlights). Only new orders remain; copy is new-only. **Redo** shows everything again.
 2. **Inventory** — view stock; stock in/out; inter-branch transfer requests (file a request; receiving branch confirms before stock is added)
 3. **Daily count** — enter actual flower + gift item counts before leaving; wrappers skipped; does not auto-adjust stock
 4. **Expenses** — log petty cash; admin can fix typos
