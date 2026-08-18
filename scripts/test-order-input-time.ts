@@ -140,28 +140,38 @@ const allSummary = buildSupplierOrderSummary([oldOrder, newOrder, cancelledNew],
 
 assertEqual(allSummary.orderCount, 2, 'cancelled orders stay out of the full reserved total');
 assertEqual(allSummary.grandTotalFlowers[0]?.reservedQty, 15, 'full summary adds old + new gerbera');
+assertEqual(allSummary.grandTotalFlowers[0]?.newQty, 0, 'no cutoff means New is not split yet');
 assertEqual(allSummary.createdAfterIso, null, 'no cutoff means createdAfter is null');
+assertEqual(allSummary.newOrderCount, 0, 'no cutoff means there is no new-order split');
 
-const newOnly = buildSupplierOrderSummary([oldOrder, newOrder, cancelledNew], products, {
+const withLastLook = buildSupplierOrderSummary([oldOrder, newOrder, cancelledNew], products, {
   dateFrom: '2026-08-20',
   dateTo: '2026-08-20',
   createdAfterIso: yesterdayIso,
   roundSettings: { flowerRoundStep: 1, miscRoundStep: 1 },
 });
 
-assertEqual(newOnly.orderCount, 1, 'added-after filter keeps only later inputted orders');
-assertEqual(newOnly.totalReservedOrderCount, 2, 'older reserved orders are counted but hidden');
-assertEqual(newOnly.grandTotalFlowers[0]?.reservedQty, 5, 'new-only totals are just the additions');
-assertEqual(newOnly.includedOrders.map((order) => order.id), ['new'], 'includedOrders lists the new additions');
-assertEqual(newOnly.createdAfterIso, yesterdayIso, 'cutoff is stored on the summary');
+assertEqual(withLastLook.orderCount, 2, 'full reserved list stays visible after a last look');
+assertEqual(withLastLook.newOrderCount, 1, 'new count is only later inputted orders');
+assertEqual(withLastLook.grandTotalFlowers[0]?.reservedQty, 15, 'All qty is still old + new gerbera');
+assertEqual(withLastLook.grandTotalFlowers[0]?.newQty, 5, 'New qty is only the additions');
+assertEqual(withLastLook.grandTotalFlowers[0]?.suggestedOrderQty, 5, 'to-order box defaults to New');
+assertEqual(withLastLook.newOrders.map((order) => order.id), ['new'], 'newOrders lists the additions');
+assertEqual(withLastLook.createdAfterIso, yesterdayIso, 'cutoff is stored on the summary');
 
 const clipboard = buildSupplierOrderClipboardText({
-  summary: newOnly,
-  orderQuantities: new Map([[newOnly.grandTotalFlowers[0].key, newOnly.grandTotalFlowers[0].suggestedOrderQty]]),
+  summary: withLastLook,
+  orderQuantities: new Map([
+    [withLastLook.grandTotalFlowers[0].key, withLastLook.grandTotalFlowers[0].suggestedOrderQty],
+  ]),
 });
 
-assertTrue(clipboard.includes('NEW ADDITIONS after'), 'clipboard labels a reorder as new additions');
-assertTrue(clipboard.includes('1 older order already ordered'), 'clipboard says older orders were already ordered');
+assertTrue(clipboard.includes('15 pink gerbera'), 'clipboard still shows full reserved branch totals');
+assertTrue(clipboard.includes('TO ORDER (new additions)'), 'clipboard labels to-order as new additions');
 assertTrue(clipboard.includes('5 stems pink gerbera'), 'clipboard to-order line is the new qty');
+assertTrue(
+  !clipboard.includes('older order already ordered'),
+  'clipboard should not talk about hiding older orders',
+);
 
 console.log('order input time tests passed');

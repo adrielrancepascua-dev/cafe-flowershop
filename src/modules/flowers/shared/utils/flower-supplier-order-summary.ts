@@ -20,6 +20,7 @@ export interface SupplierSummaryLine {
   itemName: string;
   kind: FlowerProductKind;
   reservedQty: number;
+  newQty: number;
   suggestedOrderQty: number;
 }
 
@@ -35,9 +36,9 @@ export interface SupplierOrderSummaryResult {
   grandTotalFlowers: SupplierSummaryLine[];
   grandTotalFillers: SupplierSummaryLine[];
   orderCount: number;
-  totalReservedOrderCount: number;
+  newOrderCount: number;
   createdAfterIso: string | null;
-  includedOrders: FlowerOrder[];
+  newOrders: FlowerOrder[];
   dateFrom: string;
   dateTo: string;
 }
@@ -79,8 +80,15 @@ function sortSummaryLines(lines: SupplierSummaryLine[]): SupplierSummaryLine[] {
   return [...lines].sort((left, right) => left.itemName.localeCompare(right.itemName));
 }
 
+type QtyLineEntry = {
+  productId: string | null;
+  itemName: string;
+  kind: FlowerProductKind;
+  qty: number;
+};
+
 function addToLineMap(
-  map: Map<string, { productId: string | null; itemName: string; kind: FlowerProductKind; qty: number }>,
+  map: Map<string, QtyLineEntry>,
   productId: string,
   itemName: string,
   quantity: number,
@@ -104,23 +112,28 @@ function addToLineMap(
 }
 
 function mapToSummaryLines(
-  map: Map<string, { productId: string | null; itemName: string; kind: FlowerProductKind; qty: number }>,
+  allMap: Map<string, QtyLineEntry>,
+  newQtyByKey: Map<string, number>,
   roundSettings: SupplierRoundSettings,
   roundQuantities: boolean,
+  suggestNew: boolean,
 ): { flowers: SupplierSummaryLine[]; fillers: SupplierSummaryLine[] } {
   const flowers: SupplierSummaryLine[] = [];
   const fillers: SupplierSummaryLine[] = [];
 
-  for (const [key, entry] of map) {
+  for (const [key, entry] of allMap) {
+    const newQty = newQtyByKey.get(key) ?? 0;
     const step =
       entry.kind === 'misc' ? roundSettings.miscRoundStep : roundSettings.flowerRoundStep;
+    const sourceQty = suggestNew ? newQty : entry.qty;
     const line: SupplierSummaryLine = {
       key,
       productId: entry.productId,
       itemName: entry.itemName,
       kind: entry.kind,
       reservedQty: entry.qty,
-      suggestedOrderQty: roundQuantities ? roundUpSupplierQuantity(entry.qty, step) : entry.qty,
+      newQty,
+      suggestedOrderQty: roundQuantities ? roundUpSupplierQuantity(sourceQty, step) : sourceQty,
     };
 
     if (entry.kind === 'misc') {
@@ -179,6 +192,19 @@ export function filterOrdersForSupplierSummary(
   };
 }
 
+function collectLineMap(
+  orders: FlowerOrder[],
+  productsById: Map<string, FlowerProduct>,
+): Map<string, QtyLineEntry> {
+  const map = new Map<string, QtyLineEntry>();
+  for (const order of orders) {
+    for (const item of order.items) {
+      addToLineMap(map, item.product_id, item.item_name, item.quantity, productsById);
+    }
+  }
+  return map;
+}
+
 export function buildSupplierOrderSummary(
   orders: FlowerOrder[],
   products: FlowerProduct[],
@@ -192,27 +218,27 @@ export function buildSupplierOrderSummary(
   const roundSettings = options.roundSettings ?? DEFAULT_ROUND_SETTINGS;
   const productsById = new Map(products.map((product) => [product.id, product]));
   const createdAfterIso = options.createdAfterIso?.trim() || null;
-  const { reservedOrders, includedOrders } = filterOrdersForSupplierSummary(orders, {
+  const { reservedOrders, includedOrders: newOrders } = filterOrdersForSupplierSummary(orders, {
     dateFrom: options.dateFrom,
     dateTo: options.dateTo,
     createdAfterIso,
   });
-  const activeOrders = includedOrders;
+  const suggestNew = Boolean(createdAfterIso);
+  const allMap = collectLineMap(reservedOrders, productsById);
+  const newQtyByKey = new Map<string, number>();
+  for (const [key, entry] of collectLineMap(createdAfterIso ? newOrders : [], productsById)) {
+    newQtyByKey.set(key, entry.qty);
+  }
 
   const branchMaps = new Map<
     string,
     {
       branchName: string;
-      lines: Map<string, { productId: string | null; itemName: string; kind: FlowerProductKind; qty: number }>;
+      lines: Map<string, QtyLineEntry>;
     }
   >();
 
-  const grandTotalMap = new Map<
-    string,
-    { productId: string | null; itemName: string; kind: FlowerProductKind; qty: number }
-  >();
-
-  for (const order of activeOrders) {
+  for (const order of reservedOrders) {
     let branchEntry = branchMaps.get(order.branch_id);
     if (!branchEntry) {
       branchEntry = {
@@ -224,13 +250,12 @@ export function buildSupplierOrderSummary(
 
     for (const item of order.items) {
       addToLineMap(branchEntry.lines, item.product_id, item.item_name, item.quantity, productsById);
-      addToLineMap(grandTotalMap, item.product_id, item.item_name, item.quantity, productsById);
     }
   }
 
   const branches: SupplierBranchSummary[] = [...branchMaps.entries()]
     .map(([branchId, entry]) => {
-      const split = mapToSummaryLines(entry.lines, roundSettings, false);
+      const split = mapToSummaryLines(entry.lines, newQtyByKey, roundSettings, false, false);
       return {
         branchId,
         branchName: entry.branchName,
@@ -240,16 +265,16 @@ export function buildSupplierOrderSummary(
     })
     .sort((left, right) => left.branchName.localeCompare(right.branchName));
 
-  const grandSplit = mapToSummaryLines(grandTotalMap, roundSettings, true);
+  const grandSplit = mapToSummaryLines(allMap, newQtyByKey, roundSettings, true, suggestNew);
 
   return {
     branches,
     grandTotalFlowers: grandSplit.flowers,
     grandTotalFillers: grandSplit.fillers,
-    orderCount: activeOrders.length,
-    totalReservedOrderCount: reservedOrders.length,
+    orderCount: reservedOrders.length,
+    newOrderCount: createdAfterIso ? newOrders.length : 0,
     createdAfterIso,
-    includedOrders,
+    newOrders: createdAfterIso ? newOrders : [],
     dateFrom: options.dateFrom,
     dateTo: options.dateTo,
   };
@@ -294,22 +319,13 @@ export function buildSupplierOrderClipboardText(input: {
   const lines: string[] = [
     'PAPERS & PETALS — SUPPLIER ORDER',
     formatSupplierSummaryDateRange(summary.dateFrom, summary.dateTo),
+    `${summary.orderCount} reserved order${summary.orderCount === 1 ? '' : 's'}`,
   ];
 
   if (summary.createdAfterIso) {
-    const hiddenCount = Math.max(0, summary.totalReservedOrderCount - summary.orderCount);
     lines.push(
-      `NEW ADDITIONS after ${formatOrderInputTimestamp(summary.createdAfterIso)}`,
-      `${summary.orderCount} new reserved order${summary.orderCount === 1 ? '' : 's'}`,
-    );
-    if (hiddenCount > 0) {
-      lines.push(
-        `${hiddenCount} older order${hiddenCount === 1 ? '' : 's'} already ordered — not included`,
-      );
-    }
-  } else {
-    lines.push(
-      `${summary.orderCount} reserved order${summary.orderCount === 1 ? '' : 's'}`,
+      `New = inputted after ${formatOrderInputTimestamp(summary.createdAfterIso)}`,
+      `${summary.newOrderCount} new order${summary.newOrderCount === 1 ? '' : 's'} to add`,
     );
   }
 
@@ -329,13 +345,18 @@ export function buildSupplierOrderClipboardText(input: {
     lines.push('');
   }
 
-  lines.push('TO ORDER');
+  lines.push(summary.createdAfterIso ? 'TO ORDER (new additions)' : 'TO ORDER');
   const allGrandLines = [...summary.grandTotalFlowers, ...summary.grandTotalFillers];
+  let wroteOrderLine = false;
   for (const line of allGrandLines) {
     const orderQty = orderQuantities.get(line.key) ?? line.suggestedOrderQty;
+    if (orderQty <= 0) {
+      continue;
+    }
     lines.push(`• ${formatOrderLine(line, orderQty)}`);
+    wroteOrderLine = true;
   }
-  if (allGrandLines.length === 0) {
+  if (!wroteOrderLine) {
     lines.push('• (none)');
   }
 

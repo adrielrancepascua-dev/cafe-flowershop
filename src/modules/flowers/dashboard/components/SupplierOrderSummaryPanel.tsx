@@ -1,14 +1,12 @@
 import { useEffect, useMemo, useState } from 'react';
-import { ClipboardCopy, Clock, RotateCcw } from 'lucide-react';
+import { ClipboardCopy, RotateCcw } from 'lucide-react';
 import { listFlowerOrders } from '../../../../services/flowers/orders';
 import type { FlowerOrder } from '../../shared/types/flower-order';
 import type { FlowerProduct } from '../../shared/types/flower-product';
 import {
   formatOrderInputTimestamp,
   formatPickupDateTimeLocal,
-  fromManilaDateTimeLocalValue,
   summarizeFlowerLines,
-  toManilaDateTimeLocalValue,
 } from '../../shared/utils/flower-format';
 import {
   buildSupplierOrderClipboardText,
@@ -49,11 +47,13 @@ function SummaryLineList({
 function EditableOrderLine({
   line,
   orderQty,
+  showNew,
   onChange,
   onReset,
 }: {
   line: SupplierSummaryLine;
   orderQty: number;
+  showNew: boolean;
   onChange: (value: number) => void;
   onReset: () => void;
 }) {
@@ -65,11 +65,21 @@ function EditableOrderLine({
       <div className="min-w-0 flex-1">
         <p className="text-sm font-medium text-brand-dark">{line.itemName}</p>
         <p className="text-xs text-brand-brown/60">
-          Reserved {line.reservedQty}
+          All {line.reservedQty}
           {line.kind === 'flower' ? ' stems' : ''}
-          {' · '}
-          Suggested {line.suggestedOrderQty}
-          {line.kind === 'flower' ? ' stems' : ''}
+          {showNew ? (
+            <>
+              {' · '}
+              New {line.newQty > 0 ? `+${line.newQty}` : '0'}
+              {line.kind === 'flower' ? ' stems' : ''}
+            </>
+          ) : (
+            <>
+              {' · '}
+              Suggested {line.suggestedOrderQty}
+              {line.kind === 'flower' ? ' stems' : ''}
+            </>
+          )}
         </p>
       </div>
       <div className="flex items-center gap-2">
@@ -119,11 +129,7 @@ export default function SupplierOrderSummaryPanel({
   const [loadError, setLoadError] = useState('');
   const [copyMessage, setCopyMessage] = useState('');
   const [orderOverrides, setOrderOverrides] = useState<Record<string, number>>({});
-  const [addedAfterLocal, setAddedAfterLocal] = useState(() => {
-    const saved = readSupplierLastLookIso();
-    return saved ? toManilaDateTimeLocalValue(saved) : '';
-  });
-  const [savedLastLookIso, setSavedLastLookIso] = useState(() => readSupplierLastLookIso());
+  const [lastLookIso, setLastLookIso] = useState(() => readSupplierLastLookIso());
 
   useEffect(() => {
     let cancelled = false;
@@ -172,9 +178,9 @@ export default function SupplierOrderSummaryPanel({
 
   useEffect(() => {
     setOrderOverrides({});
-  }, [dateFrom, dateTo, roundSettings.flowerRoundStep, roundSettings.miscRoundStep, addedAfterLocal]);
+  }, [dateFrom, dateTo, roundSettings.flowerRoundStep, roundSettings.miscRoundStep, lastLookIso]);
 
-  const createdAfterIso = addedAfterLocal ? fromManilaDateTimeLocalValue(addedAfterLocal) : null;
+  const createdAfterIso = lastLookIso || null;
 
   const summary = useMemo(
     () =>
@@ -210,40 +216,20 @@ export default function SupplierOrderSummaryPanel({
     setOrderOverrides({});
   }
 
-  function markNowAsLastLook() {
+  function markAlreadyOrdered() {
     const nowIso = new Date().toISOString();
-    setAddedAfterLocal(toManilaDateTimeLocalValue(nowIso));
     writeSupplierLastLookIso(nowIso);
-    setSavedLastLookIso(nowIso);
+    setLastLookIso(nowIso);
   }
 
-  function applySavedLastLook() {
-    if (!savedLastLookIso) {
-      return;
-    }
-
-    setAddedAfterLocal(toManilaDateTimeLocalValue(savedLastLookIso));
-  }
-
-  function showAllReserved() {
-    setAddedAfterLocal('');
-  }
-
-  function saveCurrentFilterAsLastLook() {
-    if (!createdAfterIso) {
-      writeSupplierLastLookIso(null);
-      setSavedLastLookIso('');
-      return;
-    }
-
-    writeSupplierLastLookIso(createdAfterIso);
-    setSavedLastLookIso(createdAfterIso);
+  function undoLastLook() {
+    writeSupplierLastLookIso(null);
+    setLastLookIso('');
   }
 
   const grandTotalLines = [...summary.grandTotalFlowers, ...summary.grandTotalFillers];
   const hasResults = summary.orderCount > 0;
-  const hiddenOlderCount = Math.max(0, summary.totalReservedOrderCount - summary.orderCount);
-  const isFilteringByInputTime = Boolean(createdAfterIso);
+  const showNew = Boolean(createdAfterIso);
 
   return (
     <div className="mt-5 space-y-5">
@@ -252,9 +238,9 @@ export default function SupplierOrderSummaryPanel({
           <div>
             <h2 className="text-lg font-semibold text-brand-dark">Supplier order summary</h2>
             <p className="mt-1 text-sm text-brand-brown/70">
-              Summarize reserved flowers and fillers per branch. After you order from the supplier,
-              tap <span className="font-semibold">Mark now</span> so the next list only shows
-              newly inputted orders — the extra stems to add.
+              Reserved flowers and fillers per branch. Copy the list, order from the supplier, then
+              tap <span className="font-semibold">Already ordered these</span>. Next time,{' '}
+              <span className="font-semibold">New</span> is only the extra stems to add.
             </p>
           </div>
           <div className="flex flex-wrap items-end gap-3">
@@ -281,60 +267,6 @@ export default function SupplierOrderSummaryPanel({
               />
             </label>
           </div>
-        </div>
-
-        <div className="mt-4 rounded-xl border border-brand-muted/35 bg-brand-beige/25 p-3 sm:p-4">
-          <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-end">
-            <label className="block min-w-[220px] flex-1 text-sm">
-              <span className="mb-1 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-brand-brown/60">
-                <Clock className="h-3.5 w-3.5" />
-                Added after (input time)
-              </span>
-              <input
-                type="datetime-local"
-                value={addedAfterLocal}
-                onChange={(event) => setAddedAfterLocal(event.target.value)}
-                className="flower-input"
-              />
-            </label>
-            <div className="flex flex-wrap gap-2">
-              <button type="button" className="flower-btn-primary py-2 text-xs" onClick={markNowAsLastLook}>
-                Mark now
-              </button>
-              {savedLastLookIso ? (
-                <button
-                  type="button"
-                  className="flower-btn-secondary py-2 text-xs"
-                  onClick={applySavedLastLook}
-                >
-                  Since last look
-                </button>
-              ) : null}
-              {addedAfterLocal ? (
-                <button type="button" className="flower-btn-secondary py-2 text-xs" onClick={showAllReserved}>
-                  Show all
-                </button>
-              ) : null}
-              {createdAfterIso && createdAfterIso !== savedLastLookIso ? (
-                <button
-                  type="button"
-                  className="flower-btn-secondary py-2 text-xs"
-                  onClick={saveCurrentFilterAsLastLook}
-                >
-                  Save as last look
-                </button>
-              ) : null}
-            </div>
-          </div>
-          <p className="mt-2 text-xs text-brand-brown/65">
-            Pickup date is when the customer claims the order. Input time is when staff typed it in.
-            Use this to see only the new additions since you last ordered from the supplier.
-          </p>
-          {savedLastLookIso ? (
-            <p className="mt-1 text-xs text-brand-brown/55">
-              Last supplier look: {formatOrderInputTimestamp(savedLastLookIso)}
-            </p>
-          ) : null}
         </div>
 
         <div className="mt-4 flex flex-wrap gap-3 border-t border-brand-muted/30 pt-4">
@@ -387,6 +319,14 @@ export default function SupplierOrderSummaryPanel({
             <ClipboardCopy className="mr-1.5 inline h-4 w-4" />
             Copy for supplier
           </button>
+          <button type="button" onClick={markAlreadyOrdered} className="flower-btn-secondary">
+            Already ordered these
+          </button>
+          {showNew ? (
+            <button type="button" onClick={undoLastLook} className="flower-btn-secondary">
+              Show all stems again
+            </button>
+          ) : null}
           <button
             type="button"
             onClick={resetAllOverrides}
@@ -403,27 +343,24 @@ export default function SupplierOrderSummaryPanel({
 
         {!loading && !loadError ? (
           <p className="mt-3 text-sm text-brand-brown/70">
-            {formatSupplierSummaryDateRange(dateFrom, dateTo)}
-            {isFilteringByInputTime && createdAfterIso
-              ? ` · ${summary.orderCount} new order${summary.orderCount === 1 ? '' : 's'} after ${formatOrderInputTimestamp(createdAfterIso)}${
-                  hiddenOlderCount > 0
-                    ? ` · ${hiddenOlderCount} older hidden`
-                    : ''
-                }`
-              : ` · ${summary.orderCount} reserved order${summary.orderCount === 1 ? '' : 's'} · all branches`}
+            {formatSupplierSummaryDateRange(dateFrom, dateTo)} · {summary.orderCount} reserved order
+            {summary.orderCount === 1 ? '' : 's'} · all branches
+            {showNew && createdAfterIso
+              ? ` · New = inputted after ${formatOrderInputTimestamp(createdAfterIso)}`
+              : ''}
           </p>
         ) : null}
       </div>
 
-      {!loading && isFilteringByInputTime && createdAfterIso && summary.includedOrders.length > 0 ? (
+      {!loading && showNew && summary.newOrders.length > 0 ? (
         <section className="rounded-2xl border border-emerald-200 bg-emerald-50/60 p-4 sm:p-5">
-          <h3 className="text-base font-semibold text-brand-dark">New orders since last look</h3>
+          <h3 className="text-base font-semibold text-brand-dark">New orders to add</h3>
           <p className="mt-0.5 text-sm text-brand-brown/70">
-            These were inputted after {formatOrderInputTimestamp(createdAfterIso)}. Quantities below
-            are only these additions.
+            {summary.newOrderCount} order{summary.newOrderCount === 1 ? '' : 's'} typed in after you
+            last ordered from the supplier.
           </p>
           <ul className="mt-3 divide-y divide-emerald-200/70">
-            {summary.includedOrders.map((order) => (
+            {summary.newOrders.map((order) => (
               <li key={order.id} className="py-2.5 first:pt-0 last:pb-0">
                 <div className="flex flex-wrap items-baseline justify-between gap-2">
                   <p className="font-semibold text-brand-dark">{order.receiver}</p>
@@ -445,11 +382,8 @@ export default function SupplierOrderSummaryPanel({
       {!loading && !hasResults && !loadError ? (
         <div className="rounded-2xl border border-dashed border-brand-muted/50 bg-brand-beige/20 px-4 py-10 text-center">
           <p className="text-sm text-brand-brown/70">
-            {isFilteringByInputTime && hiddenOlderCount > 0
-              ? `No new orders after this input time. ${hiddenOlderCount} older reserved order${
-                  hiddenOlderCount === 1 ? '' : 's'
-                } in the pickup range are hidden.`
-              : 'No reserved orders in this date range. Try widening the dates or check that orders are not cancelled.'}
+            No reserved orders in this date range. Try widening the dates or check that orders are
+            not cancelled.
           </p>
         </div>
       ) : null}
@@ -462,9 +396,7 @@ export default function SupplierOrderSummaryPanel({
               className="rounded-2xl border border-brand-muted/40 bg-white p-4 sm:p-5"
             >
               <h3 className="text-base font-semibold text-brand-dark">{branch.branchName}</h3>
-              <p className="mt-0.5 text-xs text-brand-brown/60">
-                {isFilteringByInputTime ? 'New additions only' : 'Exact reserved totals'}
-              </p>
+              <p className="mt-0.5 text-xs text-brand-brown/60">Exact reserved totals</p>
 
               {branch.flowers.length > 0 ? (
                 <div className="mt-4">
@@ -498,8 +430,8 @@ export default function SupplierOrderSummaryPanel({
             <div>
               <h3 className="text-base font-semibold text-brand-dark">To order (all branches)</h3>
               <p className="mt-0.5 text-sm text-brand-brown/65">
-                {isFilteringByInputTime
-                  ? 'Rounded totals for new additions only — edit any quantity before copying.'
+                {showNew
+                  ? 'Boxes default to New — the extra stems since you last ordered. Edit before copying.'
                   : 'Rounded totals — edit any quantity before copying to your supplier.'}
               </p>
             </div>
@@ -513,6 +445,7 @@ export default function SupplierOrderSummaryPanel({
                 <EditableOrderLine
                   key={line.key}
                   line={line}
+                  showNew={showNew}
                   orderQty={orderQuantities.get(line.key) ?? line.suggestedOrderQty}
                   onChange={(value) =>
                     setOrderOverrides((current) => ({
