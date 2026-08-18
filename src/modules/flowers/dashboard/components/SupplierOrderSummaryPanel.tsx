@@ -232,8 +232,8 @@ export default function SupplierOrderSummaryPanel({
             <p className="mt-1 text-sm text-brand-brown/70">
               Copy the list and order from the supplier, then tap{' '}
               <span className="font-semibold">Already ordered these</span>. Old orders hide. New
-              ones show up here as they get typed in. <span className="font-semibold">Redo</span>{' '}
-              brings everything back.
+              ones show up here as they get typed in — flowers, fillers, and misc.{' '}
+              <span className="font-semibold">Redo</span> brings everything back.
             </p>
           </div>
           <div className="flex flex-wrap items-end gap-3">
@@ -436,7 +436,7 @@ export default function SupplierOrderSummaryPanel({
               <h3 className="text-base font-semibold text-brand-dark">To order (all branches)</h3>
               <p className="mt-0.5 text-sm text-brand-brown/65">
                 {alreadyOrdered
-                  ? 'Only new additions — copy this list for the extra stems.'
+                  ? 'Only new additions — flowers, fillers, and misc from orders typed in after you marked already ordered.'
                   : 'Rounded totals — edit any quantity before copying to your supplier.'}
               </p>
             </div>

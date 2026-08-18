@@ -112,6 +112,16 @@ const products: FlowerProduct[] = [
     is_active: true,
     created_at: twoPmManilaIso,
   },
+  {
+    id: 'eucalyptus',
+    name: 'Eucalyptus',
+    flower_type: 'Eucalyptus',
+    product_kind: 'misc',
+    color: 'Green',
+    unit_cost: 30,
+    is_active: true,
+    created_at: twoPmManilaIso,
+  },
 ];
 
 const oldOrder = makeOrder({
@@ -124,7 +134,10 @@ const newOrder = makeOrder({
   id: 'new',
   receiver: 'New order',
   created_at: twoPmManilaIso,
-  items: [{ product_id: 'gerbera-pink', item_name: 'Pink Gerbera', quantity: 5 }],
+  items: [
+    { product_id: 'gerbera-pink', item_name: 'Pink Gerbera', quantity: 5 },
+    { product_id: 'eucalyptus', item_name: 'Eucalyptus', quantity: 3 },
+  ],
 });
 const cancelledNew = makeOrder({
   id: 'cancelled',
@@ -154,8 +167,10 @@ const withLastLook = buildSupplierOrderSummary([oldOrder, newOrder, cancelledNew
 assertEqual(withLastLook.orderCount, 1, 'after already-ordered, only later inputted orders stay visible');
 assertEqual(withLastLook.totalReservedOrderCount, 2, 'full reserved count is kept for Redo');
 assertEqual(withLastLook.newOrderCount, 1, 'new count is only later inputted orders');
-assertEqual(withLastLook.grandTotalFlowers[0]?.reservedQty, 5, 'visible qty is only the additions');
-assertEqual(withLastLook.grandTotalFlowers[0]?.suggestedOrderQty, 5, 'to-order box is the new qty');
+assertEqual(withLastLook.grandTotalFlowers[0]?.reservedQty, 5, 'visible flower qty is only the additions');
+assertEqual(withLastLook.grandTotalFlowers[0]?.suggestedOrderQty, 5, 'to-order box is the new flower qty');
+assertEqual(withLastLook.grandTotalFillers[0]?.itemName, 'Eucalyptus', 'new fillers stay on the list');
+assertEqual(withLastLook.grandTotalFillers[0]?.reservedQty, 3, 'new misc qty is included, not dropped');
 assertEqual(withLastLook.newOrders.map((order) => order.id), ['new'], 'newOrders lists the additions');
 assertEqual(withLastLook.createdAfterIso, yesterdayIso, 'cutoff is stored on the summary');
 
@@ -167,7 +182,8 @@ const clipboard = buildSupplierOrderClipboardText({
 });
 
 assertTrue(clipboard.includes('NEW ADDITIONS after'), 'clipboard labels a reorder as new additions');
-assertTrue(clipboard.includes('5 stems pink gerbera'), 'clipboard to-order line is the new qty');
+assertTrue(clipboard.includes('5 stems pink gerbera'), 'clipboard to-order line is the new flower qty');
+assertTrue(clipboard.includes('3 eucalyptus'), 'clipboard also includes new fillers and misc');
 assertTrue(!clipboard.includes('15 pink gerbera'), 'clipboard must not include already-ordered stems');
 assertTrue(clipboard.includes('TO ORDER (new additions)'), 'clipboard to-order header is new-only');
 

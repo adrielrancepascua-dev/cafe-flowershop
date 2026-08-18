@@ -68,7 +68,7 @@ Use two phones (or one phone + laptop) logged in as **different staff** accounts
 - [ ] Device A: status update visible without clearing cache
 - [ ] Staff can **edit an order once until 6:00 PM** on the day it was created (e.g. update flowers after assembling a Thumbelina bouquet); after one save or after 6 PM, **Edit order** is hidden
 - [ ] **Admin can edit any order unlimited times**, any day — no 6 PM or once-only limit
-- [ ] Each order shows **input time** (when it was typed in, not pickup). Admin **Supplier** tab: copy the list, tap **Already ordered these** (stays highlighted). Old orders hide; new ones appear as they are typed. Copy then sends only the new stems. **Redo** brings the full list back.
+- [ ] Each order shows **input time** (when it was typed in, not pickup). Admin **Supplier** tab: copy the list, tap **Already ordered these** (stays highlighted). Old orders hide; new ones appear as they are typed. Copy then sends only the new flowers, fillers, and misc. **Redo** brings the full list back.
 
 ### 2. Photo uploads
 
