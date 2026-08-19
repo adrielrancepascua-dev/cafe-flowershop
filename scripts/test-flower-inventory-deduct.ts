@@ -7,6 +7,7 @@ import {
 } from '../src/modules/flowers/shared/utils/flower-inventory-deduct';
 import { effectiveSoldPendingDeductionByProductId } from '../src/modules/flowers/shared/utils/flower-daily-inventory';
 import { formatInventoryMovementActor } from '../src/modules/flowers/shared/utils/flower-format';
+import { getInventoryDeductionBuckets } from '../src/services/flowers/orders/flowers-order-day-close';
 
 function assertEqual<T>(actual: T, expected: T, message: string): void {
   const actualJson = JSON.stringify(actual);
@@ -181,6 +182,53 @@ assertEqual(
   ),
   { [pinkRoseId]: 4 },
   'expected count must still subtract under-deducted spoilage stems',
+);
+
+const sanCarlosBranch = 'san-carlos';
+const sanCarlosDayMovements = [
+  {
+    movement_type: 'stock_out',
+    product_id: pinkRoseId,
+    quantity: 4,
+    branch_id: sanCarlosBranch,
+    note: 'Manual correction',
+    created_at: '2026-08-18T05:02:00.000Z',
+  },
+  {
+    movement_type: 'stock_in',
+    product_id: pinkRoseId,
+    quantity: 4,
+    branch_id: sanCarlosBranch,
+    note: 'Manual correction undo',
+    created_at: '2026-08-18T05:29:00.000Z',
+  },
+];
+
+assertEqual(
+  planOrderInventoryDeduction({
+    orderId: spoilageOrderId,
+    branchId: sanCarlosBranch,
+    items: [{ product_id: pinkRoseId, quantity: 4 }],
+    movements: sanCarlosDayMovements,
+  }),
+  [{ product_id: pinkRoseId, quantity: 4 }],
+  'same-day manual stock out/in must never skip spoilage order_deduct',
+);
+
+assertEqual(
+  getInventoryDeductionBuckets(
+    [
+      {
+        scheduled_for: '2026-08-18T10:08:00.000Z',
+        branch_id: sanCarlosBranch,
+        status: 'picked_up',
+        inventory_deducted: true,
+      },
+    ],
+    Date.UTC(2026, 7, 18, 12, 0, 0, 0),
+  ),
+  [{ dateKey: '2026-08-18', branchId: sanCarlosBranch }],
+  '7 PM poll must still revisit already-deducted days for reconcile',
 );
 
 console.log('inventory deduct harden tests passed');

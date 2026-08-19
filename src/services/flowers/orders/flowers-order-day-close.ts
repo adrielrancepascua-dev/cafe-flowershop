@@ -1,6 +1,6 @@
 import type { FlowerOrder } from '../../../modules/flowers/shared/types/flower-order';
 import { FLOWER_ORDER_TERMINAL_STATUSES } from '../../../modules/flowers/shared/types/flower-order';
-import { scheduledForToDateKey } from '../../../modules/flowers/shared/utils/flower-format';
+import { getLocalDayBoundsIso, scheduledForToDateKey, toManilaDateKeyFromDate } from '../../../modules/flowers/shared/utils/flower-format';
 
 /** Terminal orders deduct at 7:00 PM Manila on their pickup date. */
 export const INVENTORY_DEDUCTION_HOUR_MANILA = 19;
@@ -76,4 +76,53 @@ export function getOrdersPendingInventoryDeduction(
       FLOWER_ORDER_TERMINAL_STATUSES.includes(order.status) &&
       !order.inventory_deducted,
   );
+}
+
+/** How far back 7 PM should keep reconciling already-deducted orders. */
+export const INVENTORY_DEDUCTION_RECONCILE_LOOKBACK_DAYS = 14;
+
+export function getInventoryDeductionLookbackStartIso(nowMs: number = Date.now()): string {
+  const lookbackMs = nowMs - INVENTORY_DEDUCTION_RECONCILE_LOOKBACK_DAYS * 24 * 60 * 60 * 1000;
+  return getLocalDayBoundsIso(toManilaDateKeyFromDate(new Date(lookbackMs))).startIso;
+}
+
+export type InventoryDeductionOrderRef = {
+  scheduled_for: string;
+  branch_id: string;
+  status: FlowerOrder['status'];
+  inventory_deducted: boolean;
+};
+
+/**
+ * Date+branch buckets that still need a deduct pass.
+ * Includes already-deducted terminal orders so a partial 7 PM run can self-heal
+ * (e.g. gerbera deducted, pink roses skipped because of a same-day stock out).
+ */
+export function getInventoryDeductionBuckets(
+  orders: InventoryDeductionOrderRef[],
+  nowMs: number = Date.now(),
+): Array<{ dateKey: string; branchId: string }> {
+  const buckets = new Set<string>();
+
+  for (const order of orders) {
+    if (order.status === 'cancelled') {
+      continue;
+    }
+
+    if (!FLOWER_ORDER_TERMINAL_STATUSES.includes(order.status)) {
+      continue;
+    }
+
+    const dateKey = getPickupDateKey(order.scheduled_for);
+    if (!isInventoryDeductionDue(dateKey, nowMs)) {
+      continue;
+    }
+
+    buckets.add(`${dateKey}|${order.branch_id}`);
+  }
+
+  return [...buckets].map((bucket) => {
+    const [dateKey, branchId] = bucket.split('|');
+    return { dateKey, branchId };
+  });
 }
