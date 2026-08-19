@@ -477,7 +477,6 @@ export async function listFlowerInventoryMovementsCreatedAfterSupabase(
       .select(MOVEMENT_SELECT_BASE)
       .gte('created_at', createdAfterIso)
       .order('created_at', { ascending: true })
-      .order('id', { ascending: true })
       .range(offset, offset + pageSize - 1);
 
     if (error) {

@@ -401,7 +401,7 @@ async function deductInventoryForOrder(order: FlowerOrder): Promise<void> {
   }
 }
 
-async function restoreHistoricalReconcileDeductionsSupabase(): Promise<void> {
+export async function restoreHistoricalReconcileDeductionsSupabase(): Promise<void> {
   const movements = await listFlowerInventoryMovementsCreatedAfterSupabase(
     HISTORICAL_RECONCILE_BUG_STARTED_AT,
   ).then((rows) => rows.filter((row) => row.created_at < HISTORICAL_RECONCILE_BUG_ENDED_AT));
