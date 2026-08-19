@@ -8,6 +8,10 @@ import type {
   FlowerDailyInventoryWorksheetLine,
 } from '../types/flower-daily-inventory';
 import { scheduledForToDateKey } from './flower-format';
+import {
+  missingOrderDeductionByProduct,
+  type DeductibleInventoryMovement,
+} from './flower-inventory-deduct';
 import { miscCategoryFromFlowerType } from './flower-misc-category';
 import {
   compareFlowerTypeLabels,
@@ -54,6 +58,47 @@ export function soldPendingDeductionByProductId(
       }
 
       quantities.set(item.product_id, (quantities.get(item.product_id) ?? 0) + item.quantity);
+    }
+  }
+
+  return quantities;
+}
+
+/**
+ * Expected count must still subtract sold stems when an order was marked deducted
+ * but some lines never received an order_deduct (e.g. a same-day stock out matched qty
+ * under the old skip logic).
+ */
+export function effectiveSoldPendingDeductionByProductId(
+  orders: FlowerOrder[],
+  movements: DeductibleInventoryMovement[],
+  countDate: string,
+  branchId: string,
+): Map<string, number> {
+  const quantities = soldPendingDeductionByProductId(orders, countDate, branchId);
+
+  for (const order of orders) {
+    if (scheduledForToDateKey(order.scheduled_for) !== countDate) {
+      continue;
+    }
+
+    if (
+      order.branch_id !== branchId ||
+      order.status === 'cancelled' ||
+      !order.inventory_deducted ||
+      !FLOWER_ORDER_TERMINAL_STATUSES.includes(order.status)
+    ) {
+      continue;
+    }
+
+    const missing = missingOrderDeductionByProduct({
+      orderId: order.id,
+      items: order.items ?? [],
+      movements,
+    });
+
+    for (const [productId, quantity] of missing) {
+      quantities.set(productId, (quantities.get(productId) ?? 0) + quantity);
     }
   }
 
@@ -209,9 +254,17 @@ export function buildDailyInventoryWorksheet(input: {
   countDate: string;
   stockRows: FlowerInventoryStockRow[];
   orders: FlowerOrder[];
+  movements?: DeductibleInventoryMovement[];
   submitted: FlowerDailyInventoryCount | null;
 }): FlowerDailyInventoryWorksheet {
-  const soldPending = soldPendingDeductionByProductId(input.orders, input.countDate, input.branchId);
+  const soldPending = input.movements
+    ? effectiveSoldPendingDeductionByProductId(
+        input.orders,
+        input.movements,
+        input.countDate,
+        input.branchId,
+      )
+    : soldPendingDeductionByProductId(input.orders, input.countDate, input.branchId);
   const liveLines = input.stockRows
     .filter((row) => row.branch_id === input.branchId && shouldIncludeWorksheetRow(row, soldPending))
     .sort(compareInventoryStockRows)
