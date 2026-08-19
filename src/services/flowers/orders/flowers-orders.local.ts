@@ -22,6 +22,7 @@ import {
 import {
   hasCompleteOrderDeduction,
   HISTORICAL_RECONCILE_BUG_STARTED_AT,
+  INVENTORY_AUTO_DEDUCT_PAUSED,
   netOrderDeductedByProduct,
   planOrderInventoryDeduction,
   quantitiesToRestoreFromHistoricalReconcile,
@@ -130,6 +131,10 @@ async function maybeBatchDeductInventoryForClosedDay(
   dateKey: string,
   branchId: string,
 ): Promise<void> {
+  if (INVENTORY_AUTO_DEDUCT_PAUSED) {
+    return;
+  }
+
   const orders = readOrdersFromStorage();
   const dayOrders = orders.filter(
     (order) => getPickupDateKey(order.scheduled_for) === dateKey,
@@ -620,6 +625,10 @@ export async function restoreHistoricalReconcileDeductionsLocal(): Promise<{
 }
 
 export async function runDueInventoryDeductionsLocal(): Promise<void> {
+  if (INVENTORY_AUTO_DEDUCT_PAUSED) {
+    return;
+  }
+
   try {
     await restoreHistoricalReconcileDeductionsLocal();
   } catch (restoreError) {

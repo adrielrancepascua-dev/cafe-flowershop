@@ -25,6 +25,7 @@ import {
 import {
   hasCompleteOrderDeduction,
   HISTORICAL_RECONCILE_BUG_STARTED_AT,
+  INVENTORY_AUTO_DEDUCT_PAUSED,
   netOrderDeductedByProduct,
   planOrderInventoryDeduction,
   quantitiesToForceRestoreByProduct,
@@ -435,6 +436,10 @@ async function maybeBatchDeductInventoryForClosedDay(
   dateKey: string,
   branchId: string,
 ): Promise<void> {
+  if (INVENTORY_AUTO_DEDUCT_PAUSED) {
+    return;
+  }
+
   const dayOrders = await listOrdersForPickupDate(dateKey);
 
   if (!isInventoryDeductionDue(dateKey)) {
@@ -917,6 +922,10 @@ export async function getFlowerDayCloseStatusSupabase(
 }
 
 export async function runDueInventoryDeductionsSupabase(): Promise<void> {
+  if (INVENTORY_AUTO_DEDUCT_PAUSED) {
+    return;
+  }
+
   try {
     await restoreHistoricalReconcileDeductionsSupabase();
   } catch (restoreError) {

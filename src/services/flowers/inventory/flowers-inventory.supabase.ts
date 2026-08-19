@@ -720,6 +720,7 @@ export async function restoreFlowerInventoryForOrderSupabase(input: {
     delta: input.quantity,
     movementType: 'stock_in',
     note: input.note ?? formatInventoryOrderVoidNote(input.orderId, input.receiver),
+    allowNegative: true,
   });
 }
 
