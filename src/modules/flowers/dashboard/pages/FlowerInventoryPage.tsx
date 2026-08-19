@@ -1781,7 +1781,7 @@ export default function FlowerInventoryPage() {
         <div className="mt-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3">
           <p className="text-sm font-semibold text-red-900">Inventory repair</p>
           <p className="mt-1 text-sm text-red-800">
-            Today&apos;s extra 7 PM deducts made counts negative. Tap once and wait — this puts that stock back.
+            Auto deduct is paused. Tap once and wait — this puts this morning&apos;s extra deducts back.
           </p>
           <button
             type="button"
