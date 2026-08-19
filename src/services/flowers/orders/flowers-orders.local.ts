@@ -21,9 +21,10 @@ import {
 } from '../inventory/flowers-inventory.local';
 import {
   hasCompleteOrderDeduction,
-  missingOrderDeductionByProduct,
+  HISTORICAL_RECONCILE_BUG_STARTED_AT,
   netOrderDeductedByProduct,
   planOrderInventoryDeduction,
+  quantitiesToRestoreFromHistoricalReconcile,
 } from '../../../modules/flowers/shared/utils/flower-inventory-deduct';
 import {
   computeFlowerDayCloseStatus,
@@ -36,6 +37,7 @@ import { currentFlowerUserIsAdmin } from '../../../lib/auth/flower-auth.service'
 import { assertOrderContentEditable } from '../../../modules/flowers/shared/utils/flower-order-edit-policy';
 import { computeOrderPaymentFields } from '../../../modules/flowers/shared/utils/flower-order-payment-fields';
 import {
+  formatInventoryHistoricalReconcileUndoNote,
   formatInventoryOrderEditDeductNote,
   formatInventoryOrderEditRestoreNote,
 } from '../../../modules/flowers/shared/utils/flower-format';
@@ -206,48 +208,6 @@ async function maybeBatchDeductInventoryForClosedDay(
         writeOrdersToStorage(rollbackOrders);
       }
       throw error;
-    }
-  }
-
-  for (const order of dayOrders) {
-    if (
-      order.branch_id !== branchId ||
-      order.status === 'cancelled' ||
-      !order.inventory_deducted ||
-      !FLOWER_ORDER_TERMINAL_STATUSES.includes(order.status)
-    ) {
-      continue;
-    }
-
-    try {
-      const movements = await listFlowerInventoryMovementsLocal({
-        branchId: order.branch_id,
-        fromDate: dateKey,
-        toDate: dateKey,
-        limit: 2000,
-      });
-      const missing = missingOrderDeductionByProduct({
-        orderId: order.id,
-        items: order.items,
-        movements,
-      });
-
-      for (const [productId, quantity] of missing) {
-        await deductFlowerInventoryForOrderLocal({
-          branchId: order.branch_id,
-          productId,
-          quantity,
-          orderId: order.id,
-          receiver: order.receiver,
-        });
-      }
-    } catch (reconcileError) {
-      console.warn('Inventory deduction reconcile failed.', {
-        dateKey,
-        branchId,
-        orderId: order.id,
-        reconcileError,
-      });
     }
   }
 }
@@ -634,6 +594,26 @@ export async function getFlowerDayCloseStatusLocal(
 }
 
 export async function runDueInventoryDeductionsLocal(): Promise<void> {
+  try {
+    const movements = await listFlowerInventoryMovementsLocal({
+      fromDate: HISTORICAL_RECONCILE_BUG_STARTED_AT.slice(0, 10),
+      limit: 100000,
+    });
+    const toRestore = quantitiesToRestoreFromHistoricalReconcile(movements);
+    for (const line of toRestore) {
+      await restoreFlowerInventoryForOrderLocal({
+        branchId: line.branchId,
+        productId: line.productId,
+        quantity: line.quantity,
+        orderId: line.orderId,
+        receiver: line.receiver,
+        note: formatInventoryHistoricalReconcileUndoNote(line.orderId, line.receiver),
+      });
+    }
+  } catch (restoreError) {
+    console.warn('Historical reconcile undo failed.', restoreError);
+  }
+
   const orders = readOrdersFromStorage();
   const buckets = getInventoryDeductionBuckets(orders);
 

@@ -94,9 +94,8 @@ export type InventoryDeductionOrderRef = {
 };
 
 /**
- * Date+branch buckets that still need a deduct pass.
- * Includes already-deducted terminal orders so a partial 7 PM run can self-heal
- * (e.g. gerbera deducted, pink roses skipped because of a same-day stock out).
+ * Date+branch buckets that still need a first-time 7 PM deduct.
+ * Already-deducted orders are not revisited — historical reconcile re-deducted live stock.
  */
 export function getInventoryDeductionBuckets(
   orders: InventoryDeductionOrderRef[],
@@ -105,7 +104,7 @@ export function getInventoryDeductionBuckets(
   const buckets = new Set<string>();
 
   for (const order of orders) {
-    if (order.status === 'cancelled') {
+    if (order.status === 'cancelled' || order.inventory_deducted) {
       continue;
     }
 

@@ -11,27 +11,29 @@ import type {
   UpdateFlowerOrderInput,
 } from '../../../modules/flowers/shared/types/flower-order';
 import { FLOWER_ORDER_TERMINAL_STATUSES } from '../../../modules/flowers/shared/types/flower-order';
-import { getLocalDayBoundsIso, formatInventoryOrderEditDeductNote, formatInventoryOrderEditRestoreNote } from '../../../modules/flowers/shared/utils/flower-format';
+import { getLocalDayBoundsIso, formatInventoryHistoricalReconcileUndoNote, formatInventoryOrderEditDeductNote, formatInventoryOrderEditRestoreNote } from '../../../modules/flowers/shared/utils/flower-format';
 import { normalizeFlowerPaymentMode } from '../../../modules/flowers/shared/utils/flower-payment';
 import type { FlowerPaymentMode } from '../../../modules/flowers/shared/types/flower-order';
 import {
   deductFlowerInventoryForOrderSupabase,
   listFlowerBranchesSupabase,
+  listFlowerInventoryMovementsCreatedAfterSupabase,
   listFlowerInventoryMovementsSupabase,
   restoreFlowerInventoryForOrderSupabase,
   validateFlowerOrderStockSupabase,
 } from '../inventory/flowers-inventory.supabase';
 import {
   hasCompleteOrderDeduction,
-  missingOrderDeductionByProduct,
+  HISTORICAL_RECONCILE_BUG_ENDED_AT,
+  HISTORICAL_RECONCILE_BUG_STARTED_AT,
   netOrderDeductedByProduct,
   planOrderInventoryDeduction,
+  quantitiesToRestoreFromHistoricalReconcile,
 } from '../../../modules/flowers/shared/utils/flower-inventory-deduct';
 import { resolveOrderAttachmentUrl, resolveOrderAttachments } from './flowers-order-attachments';
 import {
   computeFlowerDayCloseStatus,
   getInventoryDeductionBuckets,
-  getInventoryDeductionLookbackStartIso,
   getOrdersPendingInventoryDeduction,
   getPickupDateKey,
   isInventoryDeductionDue,
@@ -361,7 +363,7 @@ async function deductInventoryForOrder(order: FlowerOrder): Promise<void> {
     branchId: order.branch_id,
     fromDate: getPickupDateKey(order.scheduled_for),
     toDate: getPickupDateKey(order.scheduled_for),
-    limit: 2000,
+    limit: 10000,
   });
 
   const planned = planOrderInventoryDeduction({
@@ -399,47 +401,21 @@ async function deductInventoryForOrder(order: FlowerOrder): Promise<void> {
   }
 }
 
-async function reconcileIncompleteOrderDeductions(
-  orders: FlowerOrder[],
-  dateKey: string,
-  branchId: string,
-): Promise<void> {
-  for (const order of orders) {
-    if (
-      getPickupDateKey(order.scheduled_for) !== dateKey ||
-      order.branch_id !== branchId ||
-      order.status === 'cancelled' ||
-      !order.inventory_deducted ||
-      !FLOWER_ORDER_TERMINAL_STATUSES.includes(order.status)
-    ) {
-      continue;
-    }
+async function restoreHistoricalReconcileDeductionsSupabase(): Promise<void> {
+  const movements = await listFlowerInventoryMovementsCreatedAfterSupabase(
+    HISTORICAL_RECONCILE_BUG_STARTED_AT,
+  ).then((rows) => rows.filter((row) => row.created_at < HISTORICAL_RECONCILE_BUG_ENDED_AT));
+  const toRestore = quantitiesToRestoreFromHistoricalReconcile(movements);
 
-    const movements = await listFlowerInventoryMovementsSupabase({
-      branchId: order.branch_id,
-      fromDate: dateKey,
-      toDate: dateKey,
-      limit: 2000,
+  for (const line of toRestore) {
+    await restoreFlowerInventoryForOrderSupabase({
+      branchId: line.branchId,
+      productId: line.productId,
+      quantity: line.quantity,
+      orderId: line.orderId,
+      receiver: line.receiver,
+      note: formatInventoryHistoricalReconcileUndoNote(line.orderId, line.receiver),
     });
-    const missing = missingOrderDeductionByProduct({
-      orderId: order.id,
-      items: order.items,
-      movements,
-    });
-
-    if (missing.size === 0) {
-      continue;
-    }
-
-    for (const [productId, quantity] of missing) {
-      await deductFlowerInventoryForOrderSupabase({
-        branchId: order.branch_id,
-        productId,
-        quantity,
-        orderId: order.id,
-        receiver: order.receiver,
-      });
-    }
   }
 }
 
@@ -454,6 +430,9 @@ async function maybeBatchDeductInventoryForClosedDay(
   }
 
   const pending = getOrdersPendingInventoryDeduction(dayOrders, dateKey, branchId);
+  if (pending.length === 0) {
+    return;
+  }
 
   const supabase = await requireAuthenticatedSupabaseClient();
 
@@ -483,12 +462,6 @@ async function maybeBatchDeductInventoryForClosedDay(
         .eq('id', order.id);
       throw error;
     }
-  }
-
-  try {
-    await reconcileIncompleteOrderDeductions(dayOrders, dateKey, branchId);
-  } catch (reconcileError) {
-    console.warn('Inventory deduction reconcile failed.', { dateKey, branchId, reconcileError });
   }
 }
 
@@ -932,12 +905,18 @@ export async function getFlowerDayCloseStatusSupabase(
 }
 
 export async function runDueInventoryDeductionsSupabase(): Promise<void> {
+  try {
+    await restoreHistoricalReconcileDeductionsSupabase();
+  } catch (restoreError) {
+    console.warn('Historical reconcile undo failed.', restoreError);
+  }
+
   const supabase = await requireAuthenticatedSupabaseClient();
   const { data, error } = await supabase
     .from('flower_orders')
     .select('id, scheduled_for, branch_id, status, inventory_deducted')
-    .in('status', FLOWER_ORDER_TERMINAL_STATUSES)
-    .gte('scheduled_for', getInventoryDeductionLookbackStartIso());
+    .eq('inventory_deducted', false)
+    .in('status', FLOWER_ORDER_TERMINAL_STATUSES);
 
   if (error) {
     throw toServiceError(error, 'Failed to check scheduled inventory deductions.');
