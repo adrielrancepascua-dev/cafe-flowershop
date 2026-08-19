@@ -52,6 +52,10 @@ export function movementRestoresOrder(
   return parseInventoryMovementOrderId(movement.note) === orderId;
 }
 
+/**
+ * Totals manual stock-outs that are not tied to an order.
+ * For warnings/display only — never skip 7 PM order_deduct based on this.
+ */
 export function sumUnattributedStockOutByProduct(
   movements: DeductibleInventoryMovement[],
   branchId: string,
@@ -79,17 +83,7 @@ export function alreadyDeductedQuantityForOrder(
   orderId: string,
   productId: string,
 ): number {
-  let total = 0;
-
-  for (const movement of movements) {
-    if (movement.product_id !== productId || !movementAlreadyDeductsOrder(movement, orderId)) {
-      continue;
-    }
-
-    total += movement.quantity;
-  }
-
-  return total;
+  return netOrderDeductedByProduct(movements, orderId).get(productId) ?? 0;
 }
 
 /** Net stems still removed for this order after deducts minus void/edit restores. */
@@ -141,6 +135,29 @@ export function pendingQuantityByProduct(items: OrderDeductLine[]): Map<string, 
 }
 
 /**
+ * Stems still missing an order_deduct for this order.
+ * Manual stock in/out never counts — sales and spoilage always need their own order_deduct.
+ */
+export function remainingOrderDeductionByProduct(input: {
+  orderId: string;
+  items: OrderDeductLine[];
+  movements: DeductibleInventoryMovement[];
+}): Map<string, number> {
+  const pending = pendingQuantityByProduct(input.items);
+  const netDeducted = netOrderDeductedByProduct(input.movements, input.orderId);
+  const remaining = new Map<string, number>();
+
+  for (const [productId, quantity] of pending) {
+    const leftover = Math.max(0, quantity - (netDeducted.get(productId) ?? 0));
+    if (leftover > 0) {
+      remaining.set(productId, leftover);
+    }
+  }
+
+  return remaining;
+}
+
+/**
  * Plan 7 PM deduct lines for one order.
  * Skips qty already written as order_deduct / order-attributed outbound for this order
  * so a repeat poll cannot remove the same stems twice.
@@ -151,25 +168,10 @@ export function planOrderInventoryDeduction(input: {
   items: OrderDeductLine[];
   movements: DeductibleInventoryMovement[];
 }): OrderDeductLine[] {
-  const planned: OrderDeductLine[] = [];
-
-  for (const item of input.items) {
-    if (!item.product_id || item.quantity <= 0) {
-      continue;
-    }
-
-    const alreadyDeducted = alreadyDeductedQuantityForOrder(
-      input.movements,
-      input.orderId,
-      item.product_id,
-    );
-    const remaining = Math.max(0, item.quantity - alreadyDeducted);
-    if (remaining > 0) {
-      planned.push({ product_id: item.product_id, quantity: remaining });
-    }
-  }
-
-  return planned;
+  return [...remainingOrderDeductionByProduct(input).entries()].map(([product_id, quantity]) => ({
+    product_id,
+    quantity,
+  }));
 }
 
 /** Stems still missing an order_deduct for this order after prior day-close runs. */
@@ -178,25 +180,7 @@ export function missingOrderDeductionByProduct(input: {
   items: OrderDeductLine[];
   movements: DeductibleInventoryMovement[];
 }): Map<string, number> {
-  const missing = new Map<string, number>();
-
-  for (const item of input.items) {
-    if (!item.product_id || item.quantity <= 0) {
-      continue;
-    }
-
-    const alreadyDeducted = alreadyDeductedQuantityForOrder(
-      input.movements,
-      input.orderId,
-      item.product_id,
-    );
-    const remaining = Math.max(0, item.quantity - alreadyDeducted);
-    if (remaining > 0) {
-      missing.set(item.product_id, remaining);
-    }
-  }
-
-  return missing;
+  return remainingOrderDeductionByProduct(input);
 }
 
 export function hasCompleteOrderDeduction(input: {
@@ -204,5 +188,5 @@ export function hasCompleteOrderDeduction(input: {
   items: OrderDeductLine[];
   movements: DeductibleInventoryMovement[];
 }): boolean {
-  return missingOrderDeductionByProduct(input).size === 0;
+  return remainingOrderDeductionByProduct(input).size === 0;
 }

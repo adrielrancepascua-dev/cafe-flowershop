@@ -27,6 +27,7 @@ import {
 } from '../../../modules/flowers/shared/utils/flower-inventory-deduct';
 import {
   computeFlowerDayCloseStatus,
+  getInventoryDeductionBuckets,
   getOrdersPendingInventoryDeduction,
   getPickupDateKey,
   isInventoryDeductionDue,
@@ -634,27 +635,9 @@ export async function getFlowerDayCloseStatusLocal(
 
 export async function runDueInventoryDeductionsLocal(): Promise<void> {
   const orders = readOrdersFromStorage();
-  const buckets = new Set<string>();
+  const buckets = getInventoryDeductionBuckets(orders);
 
-  for (const order of orders) {
-    if (order.inventory_deducted || order.status === 'cancelled') {
-      continue;
-    }
-
-    if (!FLOWER_ORDER_TERMINAL_STATUSES.includes(order.status)) {
-      continue;
-    }
-
-    const dateKey = getPickupDateKey(order.scheduled_for);
-    if (!isInventoryDeductionDue(dateKey)) {
-      continue;
-    }
-
-    buckets.add(`${dateKey}|${order.branch_id}`);
-  }
-
-  for (const bucket of buckets) {
-    const [dateKey, branchId] = bucket.split('|');
+  for (const { dateKey, branchId } of buckets) {
     try {
       await maybeBatchDeductInventoryForClosedDay(dateKey, branchId);
     } catch (error) {

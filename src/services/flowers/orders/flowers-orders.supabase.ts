@@ -30,6 +30,8 @@ import {
 import { resolveOrderAttachmentUrl, resolveOrderAttachments } from './flowers-order-attachments';
 import {
   computeFlowerDayCloseStatus,
+  getInventoryDeductionBuckets,
+  getInventoryDeductionLookbackStartIso,
   getOrdersPendingInventoryDeduction,
   getPickupDateKey,
   isInventoryDeductionDue,
@@ -452,9 +454,6 @@ async function maybeBatchDeductInventoryForClosedDay(
   }
 
   const pending = getOrdersPendingInventoryDeduction(dayOrders, dateKey, branchId);
-  if (pending.length === 0) {
-    return;
-  }
 
   const supabase = await requireAuthenticatedSupabaseClient();
 
@@ -937,25 +936,16 @@ export async function runDueInventoryDeductionsSupabase(): Promise<void> {
   const { data, error } = await supabase
     .from('flower_orders')
     .select('id, scheduled_for, branch_id, status, inventory_deducted')
-    .eq('inventory_deducted', false)
-    .in('status', FLOWER_ORDER_TERMINAL_STATUSES);
+    .in('status', FLOWER_ORDER_TERMINAL_STATUSES)
+    .gte('scheduled_for', getInventoryDeductionLookbackStartIso());
 
   if (error) {
     throw toServiceError(error, 'Failed to check scheduled inventory deductions.');
   }
 
-  const buckets = new Set<string>();
-  for (const row of data ?? []) {
-    const dateKey = getPickupDateKey(row.scheduled_for);
-    if (!isInventoryDeductionDue(dateKey)) {
-      continue;
-    }
+  const buckets = getInventoryDeductionBuckets(data ?? []);
 
-    buckets.add(`${dateKey}|${row.branch_id}`);
-  }
-
-  for (const bucket of buckets) {
-    const [dateKey, branchId] = bucket.split('|');
+  for (const { dateKey, branchId } of buckets) {
     try {
       await maybeBatchDeductInventoryForClosedDay(dateKey, branchId);
     } catch (deductError) {
