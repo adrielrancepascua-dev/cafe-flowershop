@@ -24,11 +24,10 @@ import {
 } from '../inventory/flowers-inventory.supabase';
 import {
   hasCompleteOrderDeduction,
-  HISTORICAL_RECONCILE_BUG_ENDED_AT,
   HISTORICAL_RECONCILE_BUG_STARTED_AT,
   netOrderDeductedByProduct,
   planOrderInventoryDeduction,
-  quantitiesToRestoreFromHistoricalReconcile,
+  quantitiesToForceRestoreByProduct,
 } from '../../../modules/flowers/shared/utils/flower-inventory-deduct';
 import { resolveOrderAttachmentUrl, resolveOrderAttachments } from './flowers-order-attachments';
 import {
@@ -401,22 +400,35 @@ async function deductInventoryForOrder(order: FlowerOrder): Promise<void> {
   }
 }
 
-export async function restoreHistoricalReconcileDeductionsSupabase(): Promise<void> {
+export async function restoreHistoricalReconcileDeductionsSupabase(): Promise<{
+  restoredUnits: number;
+  productCount: number;
+}> {
   const movements = await listFlowerInventoryMovementsCreatedAfterSupabase(
     HISTORICAL_RECONCILE_BUG_STARTED_AT,
-  ).then((rows) => rows.filter((row) => row.created_at < HISTORICAL_RECONCILE_BUG_ENDED_AT));
-  const toRestore = quantitiesToRestoreFromHistoricalReconcile(movements);
+  );
+  const toRestore = quantitiesToForceRestoreByProduct(movements);
 
-  for (const line of toRestore) {
-    await restoreFlowerInventoryForOrderSupabase({
-      branchId: line.branchId,
-      productId: line.productId,
-      quantity: line.quantity,
-      orderId: line.orderId,
-      receiver: line.receiver,
-      note: formatInventoryHistoricalReconcileUndoNote(line.orderId, line.receiver),
-    });
+  for (let index = 0; index < toRestore.length; index += 8) {
+    const batch = toRestore.slice(index, index + 8);
+    await Promise.all(
+      batch.map((line) =>
+        restoreFlowerInventoryForOrderSupabase({
+          branchId: line.branchId,
+          productId: line.productId,
+          quantity: line.quantity,
+          orderId: line.orderId,
+          receiver: line.receiver,
+          note: formatInventoryHistoricalReconcileUndoNote(line.orderId, line.receiver),
+        }),
+      ),
+    );
   }
+
+  return {
+    restoredUnits: toRestore.reduce((sum, line) => sum + line.quantity, 0),
+    productCount: toRestore.length,
+  };
 }
 
 async function maybeBatchDeductInventoryForClosedDay(

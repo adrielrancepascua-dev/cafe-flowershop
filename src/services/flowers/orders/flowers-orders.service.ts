@@ -146,7 +146,10 @@ export async function getFlowerDayCloseStatus(dateKey: string, branchId?: string
   );
 }
 
-export async function restoreHistoricalReconcileDeductions(): Promise<void> {
+export async function restoreHistoricalReconcileDeductions(): Promise<{
+  restoredUnits: number;
+  productCount: number;
+}> {
   return withSupabaseOrders(
     async () => {
       const { restoreHistoricalReconcileDeductionsSupabase } = await import('./flowers-orders.supabase');
