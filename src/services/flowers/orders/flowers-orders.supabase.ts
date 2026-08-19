@@ -926,12 +926,6 @@ export async function runDueInventoryDeductionsSupabase(): Promise<void> {
     return;
   }
 
-  try {
-    await restoreHistoricalReconcileDeductionsSupabase();
-  } catch (restoreError) {
-    console.warn('Historical reconcile undo failed.', restoreError);
-  }
-
   const supabase = await requireAuthenticatedSupabaseClient();
   const { data, error } = await supabase
     .from('flower_orders')
