@@ -629,12 +629,6 @@ export async function runDueInventoryDeductionsLocal(): Promise<void> {
     return;
   }
 
-  try {
-    await restoreHistoricalReconcileDeductionsLocal();
-  } catch (restoreError) {
-    console.warn('Historical reconcile undo failed.', restoreError);
-  }
-
   const orders = readOrdersFromStorage();
   const buckets = getInventoryDeductionBuckets(orders);
 
