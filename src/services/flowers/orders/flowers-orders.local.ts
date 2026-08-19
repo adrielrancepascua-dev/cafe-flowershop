@@ -593,23 +593,27 @@ export async function getFlowerDayCloseStatusLocal(
   return computeFlowerDayCloseStatus(orders, dateKey, branchId);
 }
 
+export async function restoreHistoricalReconcileDeductionsLocal(): Promise<void> {
+  const movements = await listFlowerInventoryMovementsLocal({
+    fromDate: HISTORICAL_RECONCILE_BUG_STARTED_AT.slice(0, 10),
+    limit: 100000,
+  });
+  const toRestore = quantitiesToRestoreFromHistoricalReconcile(movements);
+  for (const line of toRestore) {
+    await restoreFlowerInventoryForOrderLocal({
+      branchId: line.branchId,
+      productId: line.productId,
+      quantity: line.quantity,
+      orderId: line.orderId,
+      receiver: line.receiver,
+      note: formatInventoryHistoricalReconcileUndoNote(line.orderId, line.receiver),
+    });
+  }
+}
+
 export async function runDueInventoryDeductionsLocal(): Promise<void> {
   try {
-    const movements = await listFlowerInventoryMovementsLocal({
-      fromDate: HISTORICAL_RECONCILE_BUG_STARTED_AT.slice(0, 10),
-      limit: 100000,
-    });
-    const toRestore = quantitiesToRestoreFromHistoricalReconcile(movements);
-    for (const line of toRestore) {
-      await restoreFlowerInventoryForOrderLocal({
-        branchId: line.branchId,
-        productId: line.productId,
-        quantity: line.quantity,
-        orderId: line.orderId,
-        receiver: line.receiver,
-        note: formatInventoryHistoricalReconcileUndoNote(line.orderId, line.receiver),
-      });
-    }
+    await restoreHistoricalReconcileDeductionsLocal();
   } catch (restoreError) {
     console.warn('Historical reconcile undo failed.', restoreError);
   }
