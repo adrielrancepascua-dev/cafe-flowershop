@@ -1,4 +1,4 @@
-/** Disabled while inventory is repaired — use the Inventory repair button instead. */
+/** Disabled while inventory auto-deduct is paused. */
 export function useScheduledInventoryDeduction(_onDeductionComplete?: () => void): void {
   void _onDeductionComplete;
 }
