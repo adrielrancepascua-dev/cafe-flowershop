@@ -455,6 +455,55 @@ export async function listFlowerInventoryMovementsSupabase(
   }));
 }
 
+/** Pages past the UI 2000-row cap so repair/deduct can see every movement after a cutoff. */
+export async function listFlowerInventoryMovementsCreatedAfterSupabase(
+  createdAfterIso: string,
+): Promise<Array<{
+  movement_type: string;
+  product_id: string;
+  quantity: number;
+  branch_id: string;
+  note: string;
+  created_at: string;
+}>> {
+  const supabase = await requireAuthenticatedSupabaseClient();
+  const pageSize = 1000;
+  const rows: InventoryMovementDbRow[] = [];
+  let offset = 0;
+
+  for (;;) {
+    const { data, error } = await supabase
+      .from('flower_inventory_movements')
+      .select(MOVEMENT_SELECT_BASE)
+      .gte('created_at', createdAfterIso)
+      .order('created_at', { ascending: true })
+      .order('id', { ascending: true })
+      .range(offset, offset + pageSize - 1);
+
+    if (error) {
+      throw error;
+    }
+
+    const page = (data as InventoryMovementDbRow[] | null) ?? [];
+    rows.push(...page);
+
+    if (page.length < pageSize) {
+      break;
+    }
+
+    offset += pageSize;
+  }
+
+  return rows.map((row) => ({
+    movement_type: toDisplayMovementType(row.movement_type, row.note ?? ''),
+    product_id: row.product_id,
+    quantity: Number(row.quantity),
+    branch_id: row.branch_id,
+    note: row.note ?? '',
+    created_at: row.created_at,
+  }));
+}
+
 export async function adjustFlowerInventorySupabase(input: AdjustFlowerInventoryInput): Promise<void> {
   const quantity = Number(input.quantity);
   assertPositiveInteger(quantity);

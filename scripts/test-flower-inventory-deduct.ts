@@ -4,6 +4,7 @@ import {
   missingOrderDeductionByProduct,
   netOrderDeductedByProduct,
   planOrderInventoryDeduction,
+  quantitiesToRestoreFromHistoricalReconcile,
 } from '../src/modules/flowers/shared/utils/flower-inventory-deduct';
 import { effectiveSoldPendingDeductionByProductId } from '../src/modules/flowers/shared/utils/flower-daily-inventory';
 import { formatInventoryMovementActor } from '../src/modules/flowers/shared/utils/flower-format';
@@ -227,8 +228,41 @@ assertEqual(
     ],
     Date.UTC(2026, 7, 18, 12, 0, 0, 0),
   ),
-  [{ dateKey: '2026-08-18', branchId: sanCarlosBranch }],
-  '7 PM poll must still revisit already-deducted days for reconcile',
+  [],
+  'already-deducted days must not be revisited for historical reconcile',
+);
+
+assertEqual(
+  quantitiesToRestoreFromHistoricalReconcile(
+    [
+      {
+        movement_type: 'order_deduct',
+        product_id: pinkRoseId,
+        quantity: 4,
+        branch_id: sanCarlosBranch,
+        note: `Order ${spoilageOrderId} · SPOILAGE · day-close deduct`,
+        created_at: '2026-08-19T03:40:00.000Z',
+      },
+      {
+        movement_type: 'order_deduct',
+        product_id: pinkRoseId,
+        quantity: 4,
+        branch_id: sanCarlosBranch,
+        note: `Order ${spoilageOrderId} · SPOILAGE · day-close deduct`,
+        created_at: '2026-08-18T11:04:00.000Z',
+      },
+    ],
+  ),
+  [
+    {
+      branchId: sanCarlosBranch,
+      productId: pinkRoseId,
+      quantity: 4,
+      orderId: spoilageOrderId,
+      receiver: 'SPOILAGE',
+    },
+  ],
+  'only post-cutoff extra order_deducts are restored',
 );
 
 console.log('inventory deduct harden tests passed');

@@ -248,6 +248,15 @@ export function formatInventoryOrderEditRestoreNote(orderId: string, receiver: s
   return `Order ${orderId} · ${trimmedReceiver} · order edit restore`;
 }
 
+export function formatInventoryHistoricalReconcileUndoNote(orderId: string, receiver: string): string {
+  const trimmedReceiver = receiver.trim() || 'Unknown';
+  return `Order ${orderId} · ${trimmedReceiver} · historical reconcile undo`;
+}
+
+export function isHistoricalReconcileUndoNote(note: string): boolean {
+  return /historical reconcile undo/i.test(note);
+}
+
 export function resolveInventoryMovementReceiver(
   note: string,
   orderReceiverById?: ReadonlyMap<string, string>,

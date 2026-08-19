@@ -1,4 +1,9 @@
-import { parseInventoryMovementOrderId, scheduledForToDateKey } from './flower-format';
+import {
+  isHistoricalReconcileUndoNote,
+  parseInventoryMovementOrderId,
+  parseInventoryMovementReceiver,
+  scheduledForToDateKey,
+} from './flower-format';
 
 export type DeductibleInventoryMovement = {
   movement_type: string;
@@ -189,4 +194,77 @@ export function hasCompleteOrderDeduction(input: {
   movements: DeductibleInventoryMovement[];
 }): boolean {
   return remainingOrderDeductionByProduct(input).size === 0;
+}
+
+/** PR #13 started rewriting historical order_deducts around this time (UTC). */
+export const HISTORICAL_RECONCILE_BUG_STARTED_AT = '2026-08-19T03:30:00.000Z';
+/** 7:00 PM Manila on Aug 19 — stop undoing after legitimate day-close deducts begin. */
+export const HISTORICAL_RECONCILE_BUG_ENDED_AT = '2026-08-19T11:00:00.000Z';
+
+export type HistoricalReconcileRestoreLine = {
+  branchId: string;
+  productId: string;
+  quantity: number;
+  orderId: string;
+  receiver: string;
+};
+
+/**
+ * Extra order_deducts written by the 14-day historical reconcile.
+ * Idempotent: skips qty already put back with a historical reconcile undo note.
+ */
+export function quantitiesToRestoreFromHistoricalReconcile(
+  movements: DeductibleInventoryMovement[],
+  cutoffIso: string = HISTORICAL_RECONCILE_BUG_STARTED_AT,
+  endedAtIso: string = HISTORICAL_RECONCILE_BUG_ENDED_AT,
+): HistoricalReconcileRestoreLine[] {
+  const deducted = new Map<string, { quantity: number; receiver: string }>();
+  const restored = new Map<string, number>();
+
+  for (const movement of movements) {
+    const orderId = parseInventoryMovementOrderId(movement.note);
+    if (!orderId) {
+      continue;
+    }
+
+    const key = `${movement.branch_id}|${movement.product_id}|${orderId}`;
+
+    if (
+      movement.created_at >= cutoffIso &&
+      movement.created_at < endedAtIso &&
+      movement.movement_type === 'order_deduct' &&
+      movementAlreadyDeductsOrder(movement, orderId)
+    ) {
+      const current = deducted.get(key);
+      deducted.set(key, {
+        quantity: (current?.quantity ?? 0) + movement.quantity,
+        receiver: parseInventoryMovementReceiver(movement.note) || current?.receiver || 'Unknown',
+      });
+      continue;
+    }
+
+    if (isInboundRestoreMovementType(movement.movement_type) && isHistoricalReconcileUndoNote(movement.note)) {
+      restored.set(key, (restored.get(key) ?? 0) + movement.quantity);
+    }
+  }
+
+  const lines: HistoricalReconcileRestoreLine[] = [];
+
+  for (const [key, value] of deducted) {
+    const leftover = Math.max(0, value.quantity - (restored.get(key) ?? 0));
+    if (leftover <= 0) {
+      continue;
+    }
+
+    const [branchId, productId, orderId] = key.split('|');
+    lines.push({
+      branchId,
+      productId,
+      quantity: leftover,
+      orderId,
+      receiver: value.receiver,
+    });
+  }
+
+  return lines;
 }
