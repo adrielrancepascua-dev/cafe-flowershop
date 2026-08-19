@@ -20,6 +20,8 @@ import {
   validateFlowerOrderStockLocal,
 } from '../inventory/flowers-inventory.local';
 import {
+  hasCompleteOrderDeduction,
+  missingOrderDeductionByProduct,
   netOrderDeductedByProduct,
   planOrderInventoryDeduction,
 } from '../../../modules/flowers/shared/utils/flower-inventory-deduct';
@@ -175,6 +177,23 @@ async function maybeBatchDeductInventoryForClosedDay(
           receiver: order.receiver,
         });
       }
+
+      const afterMovements = await listFlowerInventoryMovementsLocal({
+        branchId: order.branch_id,
+        fromDate: dateKey,
+        toDate: dateKey,
+        limit: 2000,
+      });
+
+      if (
+        !hasCompleteOrderDeduction({
+          orderId: order.id,
+          items: order.items,
+          movements: afterMovements,
+        })
+      ) {
+        throw new Error(`Inventory deduction incomplete for order ${order.id}.`);
+      }
     } catch (error) {
       const rollbackOrders = readOrdersFromStorage();
       const rollbackIndex = rollbackOrders.findIndex((entry) => entry.id === order.id);
@@ -186,6 +205,48 @@ async function maybeBatchDeductInventoryForClosedDay(
         writeOrdersToStorage(rollbackOrders);
       }
       throw error;
+    }
+  }
+
+  for (const order of dayOrders) {
+    if (
+      order.branch_id !== branchId ||
+      order.status === 'cancelled' ||
+      !order.inventory_deducted ||
+      !FLOWER_ORDER_TERMINAL_STATUSES.includes(order.status)
+    ) {
+      continue;
+    }
+
+    try {
+      const movements = await listFlowerInventoryMovementsLocal({
+        branchId: order.branch_id,
+        fromDate: dateKey,
+        toDate: dateKey,
+        limit: 2000,
+      });
+      const missing = missingOrderDeductionByProduct({
+        orderId: order.id,
+        items: order.items,
+        movements,
+      });
+
+      for (const [productId, quantity] of missing) {
+        await deductFlowerInventoryForOrderLocal({
+          branchId: order.branch_id,
+          productId,
+          quantity,
+          orderId: order.id,
+          receiver: order.receiver,
+        });
+      }
+    } catch (reconcileError) {
+      console.warn('Inventory deduction reconcile failed.', {
+        dateKey,
+        branchId,
+        orderId: order.id,
+        reconcileError,
+      });
     }
   }
 }

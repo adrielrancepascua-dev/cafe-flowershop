@@ -171,3 +171,38 @@ export function planOrderInventoryDeduction(input: {
 
   return planned;
 }
+
+/** Stems still missing an order_deduct for this order after prior day-close runs. */
+export function missingOrderDeductionByProduct(input: {
+  orderId: string;
+  items: OrderDeductLine[];
+  movements: DeductibleInventoryMovement[];
+}): Map<string, number> {
+  const missing = new Map<string, number>();
+
+  for (const item of input.items) {
+    if (!item.product_id || item.quantity <= 0) {
+      continue;
+    }
+
+    const alreadyDeducted = alreadyDeductedQuantityForOrder(
+      input.movements,
+      input.orderId,
+      item.product_id,
+    );
+    const remaining = Math.max(0, item.quantity - alreadyDeducted);
+    if (remaining > 0) {
+      missing.set(item.product_id, remaining);
+    }
+  }
+
+  return missing;
+}
+
+export function hasCompleteOrderDeduction(input: {
+  orderId: string;
+  items: OrderDeductLine[];
+  movements: DeductibleInventoryMovement[];
+}): boolean {
+  return missingOrderDeductionByProduct(input).size === 0;
+}

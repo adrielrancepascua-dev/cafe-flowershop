@@ -22,6 +22,8 @@ import {
   validateFlowerOrderStockSupabase,
 } from '../inventory/flowers-inventory.supabase';
 import {
+  hasCompleteOrderDeduction,
+  missingOrderDeductionByProduct,
   netOrderDeductedByProduct,
   planOrderInventoryDeduction,
 } from '../../../modules/flowers/shared/utils/flower-inventory-deduct';
@@ -376,6 +378,67 @@ async function deductInventoryForOrder(order: FlowerOrder): Promise<void> {
       receiver: order.receiver,
     });
   }
+
+  const latestMovements = await listFlowerInventoryMovementsSupabase({
+    branchId: order.branch_id,
+    fromDate: getPickupDateKey(order.scheduled_for),
+    toDate: getPickupDateKey(order.scheduled_for),
+    limit: 2000,
+  });
+
+  if (
+    !hasCompleteOrderDeduction({
+      orderId: order.id,
+      items: order.items,
+      movements: latestMovements,
+    })
+  ) {
+    throw new Error(`Inventory deduction incomplete for order ${order.id}.`);
+  }
+}
+
+async function reconcileIncompleteOrderDeductions(
+  orders: FlowerOrder[],
+  dateKey: string,
+  branchId: string,
+): Promise<void> {
+  for (const order of orders) {
+    if (
+      getPickupDateKey(order.scheduled_for) !== dateKey ||
+      order.branch_id !== branchId ||
+      order.status === 'cancelled' ||
+      !order.inventory_deducted ||
+      !FLOWER_ORDER_TERMINAL_STATUSES.includes(order.status)
+    ) {
+      continue;
+    }
+
+    const movements = await listFlowerInventoryMovementsSupabase({
+      branchId: order.branch_id,
+      fromDate: dateKey,
+      toDate: dateKey,
+      limit: 2000,
+    });
+    const missing = missingOrderDeductionByProduct({
+      orderId: order.id,
+      items: order.items,
+      movements,
+    });
+
+    if (missing.size === 0) {
+      continue;
+    }
+
+    for (const [productId, quantity] of missing) {
+      await deductFlowerInventoryForOrderSupabase({
+        branchId: order.branch_id,
+        productId,
+        quantity,
+        orderId: order.id,
+        receiver: order.receiver,
+      });
+    }
+  }
 }
 
 async function maybeBatchDeductInventoryForClosedDay(
@@ -421,6 +484,12 @@ async function maybeBatchDeductInventoryForClosedDay(
         .eq('id', order.id);
       throw error;
     }
+  }
+
+  try {
+    await reconcileIncompleteOrderDeductions(dayOrders, dateKey, branchId);
+  } catch (reconcileError) {
+    console.warn('Inventory deduction reconcile failed.', { dateKey, branchId, reconcileError });
   }
 }
 

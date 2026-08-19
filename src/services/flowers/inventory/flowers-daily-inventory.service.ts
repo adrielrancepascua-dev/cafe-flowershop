@@ -13,7 +13,7 @@ import {
 } from '../../../modules/flowers/shared/utils/flower-daily-inventory';
 import { getFlowerStorageMode, shouldUseFlowerSupabase } from '../storage-mode';
 import { listFlowerOrders } from '../orders/flowers-orders.service';
-import { listFlowerBranches, listFlowerInventoryStock } from './flowers-inventory.service';
+import { listFlowerBranches, listFlowerInventoryMovements, listFlowerInventoryStock } from './flowers-inventory.service';
 import {
   getDailyInventoryCountLocal,
   listDailyInventoryCountsLocal,
@@ -70,13 +70,19 @@ export async function getDailyInventoryWorksheet(options: {
   branchId: string;
   countDate: string;
 }): Promise<FlowerDailyInventoryWorksheet> {
-  const [branches, stockRows, orders, submitted] = await Promise.all([
+  const [branches, stockRows, orders, movements, submitted] = await Promise.all([
     listFlowerBranches(),
     listFlowerInventoryStock({ branchId: options.branchId }),
     listFlowerOrders({
       branchId: options.branchId,
       scheduledFrom: options.countDate,
       scheduledTo: options.countDate,
+    }),
+    listFlowerInventoryMovements({
+      branchId: options.branchId,
+      fromDate: options.countDate,
+      toDate: options.countDate,
+      limit: 2000,
     }),
     getDailyInventoryCount(options.branchId, options.countDate),
   ]);
@@ -89,6 +95,7 @@ export async function getDailyInventoryWorksheet(options: {
     countDate: options.countDate,
     stockRows,
     orders,
+    movements,
     submitted,
   });
 }

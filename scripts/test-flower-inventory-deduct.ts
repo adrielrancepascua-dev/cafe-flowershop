@@ -1,8 +1,11 @@
 import {
   alreadyDeductedQuantityForOrder,
+  hasCompleteOrderDeduction,
+  missingOrderDeductionByProduct,
   netOrderDeductedByProduct,
   planOrderInventoryDeduction,
 } from '../src/modules/flowers/shared/utils/flower-inventory-deduct';
+import { effectiveSoldPendingDeductionByProductId } from '../src/modules/flowers/shared/utils/flower-daily-inventory';
 import { formatInventoryMovementActor } from '../src/modules/flowers/shared/utils/flower-format';
 
 function assertEqual<T>(actual: T, expected: T, message: string): void {
@@ -77,6 +80,107 @@ assertEqual(
   formatInventoryMovementActor({ movement_type: 'order_deduct', created_by_name: 'Rance Pascua' }),
   "7:00 PM deduct · ran on Rance Pascua's session",
   'auto deduct should not be mistaken for a manual stock out',
+);
+
+const spoilageOrderId = 'PP-1787047880756-6584';
+const pinkRoseId = 'local-rose-pink';
+
+assertEqual(
+  Object.fromEntries(
+    missingOrderDeductionByProduct({
+      orderId: spoilageOrderId,
+      items: [
+        { product_id: 'gerbera-pink', quantity: 1 },
+        { product_id: pinkRoseId, quantity: 4 },
+      ],
+      movements: [
+        {
+          movement_type: 'order_deduct',
+          product_id: 'gerbera-pink',
+          quantity: 1,
+          branch_id: branchId,
+          note: `Order ${spoilageOrderId} · SPOILAGE · day-close deduct`,
+          created_at: '2026-08-18T11:04:00.000Z',
+        },
+      ],
+    }),
+  ),
+  { [pinkRoseId]: 4 },
+  'marked-deducted spoilage with only gerbera removed must still show 4 missing pink roses',
+);
+
+assertEqual(
+  hasCompleteOrderDeduction({
+    orderId: spoilageOrderId,
+    items: [{ product_id: pinkRoseId, quantity: 4 }],
+    movements: [
+      {
+        movement_type: 'order_deduct',
+        product_id: pinkRoseId,
+        quantity: 4,
+        branch_id: branchId,
+        note: `Order ${spoilageOrderId} · SPOILAGE · day-close deduct`,
+        created_at: '2026-08-18T11:04:00.000Z',
+      },
+    ],
+  }),
+  true,
+  'complete order deduct should pass completeness check',
+);
+
+assertEqual(
+  Object.fromEntries(
+    effectiveSoldPendingDeductionByProductId(
+      [
+        {
+          id: spoilageOrderId,
+          branch_id: branchId,
+          branch_name: 'San Carlos',
+          receiver: 'SPOILAGE',
+          customer_social: '',
+          scheduled_for: '2026-08-18T10:08:00.000Z',
+          status: 'picked_up',
+          claim_mode: 'walk_in',
+          wrapper_color: '',
+          greeting_card: '',
+          special_instructions: '',
+          downpayment: 0,
+          payment_mode: 'cash',
+          payment_reference: '',
+          total_amount: 1,
+          balance: 1,
+          balance_paid: false,
+          notes: '',
+          photo_inspo_data_url: '',
+          proof_dp_data_url: '',
+          order_form_ss_data_url: '',
+          ready_photo_data_url: '',
+          created_by_id: 'admin',
+          created_by_name: 'Papers & Petals Co-admin',
+          inventory_deducted: true,
+          content_edited_at: null,
+          items: [
+            { id: 1, product_id: 'gerbera-pink', item_name: 'Gerbera (Pink)', quantity: 1 },
+            { id: 2, product_id: pinkRoseId, item_name: 'Local Rose (Pink)', quantity: 4 },
+          ],
+        },
+      ],
+      [
+        {
+          movement_type: 'order_deduct',
+          product_id: 'gerbera-pink',
+          quantity: 1,
+          branch_id: branchId,
+          note: `Order ${spoilageOrderId} · SPOILAGE · day-close deduct`,
+          created_at: '2026-08-18T11:04:00.000Z',
+        },
+      ],
+      '2026-08-18',
+      branchId,
+    ),
+  ),
+  { [pinkRoseId]: 4 },
+  'expected count must still subtract under-deducted spoilage stems',
 );
 
 console.log('inventory deduct harden tests passed');
