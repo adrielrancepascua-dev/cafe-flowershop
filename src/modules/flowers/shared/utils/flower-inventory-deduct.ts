@@ -1,7 +1,6 @@
 import {
   isHistoricalReconcileUndoNote,
   parseInventoryMovementOrderId,
-  parseInventoryMovementReceiver,
   scheduledForToDateKey,
 } from './flower-format';
 
@@ -211,60 +210,72 @@ export type HistoricalReconcileRestoreLine = {
 
 /**
  * Extra order_deducts written by the 14-day historical reconcile.
- * Idempotent: skips qty already put back with a historical reconcile undo note.
+ * Groups by branch+product so one stock-in can undo hundreds of order lines.
+ * Uses parsed timestamps so +00:00 vs Z does not skip rows.
  */
-export function quantitiesToRestoreFromHistoricalReconcile(
+export function quantitiesToForceRestoreByProduct(
   movements: DeductibleInventoryMovement[],
   cutoffIso: string = HISTORICAL_RECONCILE_BUG_STARTED_AT,
   endedAtIso: string = HISTORICAL_RECONCILE_BUG_ENDED_AT,
 ): HistoricalReconcileRestoreLine[] {
-  const deducted = new Map<string, { quantity: number; receiver: string }>();
+  const cutoffMs = Date.parse(cutoffIso);
+  const endedMs = Date.parse(endedAtIso);
+  const deducted = new Map<string, number>();
   const restored = new Map<string, number>();
 
   for (const movement of movements) {
-    const orderId = parseInventoryMovementOrderId(movement.note);
-    if (!orderId) {
+    const createdMs = Date.parse(movement.created_at);
+    if (!Number.isFinite(createdMs)) {
       continue;
     }
 
-    const key = `${movement.branch_id}|${movement.product_id}|${orderId}`;
-
-    if (
-      movement.created_at >= cutoffIso &&
-      movement.created_at < endedAtIso &&
-      movement.movement_type === 'order_deduct' &&
-      movementAlreadyDeductsOrder(movement, orderId)
-    ) {
-      const current = deducted.get(key);
-      deducted.set(key, {
-        quantity: (current?.quantity ?? 0) + movement.quantity,
-        receiver: parseInventoryMovementReceiver(movement.note) || current?.receiver || 'Unknown',
-      });
-      continue;
-    }
+    const key = `${movement.branch_id}|${movement.product_id}`;
 
     if (isInboundRestoreMovementType(movement.movement_type) && isHistoricalReconcileUndoNote(movement.note)) {
       restored.set(key, (restored.get(key) ?? 0) + movement.quantity);
+      continue;
     }
+
+    if (createdMs < cutoffMs || createdMs >= endedMs) {
+      continue;
+    }
+
+    const isOrderDeduct =
+      movement.movement_type === 'order_deduct' ||
+      (isOutboundSaleMovementType(movement.movement_type) && parseInventoryMovementOrderId(movement.note) != null);
+
+    if (!isOrderDeduct) {
+      continue;
+    }
+
+    deducted.set(key, (deducted.get(key) ?? 0) + movement.quantity);
   }
 
   const lines: HistoricalReconcileRestoreLine[] = [];
 
-  for (const [key, value] of deducted) {
-    const leftover = Math.max(0, value.quantity - (restored.get(key) ?? 0));
+  for (const [key, quantity] of deducted) {
+    const leftover = Math.max(0, quantity - (restored.get(key) ?? 0));
     if (leftover <= 0) {
       continue;
     }
 
-    const [branchId, productId, orderId] = key.split('|');
+    const [branchId, productId] = key.split('|');
     lines.push({
       branchId,
       productId,
       quantity: leftover,
-      orderId,
-      receiver: value.receiver,
+      orderId: 'BULK',
+      receiver: 'inventory repair',
     });
   }
 
   return lines;
+}
+
+export function quantitiesToRestoreFromHistoricalReconcile(
+  movements: DeductibleInventoryMovement[],
+  cutoffIso?: string,
+  endedAtIso?: string,
+): HistoricalReconcileRestoreLine[] {
+  return quantitiesToForceRestoreByProduct(movements, cutoffIso, endedAtIso);
 }

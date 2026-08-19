@@ -11,7 +11,7 @@ import {
   rejectFlowerTransferRequest,
   updateFlowerTransferRequestBilling,
 } from '../../../../services/flowers/inventory';
-import { getFlowerOrder } from '../../../../services/flowers/orders';
+import { getFlowerOrder, restoreHistoricalReconcileDeductions } from '../../../../services/flowers/orders';
 import { useFlowerAuth } from '../../../../lib/auth/FlowerAuthContext';
 import { extractSupabaseErrorMessage } from '../../../../lib/supabase/errors';
 import type {
@@ -1153,6 +1153,7 @@ export default function FlowerInventoryPage() {
   const [loading, setLoading] = useState(true);
   const [message, setMessage] = useState('');
   const [errorMessage, setErrorMessage] = useState('');
+  const [restoreBusy, setRestoreBusy] = useState(false);
   const [transferMessage, setTransferMessage] = useState('');
   const [transferErrorMessage, setTransferErrorMessage] = useState('');
 
@@ -1216,6 +1217,27 @@ export default function FlowerInventoryPage() {
       setLoading(false);
       setIsRefreshing(false);
       isFirstLoadRef.current = false;
+    }
+  }
+
+  async function handleForceInventoryRestore() {
+    setRestoreBusy(true);
+    setErrorMessage('');
+    setMessage('');
+    try {
+      const result = await restoreHistoricalReconcileDeductions();
+      if (result.restoredUnits === 0) {
+        setMessage('No leftover extra deducts to put back. If totals are still wrong, wait 1 minute and tap again.');
+      } else {
+        setMessage(
+          `Put back ${result.restoredUnits} units across ${result.productCount} products. Stock list refreshed.`,
+        );
+      }
+      await loadData();
+    } catch (error) {
+      setErrorMessage(extractSupabaseErrorMessage(error, 'Could not put inventory back.'));
+    } finally {
+      setRestoreBusy(false);
     }
   }
 
@@ -1754,6 +1776,23 @@ export default function FlowerInventoryPage() {
           Inter-branch transfer
         </button>
       </div>
+
+      {isAdmin && isStockView ? (
+        <div className="mt-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3">
+          <p className="text-sm font-semibold text-red-900">Inventory repair</p>
+          <p className="mt-1 text-sm text-red-800">
+            Today&apos;s extra 7 PM deducts made counts negative. Tap once and wait — this puts that stock back.
+          </p>
+          <button
+            type="button"
+            onClick={() => void handleForceInventoryRestore()}
+            disabled={restoreBusy}
+            className="mt-3 rounded-lg bg-red-800 px-4 py-2 text-sm font-semibold text-white disabled:opacity-60"
+          >
+            {restoreBusy ? 'Putting stock back…' : 'Put extra deducts back now'}
+          </button>
+        </div>
+      ) : null}
 
       {message && activeTab === 'stock' ? (
         <p className="mt-3 text-sm text-emerald-700">{message}</p>

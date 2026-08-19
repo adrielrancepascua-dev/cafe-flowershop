@@ -593,7 +593,10 @@ export async function getFlowerDayCloseStatusLocal(
   return computeFlowerDayCloseStatus(orders, dateKey, branchId);
 }
 
-export async function restoreHistoricalReconcileDeductionsLocal(): Promise<void> {
+export async function restoreHistoricalReconcileDeductionsLocal(): Promise<{
+  restoredUnits: number;
+  productCount: number;
+}> {
   const movements = await listFlowerInventoryMovementsLocal({
     fromDate: HISTORICAL_RECONCILE_BUG_STARTED_AT.slice(0, 10),
     limit: 100000,
@@ -609,6 +612,11 @@ export async function restoreHistoricalReconcileDeductionsLocal(): Promise<void>
       note: formatInventoryHistoricalReconcileUndoNote(line.orderId, line.receiver),
     });
   }
+
+  return {
+    restoredUnits: toRestore.reduce((sum, line) => sum + line.quantity, 0),
+    productCount: toRestore.length,
+  };
 }
 
 export async function runDueInventoryDeductionsLocal(): Promise<void> {
