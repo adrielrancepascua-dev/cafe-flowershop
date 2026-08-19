@@ -28,7 +28,7 @@ import { FlowerBranchTransferPrintDocument } from '../../shared/components/Flowe
 import { Minus, Plus, ArrowLeftRight, Package, ChevronDown, Check, X, Trash2, Search } from 'lucide-react';
 import FlowerInventoryProductLogPanel from '../components/FlowerInventoryProductLogPanel';
 import FlowerConfirmDialog from '../components/FlowerConfirmDialog';
-import { listFlowerOrders } from '../../../../services/flowers/orders';
+import { listFlowerOrders, forceRunInventoryDeductions } from '../../../../services/flowers/orders';
 import { soldPendingDeductionByProductId } from '../../shared/utils/flower-daily-inventory';
 import {
   dedupeInventoryMovementRows,
@@ -1186,6 +1186,7 @@ export default function FlowerInventoryPage() {
     pendingSold: number;
   } | null>(null);
   const [stockOutConfirmBusy, setStockOutConfirmBusy] = useState(false);
+  const [forceDeductBusy, setForceDeductBusy] = useState(false);
 
   async function loadData() {
     const isFirstLoad = isFirstLoadRef.current;
@@ -1735,6 +1736,36 @@ export default function FlowerInventoryPage() {
                 : 'View-only wrappers and gift item stock for this branch.'
         }
       />
+
+      {isAdmin ? (
+        <div className="mt-3">
+          <button
+            type="button"
+            disabled={forceDeductBusy}
+            onClick={async () => {
+              setForceDeductBusy(true);
+              setMessage('');
+              setErrorMessage('');
+              try {
+                const count = await forceRunInventoryDeductions();
+                if (count > 0) {
+                  setMessage(`Order deduct done — ${count} batch(es) processed.`);
+                  await loadData();
+                } else {
+                  setMessage('No pending orders to deduct.');
+                }
+              } catch (err) {
+                setErrorMessage(extractSupabaseErrorMessage(err, 'Order deduct failed.'));
+              } finally {
+                setForceDeductBusy(false);
+              }
+            }}
+            className="rounded-xl bg-brand-brown px-4 py-2 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-brand-dark disabled:opacity-50"
+          >
+            {forceDeductBusy ? 'Deducting…' : 'Run order deduct now'}
+          </button>
+        </div>
+      ) : null}
 
       <div className="mt-4 inline-flex rounded-xl border border-brand-muted/50 bg-white p-1">
         <button

@@ -168,3 +168,14 @@ export async function runDueInventoryDeductions(): Promise<void> {
     () => runDueInventoryDeductionsLocal(),
   );
 }
+
+/** Admin-triggered: deduct pending orders now, ignoring the 7 PM time gate. */
+export async function forceRunInventoryDeductions(): Promise<number> {
+  return withSupabaseOrders(
+    async () => {
+      const { forceRunInventoryDeductionsSupabase } = await import('./flowers-orders.supabase');
+      return forceRunInventoryDeductionsSupabase();
+    },
+    async () => 0,
+  );
+}

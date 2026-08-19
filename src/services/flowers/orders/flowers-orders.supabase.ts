@@ -435,6 +435,7 @@ export async function restoreHistoricalReconcileDeductionsSupabase(): Promise<{
 async function maybeBatchDeductInventoryForClosedDay(
   dateKey: string,
   branchId: string,
+  options?: { skipTimeGate?: boolean },
 ): Promise<void> {
   if (INVENTORY_AUTO_DEDUCT_PAUSED) {
     return;
@@ -442,7 +443,7 @@ async function maybeBatchDeductInventoryForClosedDay(
 
   const dayOrders = await listOrdersForPickupDate(dateKey);
 
-  if (!isInventoryDeductionDue(dateKey)) {
+  if (!options?.skipTimeGate && !isInventoryDeductionDue(dateKey)) {
     return;
   }
 
@@ -946,4 +947,36 @@ export async function runDueInventoryDeductionsSupabase(): Promise<void> {
       console.warn('Scheduled inventory deduction failed.', { dateKey, branchId, deductError });
     }
   }
+}
+
+/** Admin-triggered: deduct pending orders now, ignoring the 7 PM time gate. */
+export async function forceRunInventoryDeductionsSupabase(): Promise<number> {
+  if (INVENTORY_AUTO_DEDUCT_PAUSED) {
+    return 0;
+  }
+
+  const supabase = await requireAuthenticatedSupabaseClient();
+  const { data, error } = await supabase
+    .from('flower_orders')
+    .select('id, scheduled_for, branch_id, status, inventory_deducted')
+    .eq('inventory_deducted', false)
+    .in('status', FLOWER_ORDER_TERMINAL_STATUSES);
+
+  if (error) {
+    throw toServiceError(error, 'Failed to check pending inventory deductions.');
+  }
+
+  const buckets = getInventoryDeductionBuckets(data ?? []);
+  let deducted = 0;
+
+  for (const { dateKey, branchId } of buckets) {
+    try {
+      await maybeBatchDeductInventoryForClosedDay(dateKey, branchId, { skipTimeGate: true });
+      deducted++;
+    } catch (deductError) {
+      console.warn('Force inventory deduction failed.', { dateKey, branchId, deductError });
+    }
+  }
+
+  return deducted;
 }

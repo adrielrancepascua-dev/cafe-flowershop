@@ -5,6 +5,7 @@ export {
   getFlowerOrder,
   listFlowerOrders,
   runDueInventoryDeductions,
+  forceRunInventoryDeductions,
   restoreHistoricalReconcileDeductions,
   updateFlowerOrder,
   updateFlowerOrderReadyPhoto,
