@@ -119,13 +119,8 @@ export async function getStaffReportsAccess(
   const { isDailyInventorySubmitted } = await import('../inventory/flowers-daily-inventory.service');
   const dailyInventorySubmitted = await isDailyInventorySubmitted(branchId, reportDate);
 
-  // Temporarily skip the daily-count gate while inventory numbers are being
-  // manually realigned after the Aug 19 auto-deduct incident.  Remove this
-  // override once staff resume normal daily counts.
-  const SKIP_DAILY_COUNT_GATE = true;
-
   return {
-    allowed: SKIP_DAILY_COUNT_GATE || dailyInventorySubmitted,
+    allowed: dailyInventorySubmitted,
     pendingIncomingTransfers: 0,
     openOrders: status.open_orders,
     totalOrders: status.total_orders,
