@@ -100,6 +100,7 @@ export type InventoryDeductionOrderRef = {
 export function getInventoryDeductionBuckets(
   orders: InventoryDeductionOrderRef[],
   nowMs: number = Date.now(),
+  options?: { skipTimeGate?: boolean },
 ): Array<{ dateKey: string; branchId: string }> {
   const buckets = new Set<string>();
 
@@ -113,7 +114,7 @@ export function getInventoryDeductionBuckets(
     }
 
     const dateKey = getPickupDateKey(order.scheduled_for);
-    if (!isInventoryDeductionDue(dateKey, nowMs)) {
+    if (!options?.skipTimeGate && !isInventoryDeductionDue(dateKey, nowMs)) {
       continue;
     }
 

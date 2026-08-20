@@ -436,23 +436,24 @@ async function maybeBatchDeductInventoryForClosedDay(
   dateKey: string,
   branchId: string,
   options?: { skipTimeGate?: boolean },
-): Promise<void> {
+): Promise<number> {
   if (INVENTORY_AUTO_DEDUCT_PAUSED) {
-    return;
+    return 0;
   }
 
   const dayOrders = await listOrdersForPickupDate(dateKey);
 
   if (!options?.skipTimeGate && !isInventoryDeductionDue(dateKey)) {
-    return;
+    return 0;
   }
 
   const pending = getOrdersPendingInventoryDeduction(dayOrders, dateKey, branchId);
   if (pending.length === 0) {
-    return;
+    return 0;
   }
 
   const supabase = await requireAuthenticatedSupabaseClient();
+  let deducted = 0;
 
   for (const order of pending) {
     const { data: claimed, error: claimError } = await supabase
@@ -473,6 +474,7 @@ async function maybeBatchDeductInventoryForClosedDay(
 
     try {
       await deductInventoryForOrder(order);
+      deducted += 1;
     } catch (error) {
       await supabase
         .from('flower_orders')
@@ -481,6 +483,8 @@ async function maybeBatchDeductInventoryForClosedDay(
       throw error;
     }
   }
+
+  return deducted;
 }
 
 export async function listFlowerOrdersSupabase(
@@ -966,13 +970,12 @@ export async function forceRunInventoryDeductionsSupabase(): Promise<number> {
     throw toServiceError(error, 'Failed to check pending inventory deductions.');
   }
 
-  const buckets = getInventoryDeductionBuckets(data ?? []);
+  const buckets = getInventoryDeductionBuckets(data ?? [], Date.now(), { skipTimeGate: true });
   let deducted = 0;
 
   for (const { dateKey, branchId } of buckets) {
     try {
-      await maybeBatchDeductInventoryForClosedDay(dateKey, branchId, { skipTimeGate: true });
-      deducted++;
+      deducted += await maybeBatchDeductInventoryForClosedDay(dateKey, branchId, { skipTimeGate: true });
     } catch (deductError) {
       console.warn('Force inventory deduction failed.', { dateKey, branchId, deductError });
     }

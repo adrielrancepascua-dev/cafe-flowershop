@@ -130,6 +130,7 @@ function getPickupDateKeyFromOrder(iso: string): string {
 async function maybeBatchDeductInventoryForClosedDay(
   dateKey: string,
   branchId: string,
+  options?: { skipTimeGate?: boolean },
 ): Promise<void> {
   if (INVENTORY_AUTO_DEDUCT_PAUSED) {
     return;
@@ -140,7 +141,7 @@ async function maybeBatchDeductInventoryForClosedDay(
     (order) => getPickupDateKey(order.scheduled_for) === dateKey,
   );
 
-  if (!isInventoryDeductionDue(dateKey)) {
+  if (!options?.skipTimeGate && !isInventoryDeductionDue(dateKey)) {
     return;
   }
 
@@ -639,4 +640,26 @@ export async function runDueInventoryDeductionsLocal(): Promise<void> {
       console.warn('Scheduled inventory deduction failed.', { dateKey, branchId, error });
     }
   }
+}
+
+export async function forceRunInventoryDeductionsLocal(): Promise<number> {
+  if (INVENTORY_AUTO_DEDUCT_PAUSED) {
+    return 0;
+  }
+
+  const orders = readOrdersFromStorage();
+  const buckets = getInventoryDeductionBuckets(orders, Date.now(), { skipTimeGate: true });
+  let deducted = 0;
+
+  for (const { dateKey, branchId } of buckets) {
+    const before = getOrdersPendingInventoryDeduction(orders, dateKey, branchId).length;
+    try {
+      await maybeBatchDeductInventoryForClosedDay(dateKey, branchId, { skipTimeGate: true });
+      deducted += before;
+    } catch (error) {
+      console.warn('Force inventory deduction failed.', { dateKey, branchId, error });
+    }
+  }
+
+  return deducted;
 }

@@ -1749,7 +1749,7 @@ export default function FlowerInventoryPage() {
               try {
                 const count = await forceRunInventoryDeductions();
                 if (count > 0) {
-                  setMessage(`Order deduct done — ${count} batch(es) processed.`);
+                  setMessage(`Order deduct done — ${count} order(s) deducted.`);
                   await loadData();
                 } else {
                   setMessage('No pending orders to deduct.');

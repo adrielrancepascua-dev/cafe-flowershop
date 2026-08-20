@@ -160,20 +160,25 @@ export default function FlowerExpensesPage() {
   }
 
   async function loadData() {
-    const [expenseList, branchList] = await Promise.all([
-      listFlowerStaffExpenses(isAdmin ? undefined : user?.id),
-      listFlowerBranches(),
-    ]);
-    setExpenses(expenseList);
-    setBranches(branchList);
+    try {
+      const [expenseList, branchList] = await Promise.all([
+        listFlowerStaffExpenses(isAdmin ? undefined : user?.id),
+        listFlowerBranches(),
+      ]);
+      setExpenses(expenseList);
+      setBranches(branchList);
+      setErrorMessage('');
 
-    if (!isAdmin && staffBranchId) {
-      setDraft((current) => ({
-        ...emptyDraft(staffBranchId),
-        expense_date: staffViewDate || current.expense_date || toDateKey(new Date()),
-      }));
-    } else if (!draft.branch_id && branchList[0]) {
-      setDraft(emptyDraft(branchList[0].id));
+      if (!isAdmin && staffBranchId) {
+        setDraft((current) => ({
+          ...emptyDraft(staffBranchId),
+          expense_date: staffViewDate || current.expense_date || toDateKey(new Date()),
+        }));
+      } else if (!draft.branch_id && branchList[0]) {
+        setDraft(emptyDraft(branchList[0].id));
+      }
+    } catch (error) {
+      setErrorMessage(extractSupabaseErrorMessage(error, 'Failed to load expenses.'));
     }
   }
 

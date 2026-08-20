@@ -26,14 +26,7 @@ async function withSupabaseExpenses<T>(
   const mode = getFlowerStorageMode();
 
   if (shouldUseFlowerSupabase(mode)) {
-    try {
-      return await operation();
-    } catch (error) {
-      if (mode === 'supabase') {
-        throw error;
-      }
-      console.warn('Falling back to local flower expenses.', error);
-    }
+    return operation();
   }
 
   return fallback();

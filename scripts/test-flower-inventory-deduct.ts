@@ -232,6 +232,26 @@ assertEqual(
   'already-deducted days must not be revisited for historical reconcile',
 );
 
+const beforeSevenPmUtc = Date.UTC(2026, 7, 20, 8, 0, 0, 0); // 4:00 PM Manila
+const dagupanPending = {
+  scheduled_for: '2026-08-20T02:00:00.000Z',
+  branch_id: 'branch-dagupan',
+  status: 'delivered' as const,
+  inventory_deducted: false,
+};
+
+assertEqual(
+  getInventoryDeductionBuckets([dagupanPending], beforeSevenPmUtc),
+  [],
+  'scheduled 7 PM deduct must wait until 7 PM Manila',
+);
+
+assertEqual(
+  getInventoryDeductionBuckets([dagupanPending], beforeSevenPmUtc, { skipTimeGate: true }),
+  [{ dateKey: '2026-08-20', branchId: 'branch-dagupan' }],
+  'Run order deduct now must include pending terminal orders before 7 PM',
+);
+
 assertEqual(
   quantitiesToRestoreFromHistoricalReconcile(
     [

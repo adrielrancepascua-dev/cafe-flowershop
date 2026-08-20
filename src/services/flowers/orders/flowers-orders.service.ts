@@ -14,6 +14,7 @@ import {
   getFlowerOrderLocal,
   listFlowerOrdersLocal,
   runDueInventoryDeductionsLocal,
+  forceRunInventoryDeductionsLocal,
   restoreHistoricalReconcileDeductionsLocal,
   updateFlowerOrderLocal,
   updateFlowerOrderReadyPhotoLocal,
@@ -176,6 +177,6 @@ export async function forceRunInventoryDeductions(): Promise<number> {
       const { forceRunInventoryDeductionsSupabase } = await import('./flowers-orders.supabase');
       return forceRunInventoryDeductionsSupabase();
     },
-    async () => 0,
+    () => forceRunInventoryDeductionsLocal(),
   );
 }

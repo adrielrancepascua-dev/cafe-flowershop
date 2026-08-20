@@ -159,7 +159,7 @@ function mapStaffExpense(row: StaffExpenseDbRow, branchName: string): FlowerStaf
     branch_name: branchName,
     amount: Number(row.amount),
     description: row.description,
-    expense_date: row.expense_date,
+    expense_date: String(row.expense_date ?? '').slice(0, 10),
     payment_mode: normalizeFlowerExpensePaymentMode(row.payment_mode),
     created_at: row.created_at,
   };
@@ -203,7 +203,7 @@ export async function listFlowerStaffExpensesSupabase(
   const { data, error } = await query;
 
   if (error) {
-    throw error;
+    throw toServiceError(error, 'Failed to load expenses.');
   }
 
   return ((data as StaffExpenseDbRow[] | null) ?? []).map((row) =>
