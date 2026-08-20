@@ -7,6 +7,7 @@ import {
 } from '../../../../services/flowers/expenses/flowers-expenses.service';
 import { listFlowerBranches } from '../../../../services/flowers/inventory';
 import { useFlowerAuth } from '../../../../lib/auth/FlowerAuthContext';
+import { extractSupabaseErrorMessage } from '../../../../lib/supabase/errors';
 import type { FlowerStaffExpense, FlowerExpensePaymentMode } from '../../shared/types/flower-expense';
 import {
   FLOWER_EXPENSE_PAYMENT_MODE_LABELS,
@@ -236,7 +237,7 @@ export default function FlowerExpensesPage() {
       setErrorMessage('');
       await loadData();
     } catch (error) {
-      setErrorMessage(error instanceof Error ? error.message : 'Failed to save expense.');
+      setErrorMessage(extractSupabaseErrorMessage(error, 'Failed to save expense.'));
     }
   }
 
@@ -283,7 +284,7 @@ export default function FlowerExpensesPage() {
       setErrorMessage('');
       await loadData();
     } catch (error) {
-      setErrorMessage(error instanceof Error ? error.message : 'Failed to update expense.');
+      setErrorMessage(extractSupabaseErrorMessage(error, 'Failed to update expense.'));
     }
   }
 
@@ -301,7 +302,7 @@ export default function FlowerExpensesPage() {
       setErrorMessage('');
       await loadData();
     } catch (error) {
-      setErrorMessage(error instanceof Error ? error.message : 'Failed to delete expense.');
+      setErrorMessage(extractSupabaseErrorMessage(error, 'Failed to delete expense.'));
     }
   }
 

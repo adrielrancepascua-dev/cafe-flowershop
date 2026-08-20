@@ -1,5 +1,6 @@
 import { getSupabaseClient } from '../../../lib/supabase/client';
 import { requireSupabaseAuthSession } from '../../../lib/auth/flower-auth.service';
+import { toServiceError } from '../../../lib/supabase/errors';
 import type {
   CreateFlowerStaffExpenseInput,
   CreateFlowerSupplierCostInput,
@@ -32,6 +33,61 @@ type StaffExpenseDbRow = {
   payment_mode?: string | null;
   created_at: string;
 };
+
+let expensePaymentModeColumnAvailable: boolean | undefined;
+
+function isMissingExpensePaymentModeColumnError(error: { message?: string } | null): boolean {
+  if (!error?.message) {
+    return false;
+  }
+
+  return /payment_mode/i.test(error.message);
+}
+
+function shouldIncludeExpensePaymentMode(): boolean {
+  return expensePaymentModeColumnAvailable !== false;
+}
+
+type StaffExpenseInsertRow = {
+  id: string;
+  staff_id: string;
+  staff_name: string;
+  branch_id: string;
+  amount: number;
+  description: string;
+  expense_date: string;
+  payment_mode?: FlowerExpensePaymentMode;
+  created_at: string;
+};
+
+function buildStaffExpenseInsertRow(input: {
+  id: string;
+  staff_id: string;
+  staff_name: string;
+  branch_id: string;
+  amount: number;
+  description: string;
+  expense_date: string;
+  payment_mode: FlowerExpensePaymentMode;
+  created_at: string;
+}): StaffExpenseInsertRow {
+  const row: StaffExpenseInsertRow = {
+    id: input.id,
+    staff_id: input.staff_id,
+    staff_name: input.staff_name,
+    branch_id: input.branch_id,
+    amount: input.amount,
+    description: input.description,
+    expense_date: input.expense_date,
+    created_at: input.created_at,
+  };
+
+  if (shouldIncludeExpensePaymentMode()) {
+    row.payment_mode = normalizeFlowerExpensePaymentMode(input.payment_mode);
+  }
+
+  return row;
+}
 
 type SupplierCostDbRow = {
   id: string;
@@ -166,7 +222,7 @@ export async function createFlowerStaffExpenseSupabase(
     throw new Error('Branch not found.');
   }
 
-  const created: StaffExpenseDbRow = {
+  const created = buildStaffExpenseInsertRow({
     id: `exp-${Date.now()}`,
     staff_id: input.staff_id,
     staff_name: input.staff_name,
@@ -176,15 +232,29 @@ export async function createFlowerStaffExpenseSupabase(
     expense_date: input.expense_date,
     payment_mode: normalizeFlowerExpensePaymentMode(input.payment_mode),
     created_at: new Date().toISOString(),
-  };
+  });
 
-  const { error } = await supabase.from('flower_staff_expenses').insert(created);
+  let { error } = await supabase.from('flower_staff_expenses').insert(created);
 
-  if (error) {
-    throw error;
+  if (error && shouldIncludeExpensePaymentMode() && isMissingExpensePaymentModeColumnError(error)) {
+    expensePaymentModeColumnAvailable = false;
+    const { payment_mode: _ignored, ...legacyRow } = created;
+    ({ error } = await supabase.from('flower_staff_expenses').insert(legacyRow));
+  } else if (!error && shouldIncludeExpensePaymentMode()) {
+    expensePaymentModeColumnAvailable = true;
   }
 
-  return mapStaffExpense(created, branchName);
+  if (error) {
+    throw toServiceError(error, 'Failed to save expense.');
+  }
+
+  return mapStaffExpense(
+    {
+      ...created,
+      payment_mode: created.payment_mode ?? normalizeFlowerExpensePaymentMode(input.payment_mode),
+    },
+    branchName,
+  );
 }
 
 export async function updateFlowerStaffExpenseSupabase(
@@ -198,21 +268,46 @@ export async function updateFlowerStaffExpenseSupabase(
     throw new Error('Branch not found.');
   }
 
-  const { data, error } = await supabase
+  const paymentMode = normalizeFlowerExpensePaymentMode(input.payment_mode);
+  const updatePayload: {
+    branch_id: string;
+    amount: number;
+    description: string;
+    expense_date: string;
+    payment_mode?: FlowerExpensePaymentMode;
+  } = {
+    branch_id: input.branch_id,
+    amount: input.amount,
+    description: input.description.trim(),
+    expense_date: input.expense_date,
+  };
+
+  if (shouldIncludeExpensePaymentMode()) {
+    updatePayload.payment_mode = paymentMode;
+  }
+
+  let { data, error } = await supabase
     .from('flower_staff_expenses')
-    .update({
-      branch_id: input.branch_id,
-      amount: input.amount,
-      description: input.description.trim(),
-      expense_date: input.expense_date,
-      payment_mode: normalizeFlowerExpensePaymentMode(input.payment_mode),
-    })
+    .update(updatePayload)
     .eq('id', input.id)
     .select('*')
     .single();
 
+  if (error && shouldIncludeExpensePaymentMode() && isMissingExpensePaymentModeColumnError(error)) {
+    expensePaymentModeColumnAvailable = false;
+    const { payment_mode: _ignored, ...legacyPayload } = updatePayload;
+    ({ data, error } = await supabase
+      .from('flower_staff_expenses')
+      .update(legacyPayload)
+      .eq('id', input.id)
+      .select('*')
+      .single());
+  } else if (!error && shouldIncludeExpensePaymentMode()) {
+    expensePaymentModeColumnAvailable = true;
+  }
+
   if (error || !data) {
-    throw error ?? new Error('Expense not found.');
+    throw toServiceError(error, 'Failed to update expense.');
   }
 
   return mapStaffExpense(data as StaffExpenseDbRow, branchName);
