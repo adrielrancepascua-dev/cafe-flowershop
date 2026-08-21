@@ -32,7 +32,6 @@ import { listFlowerOrders, forceRunInventoryDeductions } from '../../../../servi
 import { soldPendingDeductionByProductId } from '../../shared/utils/flower-daily-inventory';
 import {
   INVENTORY_AUTO_DEDUCT_PAUSED,
-  INVENTORY_DEDUCT_POLL_ENABLED,
 } from '../../shared/utils/flower-inventory-deduct';
 import {
   dedupeInventoryMovementRows,
@@ -1744,12 +1743,11 @@ export default function FlowerInventoryPage() {
 
       {isAdmin ? (
         <div className="mt-3 space-y-2">
-          {!INVENTORY_DEDUCT_POLL_ENABLED ? (
-            <p className="rounded-xl border border-amber-200/80 bg-amber-50/80 px-3 py-2 text-sm text-amber-950">
-              Background auto-deduct poll is off. Use <span className="font-semibold">Run order deduct now</span> when a
-              branch closes early (or at end of day). One click is enough.
-            </p>
-          ) : null}
+          <p className="text-sm text-brand-brown/70">
+            Completed sales deduct automatically after 7:00 PM. Use{' '}
+            <span className="font-semibold text-brand-dark">Run order deduct now</span> only if a branch closes early —
+            one click is enough.
+          </p>
           <button
             type="button"
             disabled={forceDeductBusy || INVENTORY_AUTO_DEDUCT_PAUSED}

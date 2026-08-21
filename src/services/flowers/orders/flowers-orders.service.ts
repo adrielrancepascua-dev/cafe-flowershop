@@ -160,7 +160,7 @@ export async function restoreHistoricalReconcileDeductions(): Promise<{
   );
 }
 
-export async function runDueInventoryDeductions(): Promise<void> {
+export async function runDueInventoryDeductions(): Promise<number> {
   return withSupabaseOrders(
     async () => {
       const { runDueInventoryDeductionsSupabase } = await import('./flowers-orders.supabase');

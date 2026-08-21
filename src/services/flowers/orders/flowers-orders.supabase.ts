@@ -943,9 +943,9 @@ export async function getFlowerDayCloseStatusSupabase(
   return computeFlowerDayCloseStatus(orders, dateKey, branchId);
 }
 
-export async function runDueInventoryDeductionsSupabase(): Promise<void> {
+export async function runDueInventoryDeductionsSupabase(): Promise<number> {
   if (INVENTORY_AUTO_DEDUCT_PAUSED) {
-    return;
+    return 0;
   }
 
   const supabase = await requireAuthenticatedSupabaseClient();
@@ -960,14 +960,17 @@ export async function runDueInventoryDeductionsSupabase(): Promise<void> {
   }
 
   const buckets = getInventoryDeductionBuckets(data ?? []);
+  let deducted = 0;
 
   for (const { dateKey, branchId } of buckets) {
     try {
-      await maybeBatchDeductInventoryForClosedDay(dateKey, branchId);
+      deducted += await maybeBatchDeductInventoryForClosedDay(dateKey, branchId);
     } catch (deductError) {
       console.warn('Scheduled inventory deduction failed.', { dateKey, branchId, deductError });
     }
   }
+
+  return deducted;
 }
 
 /** Admin-triggered: deduct pending orders now, ignoring the 7 PM time gate. */

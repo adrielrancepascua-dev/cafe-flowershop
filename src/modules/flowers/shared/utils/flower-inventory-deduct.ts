@@ -204,10 +204,10 @@ export const HISTORICAL_RECONCILE_BUG_ENDED_AT = '2026-08-19T11:00:00.000Z';
 export const INVENTORY_AUTO_DEDUCT_PAUSED = false;
 
 /**
- * 60s dashboard poll amplifier. Keep false until we're confident; early close
- * should use "Run order deduct now" instead of background polling.
+ * 60s dashboard poll for 7 PM Manila auto deduct.
+ * Safe with order-id movement lookup + claim guards; force button still used for early close.
  */
-export const INVENTORY_DEDUCT_POLL_ENABLED = false;
+export const INVENTORY_DEDUCT_POLL_ENABLED = true;
 
 export type HistoricalReconcileRestoreLine = {
   branchId: string;

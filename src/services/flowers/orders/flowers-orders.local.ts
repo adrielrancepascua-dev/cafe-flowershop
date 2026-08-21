@@ -633,21 +633,28 @@ export async function restoreHistoricalReconcileDeductionsLocal(): Promise<{
   };
 }
 
-export async function runDueInventoryDeductionsLocal(): Promise<void> {
+export async function runDueInventoryDeductionsLocal(): Promise<number> {
   if (INVENTORY_AUTO_DEDUCT_PAUSED) {
-    return;
+    return 0;
   }
 
   const orders = readOrdersFromStorage();
   const buckets = getInventoryDeductionBuckets(orders);
+  let deducted = 0;
 
   for (const { dateKey, branchId } of buckets) {
     try {
+      const before = getOrdersPendingInventoryDeduction(orders, dateKey, branchId).length;
       await maybeBatchDeductInventoryForClosedDay(dateKey, branchId);
+      const afterOrders = readOrdersFromStorage();
+      const after = getOrdersPendingInventoryDeduction(afterOrders, dateKey, branchId).length;
+      deducted += Math.max(0, before - after);
     } catch (error) {
       console.warn('Scheduled inventory deduction failed.', { dateKey, branchId, error });
     }
   }
+
+  return deducted;
 }
 
 export async function forceRunInventoryDeductionsLocal(): Promise<number> {
