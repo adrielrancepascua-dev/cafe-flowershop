@@ -24,7 +24,7 @@ import {
   normalizeFlowerProductColor,
 } from '../../../modules/flowers/shared/utils/flower-product-colors';
 import { normalizeFlowerProductKind } from '../../../modules/flowers/shared/utils/flower-product-kind';
-import { formatInventoryOrderDeductNote, formatInventoryOrderVoidNote } from '../../../modules/flowers/shared/utils/flower-format';
+import { formatInventoryOrderDeductNote, formatInventoryOrderVoidNote, parseInventoryMovementOrderId } from '../../../modules/flowers/shared/utils/flower-format';
 import { getStoredFlowerSession } from '../../../lib/auth/flower-auth.service';
 
 const INVENTORY_STORAGE_KEY = 'papers_petals_flower_inventory_v2';
@@ -173,6 +173,10 @@ export async function listFlowerInventoryMovementsLocal(
     }
 
     if (options.productId && movement.product_id !== options.productId) {
+      return false;
+    }
+
+    if (options.orderId && parseInventoryMovementOrderId(movement.note) !== options.orderId) {
       return false;
     }
 

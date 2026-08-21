@@ -379,6 +379,11 @@ export async function listFlowerInventoryMovementsSupabase(
       query = query.eq('product_id', options.productId);
     }
 
+    if (options.orderId) {
+      // Notes look like: "Order PP-123 · Receiver · day-close deduct"
+      query = query.ilike('note', `%Order ${options.orderId}%`);
+    }
+
     if (options.fromDate) {
       const { startIso } = getLocalDayBoundsIso(options.fromDate);
       query = query.gte('created_at', startIso);

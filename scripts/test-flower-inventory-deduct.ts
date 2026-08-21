@@ -252,6 +252,83 @@ assertEqual(
   'Run order deduct now must include pending terminal orders before 7 PM',
 );
 
+// Root cause of Aug 21 loop: movements written "today" while completeness only
+// looked at the pickup-date window → leftover full qty → claim released → poll
+// re-deducted forever.
+const loopOrderId = 'PP-1787215019649-5317';
+const loopPinkId = 'local-rose-pink';
+const loopRedId = 'local-rose-red';
+const loopHotPinkId = 'local-rose-hot-pink';
+const pickupDayMovementsOnly = [
+  // empty on pickup day — force/late deduct wrote nothing here
+];
+const movementsWrittenNextDay = [
+  {
+    movement_type: 'order_deduct',
+    product_id: loopPinkId,
+    quantity: 2,
+    branch_id: sanCarlosBranch,
+    note: `Order ${loopOrderId} · SPOILAGE · day-close deduct`,
+    created_at: '2026-08-21T09:40:00.000Z',
+  },
+  {
+    movement_type: 'order_deduct',
+    product_id: loopRedId,
+    quantity: 2,
+    branch_id: sanCarlosBranch,
+    note: `Order ${loopOrderId} · SPOILAGE · day-close deduct`,
+    created_at: '2026-08-21T09:40:00.000Z',
+  },
+  {
+    movement_type: 'order_deduct',
+    product_id: loopHotPinkId,
+    quantity: 1,
+    branch_id: sanCarlosBranch,
+    note: `Order ${loopOrderId} · SPOILAGE · day-close deduct`,
+    created_at: '2026-08-21T09:40:00.000Z',
+  },
+];
+const loopItems = [
+  { product_id: loopPinkId, quantity: 2 },
+  { product_id: loopRedId, quantity: 2 },
+  { product_id: loopHotPinkId, quantity: 1 },
+];
+
+assertEqual(
+  planOrderInventoryDeduction({
+    orderId: loopOrderId,
+    branchId: sanCarlosBranch,
+    items: loopItems,
+    movements: pickupDayMovementsOnly,
+  }),
+  loopItems,
+  'blind pickup-day window misses late writes and would plan a full re-deduct',
+);
+
+assertEqual(
+  planOrderInventoryDeduction({
+    orderId: loopOrderId,
+    branchId: sanCarlosBranch,
+    items: loopItems,
+    movements: movementsWrittenNextDay,
+  }),
+  [],
+  'order-id movement lookup must treat late writes as already deducted (no loop)',
+);
+
+assertEqual(
+  hasCompleteOrderDeduction({
+    orderId: loopOrderId,
+    items: loopItems,
+    movements: [
+      ...movementsWrittenNextDay,
+      ...movementsWrittenNextDay, // over-deducted by the loop
+    ],
+  }),
+  true,
+  'over-deducted orders must still count as complete so claim stays set',
+);
+
 assertEqual(
   quantitiesToRestoreFromHistoricalReconcile(
     [

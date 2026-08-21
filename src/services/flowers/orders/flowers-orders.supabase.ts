@@ -11,7 +11,7 @@ import type {
   UpdateFlowerOrderInput,
 } from '../../../modules/flowers/shared/types/flower-order';
 import { FLOWER_ORDER_TERMINAL_STATUSES } from '../../../modules/flowers/shared/types/flower-order';
-import { getLocalDayBoundsIso, formatInventoryHistoricalReconcileUndoNote, formatInventoryOrderEditDeductNote, formatInventoryOrderEditRestoreNote, toManilaDateKeyFromDate } from '../../../modules/flowers/shared/utils/flower-format';
+import { getLocalDayBoundsIso, formatInventoryHistoricalReconcileUndoNote, formatInventoryOrderEditDeductNote, formatInventoryOrderEditRestoreNote } from '../../../modules/flowers/shared/utils/flower-format';
 import { normalizeFlowerPaymentMode } from '../../../modules/flowers/shared/utils/flower-payment';
 import type { FlowerPaymentMode } from '../../../modules/flowers/shared/types/flower-order';
 import {
@@ -357,19 +357,14 @@ async function listOrdersForPickupDate(dateKey: string): Promise<FlowerOrder[]> 
 }
 
 async function listMovementsForOrderDeduct(order: FlowerOrder) {
-  const pickupKey = getPickupDateKey(order.scheduled_for);
-  const todayKey = toManilaDateKeyFromDate(new Date());
-  // Include today even when pickup was yesterday — late/force deducts write
-  // movements on "now", and the old same-day-only window missed them, which
-  // reset inventory_deducted and re-deducted forever on the 60s poll.
-  const fromDate = pickupKey <= todayKey ? pickupKey : todayKey;
-  const toDate = pickupKey <= todayKey ? todayKey : pickupKey;
-
+  // CRITICAL: look up by order id in the note, NOT by pickup-date created_at window.
+  // Early/force deduct writes movements "today". If pickup was yesterday (or any
+  // other day), a same-day window misses them → completeness fails → claim is
+  // released → 60s poll re-deducts the full order forever.
   return listFlowerInventoryMovementsSupabase({
     branchId: order.branch_id,
-    fromDate,
-    toDate,
-    limit: 10000,
+    orderId: order.id,
+    limit: 5000,
   });
 }
 

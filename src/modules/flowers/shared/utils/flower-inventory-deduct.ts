@@ -200,8 +200,14 @@ export const HISTORICAL_RECONCILE_BUG_STARTED_AT = '2026-08-19T03:30:00.000Z';
 /** 7:00 PM Manila on Aug 19 — stop undoing after legitimate day-close deducts begin. */
 export const HISTORICAL_RECONCILE_BUG_ENDED_AT = '2026-08-19T11:00:00.000Z';
 
-/** Emergency brake — paused after Aug 21 re-deduct loop. Keep true until safe to resume. */
-export const INVENTORY_AUTO_DEDUCT_PAUSED = true;
+/** Emergency brake — false after Aug 21 root-cause fix (order-id movement lookup). */
+export const INVENTORY_AUTO_DEDUCT_PAUSED = false;
+
+/**
+ * 60s dashboard poll amplifier. Keep false until we're confident; early close
+ * should use "Run order deduct now" instead of background polling.
+ */
+export const INVENTORY_DEDUCT_POLL_ENABLED = false;
 
 export type HistoricalReconcileRestoreLine = {
   branchId: string;

@@ -1,6 +1,9 @@
 import { useEffect, useRef } from 'react';
 import { runDueInventoryDeductions } from '../../../../services/flowers/orders';
-import { INVENTORY_AUTO_DEDUCT_PAUSED } from '../../shared/utils/flower-inventory-deduct';
+import {
+  INVENTORY_AUTO_DEDUCT_PAUSED,
+  INVENTORY_DEDUCT_POLL_ENABLED,
+} from '../../shared/utils/flower-inventory-deduct';
 
 const INVENTORY_DEDUCTION_POLL_MS = 60_000;
 
@@ -10,7 +13,9 @@ export function useScheduledInventoryDeduction(onDeductionComplete?: () => void)
   onCompleteRef.current = onDeductionComplete;
 
   useEffect(() => {
-    if (INVENTORY_AUTO_DEDUCT_PAUSED) {
+    // Poll was the amplifier for the Aug 21 re-deduct loop. Keep off until
+    // explicitly re-enabled; early close uses the admin force button instead.
+    if (INVENTORY_AUTO_DEDUCT_PAUSED || !INVENTORY_DEDUCT_POLL_ENABLED) {
       return;
     }
 

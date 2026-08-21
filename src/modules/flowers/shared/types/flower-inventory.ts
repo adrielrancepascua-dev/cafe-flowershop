@@ -50,6 +50,8 @@ export interface ListFlowerInventoryMovementsOptions extends ListFlowerInventory
   fromDate?: string;
   toDate?: string;
   productId?: string;
+  /** Match movements whose note references this order id (Order PP-…). */
+  orderId?: string;
 }
 
 export type FlowerInventoryStockPrintLayout = 'combined' | 'by_branch';

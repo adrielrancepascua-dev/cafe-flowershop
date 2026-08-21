@@ -30,7 +30,10 @@ import FlowerInventoryProductLogPanel from '../components/FlowerInventoryProduct
 import FlowerConfirmDialog from '../components/FlowerConfirmDialog';
 import { listFlowerOrders, forceRunInventoryDeductions } from '../../../../services/flowers/orders';
 import { soldPendingDeductionByProductId } from '../../shared/utils/flower-daily-inventory';
-import { INVENTORY_AUTO_DEDUCT_PAUSED } from '../../shared/utils/flower-inventory-deduct';
+import {
+  INVENTORY_AUTO_DEDUCT_PAUSED,
+  INVENTORY_DEDUCT_POLL_ENABLED,
+} from '../../shared/utils/flower-inventory-deduct';
 import {
   dedupeInventoryMovementRows,
   formatInventoryMovementActor,
@@ -1740,9 +1743,10 @@ export default function FlowerInventoryPage() {
 
       {isAdmin ? (
         <div className="mt-3 space-y-2">
-          {INVENTORY_AUTO_DEDUCT_PAUSED ? (
-            <p className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">
-              Auto order deduct is paused after a re-deduct loop. Do not run deduct until Rance turns it back on.
+          {!INVENTORY_DEDUCT_POLL_ENABLED ? (
+            <p className="rounded-xl border border-amber-200/80 bg-amber-50/80 px-3 py-2 text-sm text-amber-950">
+              Background auto-deduct poll is off. Use <span className="font-semibold">Run order deduct now</span> when a
+              branch closes early (or at end of day). One click is enough.
             </p>
           ) : null}
           <button
