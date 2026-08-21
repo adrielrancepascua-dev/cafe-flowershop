@@ -11,7 +11,7 @@ import type {
   UpdateFlowerOrderInput,
 } from '../../../modules/flowers/shared/types/flower-order';
 import { FLOWER_ORDER_TERMINAL_STATUSES } from '../../../modules/flowers/shared/types/flower-order';
-import { getLocalDayBoundsIso, formatInventoryHistoricalReconcileUndoNote, formatInventoryOrderEditDeductNote, formatInventoryOrderEditRestoreNote } from '../../../modules/flowers/shared/utils/flower-format';
+import { getLocalDayBoundsIso, formatInventoryHistoricalReconcileUndoNote, formatInventoryOrderEditDeductNote, formatInventoryOrderEditRestoreNote, toManilaDateKeyFromDate } from '../../../modules/flowers/shared/utils/flower-format';
 import { normalizeFlowerPaymentMode } from '../../../modules/flowers/shared/utils/flower-payment';
 import type { FlowerPaymentMode } from '../../../modules/flowers/shared/types/flower-order';
 import {
@@ -356,15 +356,27 @@ async function listOrdersForPickupDate(dateKey: string): Promise<FlowerOrder[]> 
   });
 }
 
+async function listMovementsForOrderDeduct(order: FlowerOrder) {
+  const pickupKey = getPickupDateKey(order.scheduled_for);
+  const todayKey = toManilaDateKeyFromDate(new Date());
+  // Include today even when pickup was yesterday — late/force deducts write
+  // movements on "now", and the old same-day-only window missed them, which
+  // reset inventory_deducted and re-deducted forever on the 60s poll.
+  const fromDate = pickupKey <= todayKey ? pickupKey : todayKey;
+  const toDate = pickupKey <= todayKey ? todayKey : pickupKey;
+
+  return listFlowerInventoryMovementsSupabase({
+    branchId: order.branch_id,
+    fromDate,
+    toDate,
+    limit: 10000,
+  });
+}
+
 async function deductInventoryForOrder(order: FlowerOrder): Promise<void> {
   await validateFlowerOrderStockSupabase(order.branch_id, order.items);
 
-  const movements = await listFlowerInventoryMovementsSupabase({
-    branchId: order.branch_id,
-    fromDate: getPickupDateKey(order.scheduled_for),
-    toDate: getPickupDateKey(order.scheduled_for),
-    limit: 10000,
-  });
+  const movements = await listMovementsForOrderDeduct(order);
 
   const planned = planOrderInventoryDeduction({
     orderId: order.id,
@@ -372,6 +384,11 @@ async function deductInventoryForOrder(order: FlowerOrder): Promise<void> {
     items: order.items,
     movements,
   });
+
+  // Already fully covered by prior order_deduct rows — keep the claim, do nothing.
+  if (planned.length === 0) {
+    return;
+  }
 
   for (const item of planned) {
     await deductFlowerInventoryForOrderSupabase({
@@ -383,12 +400,7 @@ async function deductInventoryForOrder(order: FlowerOrder): Promise<void> {
     });
   }
 
-  const latestMovements = await listFlowerInventoryMovementsSupabase({
-    branchId: order.branch_id,
-    fromDate: getPickupDateKey(order.scheduled_for),
-    toDate: getPickupDateKey(order.scheduled_for),
-    limit: 2000,
-  });
+  const latestMovements = await listMovementsForOrderDeduct(order);
 
   if (
     !hasCompleteOrderDeduction({
@@ -476,10 +488,20 @@ async function maybeBatchDeductInventoryForClosedDay(
       await deductInventoryForOrder(order);
       deducted += 1;
     } catch (error) {
-      await supabase
-        .from('flower_orders')
-        .update({ inventory_deducted: false })
-        .eq('id', order.id);
+      // Never release the claim if any order-attributed deduct already landed —
+      // releasing caused a every-minute re-deduct loop on the dashboard poll.
+      try {
+        const movements = await listMovementsForOrderDeduct(order);
+        const alreadyDeducted = netOrderDeductedByProduct(movements, order.id);
+        if (alreadyDeducted.size === 0) {
+          await supabase
+            .from('flower_orders')
+            .update({ inventory_deducted: false })
+            .eq('id', order.id);
+        }
+      } catch (releaseError) {
+        console.warn('Failed to evaluate deduct claim release.', { orderId: order.id, releaseError });
+      }
       throw error;
     }
   }

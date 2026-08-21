@@ -200,8 +200,8 @@ export const HISTORICAL_RECONCILE_BUG_STARTED_AT = '2026-08-19T03:30:00.000Z';
 /** 7:00 PM Manila on Aug 19 — stop undoing after legitimate day-close deducts begin. */
 export const HISTORICAL_RECONCILE_BUG_ENDED_AT = '2026-08-19T11:00:00.000Z';
 
-/** Emergency brake — keep false. Do not replay already-deducted history. */
-export const INVENTORY_AUTO_DEDUCT_PAUSED = false;
+/** Emergency brake — paused after Aug 21 re-deduct loop. Keep true until safe to resume. */
+export const INVENTORY_AUTO_DEDUCT_PAUSED = true;
 
 export type HistoricalReconcileRestoreLine = {
   branchId: string;

@@ -1,5 +1,6 @@
 import { useEffect, useRef } from 'react';
 import { runDueInventoryDeductions } from '../../../../services/flowers/orders';
+import { INVENTORY_AUTO_DEDUCT_PAUSED } from '../../shared/utils/flower-inventory-deduct';
 
 const INVENTORY_DEDUCTION_POLL_MS = 60_000;
 
@@ -9,6 +10,10 @@ export function useScheduledInventoryDeduction(onDeductionComplete?: () => void)
   onCompleteRef.current = onDeductionComplete;
 
   useEffect(() => {
+    if (INVENTORY_AUTO_DEDUCT_PAUSED) {
+      return;
+    }
+
     let cancelled = false;
 
     const tick = async () => {

@@ -20,13 +20,13 @@ assertEqual(
 
 assertEqual(
   formatInventoryMovementActor({ movement_type: 'order_deduct', created_by_name: 'Rance Pascua' }),
-  "7:00 PM deduct · ran on Rance Pascua's session",
+  "Order deduct · ran on Rance Pascua's session",
   'auto deduct should not be mistaken for a manual stock out',
 );
 
 assertEqual(
   formatInventoryMovementActor({ movement_type: 'order_deduct', created_by_name: '' }),
-  '7:00 PM auto deduct',
+  'Order deduct (auto)',
   'auto deduct with no session name still labels as automatic',
 );
 

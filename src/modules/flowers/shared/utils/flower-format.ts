@@ -385,7 +385,7 @@ export function formatInventoryMovementActor(
   const name = movement.created_by_name?.trim() ?? '';
 
   if (movement.movement_type === 'order_deduct') {
-    return name ? `7:00 PM deduct · ran on ${name}'s session` : '7:00 PM auto deduct';
+    return name ? `Order deduct · ran on ${name}'s session` : 'Order deduct (auto)';
   }
 
   if (movement.movement_type === 'transfer_in' || movement.movement_type === 'transfer_out') {

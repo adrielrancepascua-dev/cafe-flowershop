@@ -41,6 +41,7 @@ import {
   formatInventoryHistoricalReconcileUndoNote,
   formatInventoryOrderEditDeductNote,
   formatInventoryOrderEditRestoreNote,
+  toManilaDateKeyFromDate,
 } from '../../../modules/flowers/shared/utils/flower-format';
 import { validateOrderInspoPhotoWithProducts } from './flowers-order-validation';
 import { listFlowerStemsLocal } from '../products/flowers-products.local';
@@ -164,11 +165,15 @@ async function maybeBatchDeductInventoryForClosedDay(
     try {
       await validateFlowerOrderStockLocal(order.branch_id, order.items);
 
+      const todayKey = toManilaDateKeyFromDate(new Date());
+      const fromDate = dateKey <= todayKey ? dateKey : todayKey;
+      const toDate = dateKey <= todayKey ? todayKey : dateKey;
+
       const latestMovements = await listFlowerInventoryMovementsLocal({
         branchId: order.branch_id,
-        fromDate: dateKey,
-        toDate: dateKey,
-        limit: 2000,
+        fromDate,
+        toDate,
+        limit: 10000,
       });
       const planned = planOrderInventoryDeduction({
         orderId: order.id,
@@ -187,11 +192,15 @@ async function maybeBatchDeductInventoryForClosedDay(
         });
       }
 
+      if (planned.length === 0) {
+        continue;
+      }
+
       const afterMovements = await listFlowerInventoryMovementsLocal({
         branchId: order.branch_id,
-        fromDate: dateKey,
-        toDate: dateKey,
-        limit: 2000,
+        fromDate,
+        toDate,
+        limit: 10000,
       });
 
       if (
@@ -204,14 +213,23 @@ async function maybeBatchDeductInventoryForClosedDay(
         throw new Error(`Inventory deduction incomplete for order ${order.id}.`);
       }
     } catch (error) {
-      const rollbackOrders = readOrdersFromStorage();
-      const rollbackIndex = rollbackOrders.findIndex((entry) => entry.id === order.id);
-      if (rollbackIndex !== -1) {
-        rollbackOrders[rollbackIndex] = {
-          ...rollbackOrders[rollbackIndex],
-          inventory_deducted: false,
-        };
-        writeOrdersToStorage(rollbackOrders);
+      const afterFailMovements = await listFlowerInventoryMovementsLocal({
+        branchId: order.branch_id,
+        fromDate: dateKey <= toManilaDateKeyFromDate(new Date()) ? dateKey : toManilaDateKeyFromDate(new Date()),
+        toDate: toManilaDateKeyFromDate(new Date()),
+        limit: 10000,
+      });
+      const alreadyDeducted = netOrderDeductedByProduct(afterFailMovements, order.id);
+      if (alreadyDeducted.size === 0) {
+        const rollbackOrders = readOrdersFromStorage();
+        const rollbackIndex = rollbackOrders.findIndex((entry) => entry.id === order.id);
+        if (rollbackIndex !== -1) {
+          rollbackOrders[rollbackIndex] = {
+            ...rollbackOrders[rollbackIndex],
+            inventory_deducted: false,
+          };
+          writeOrdersToStorage(rollbackOrders);
+        }
       }
       throw error;
     }
