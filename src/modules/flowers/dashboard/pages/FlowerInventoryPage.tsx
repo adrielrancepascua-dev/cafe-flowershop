@@ -1742,12 +1742,7 @@ export default function FlowerInventoryPage() {
       />
 
       {isAdmin ? (
-        <div className="mt-3 space-y-2">
-          <p className="text-sm text-brand-brown/70">
-            Completed sales deduct automatically after 7:00 PM. Use{' '}
-            <span className="font-semibold text-brand-dark">Run order deduct now</span> only if a branch closes early —
-            one click is enough.
-          </p>
+        <div className="mt-3">
           <button
             type="button"
             disabled={forceDeductBusy || INVENTORY_AUTO_DEDUCT_PAUSED}
