@@ -223,6 +223,18 @@ export function parseInventoryMovementOrderId(note: string): string | null {
   return match?.[1] ?? null;
 }
 
+/** PostgREST/SQL LIKE pattern that matches notes for one order without prefix collisions. */
+export function inventoryMovementNoteLikePatternForOrderId(orderId: string): string {
+  const trimmed = orderId.trim();
+  if (!trimmed) {
+    return '';
+  }
+  // Notes are always: "Order <id> · <receiver> · …"
+  // Escape LIKE wildcards so ids never match broadly.
+  const escaped = trimmed.replace(/\\/g, '\\\\').replace(/%/g, '\\%').replace(/_/g, '\\_');
+  return `Order ${escaped} ·%`;
+}
+
 export function parseInventoryMovementReceiver(note: string): string | null {
   const match = note.match(/Order\s+\S+\s+·\s+(.+?)\s+·\s+day-close/i);
   return match?.[1]?.trim() || null;

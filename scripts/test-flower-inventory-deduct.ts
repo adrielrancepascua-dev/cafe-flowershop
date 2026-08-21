@@ -7,7 +7,7 @@ import {
   quantitiesToRestoreFromHistoricalReconcile,
 } from '../src/modules/flowers/shared/utils/flower-inventory-deduct';
 import { effectiveSoldPendingDeductionByProductId } from '../src/modules/flowers/shared/utils/flower-daily-inventory';
-import { formatInventoryMovementActor } from '../src/modules/flowers/shared/utils/flower-format';
+import { formatInventoryMovementActor, inventoryMovementNoteLikePatternForOrderId } from '../src/modules/flowers/shared/utils/flower-format';
 import { getInventoryDeductionBuckets } from '../src/services/flowers/orders/flowers-order-day-close';
 
 function assertEqual<T>(actual: T, expected: T, message: string): void {
@@ -327,6 +327,18 @@ assertEqual(
   }),
   true,
   'over-deducted orders must still count as complete so claim stays set',
+);
+
+assertEqual(
+  inventoryMovementNoteLikePatternForOrderId('PP-1'),
+  'Order PP-1 ·%',
+  'note like pattern anchors on Order <id> ·',
+);
+
+assertEqual(
+  inventoryMovementNoteLikePatternForOrderId('PP-1_x'),
+  'Order PP-1\\_x ·%',
+  'LIKE wildcards inside order ids must be escaped',
 );
 
 assertEqual(

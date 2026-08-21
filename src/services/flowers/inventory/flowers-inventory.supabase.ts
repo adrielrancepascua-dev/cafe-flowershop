@@ -17,7 +17,7 @@ import type {
   TransferFlowerInventoryInput,
   UpdateFlowerTransferRequestBillingInput,
 } from '../../../modules/flowers/shared/types/flower-inventory';
-import { getLocalDayBoundsIso, formatInventoryOrderDeductNote, formatInventoryOrderVoidNote, parseInventoryMovementOrderId } from '../../../modules/flowers/shared/utils/flower-format';
+import { getLocalDayBoundsIso, formatInventoryOrderDeductNote, formatInventoryOrderVoidNote, inventoryMovementNoteLikePatternForOrderId, parseInventoryMovementOrderId } from '../../../modules/flowers/shared/utils/flower-format';
 import {
   compareInventoryStockRows,
   normalizeFlowerProductColor,
@@ -380,8 +380,11 @@ export async function listFlowerInventoryMovementsSupabase(
     }
 
     if (options.orderId) {
-      // Notes look like: "Order PP-123 · Receiver · day-close deduct"
-      query = query.ilike('note', `%Order ${options.orderId}%`);
+      const pattern = inventoryMovementNoteLikePatternForOrderId(options.orderId);
+      if (pattern) {
+        // Exact "Order <id> ·…" prefix — avoids PP-1 matching PP-12 via leading %ilike.
+        query = query.like('note', pattern);
+      }
     }
 
     if (options.fromDate) {

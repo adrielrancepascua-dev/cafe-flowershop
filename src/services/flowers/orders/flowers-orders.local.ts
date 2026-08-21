@@ -223,7 +223,7 @@ async function maybeBatchDeductInventoryForClosedDay(
           writeOrdersToStorage(rollbackOrders);
         }
       }
-      throw error;
+      console.warn('Inventory deduction failed for order.', { orderId: order.id, error });
     }
   }
 }
@@ -364,9 +364,8 @@ export async function updateFlowerOrderLocal(input: UpdateFlowerOrderInput): Pro
     const editDeductNote = formatInventoryOrderEditDeductNote(orderId, nextReceiver);
     const movements = await listFlowerInventoryMovementsLocal({
       branchId: existing.branch_id,
-      fromDate: getPickupDateKey(existing.scheduled_for),
-      toDate: getPickupDateKey(existing.scheduled_for),
-      limit: 2000,
+      orderId,
+      limit: 5000,
     });
     const previousQtyMap = netOrderDeductedByProduct(movements, orderId);
     const previousQty = Object.fromEntries(previousQtyMap);
@@ -483,9 +482,8 @@ export async function deleteFlowerOrderLocal(orderId: string): Promise<void> {
   if (existing.inventory_deducted) {
     const movements = await listFlowerInventoryMovementsLocal({
       branchId: existing.branch_id,
-      fromDate: getPickupDateKey(existing.scheduled_for),
-      toDate: getPickupDateKey(existing.scheduled_for),
-      limit: 2000,
+      orderId: existing.id,
+      limit: 5000,
     });
     const netDeducted = netOrderDeductedByProduct(movements, existing.id);
 

@@ -266,9 +266,8 @@ async function reconcileInventoryAfterOrderContentEditSupabase(input: {
   const editDeductNote = formatInventoryOrderEditDeductNote(orderId, nextReceiver);
   const movements = await listFlowerInventoryMovementsSupabase({
     branchId: existing.branch_id,
-    fromDate: getPickupDateKey(existing.scheduled_for),
-    toDate: getPickupDateKey(existing.scheduled_for),
-    limit: 2000,
+    orderId,
+    limit: 5000,
   });
   const previousQtyMap = netOrderDeductedByProduct(movements, orderId);
   const previousQty = Object.fromEntries(previousQtyMap);
@@ -472,7 +471,8 @@ async function maybeBatchDeductInventoryForClosedDay(
       .maybeSingle();
 
     if (claimError) {
-      throw claimError;
+      console.warn('Inventory deduct claim failed.', { orderId: order.id, claimError });
+      continue;
     }
 
     if (!claimed) {
@@ -497,7 +497,8 @@ async function maybeBatchDeductInventoryForClosedDay(
       } catch (releaseError) {
         console.warn('Failed to evaluate deduct claim release.', { orderId: order.id, releaseError });
       }
-      throw error;
+      // Continue other pending orders — one failure must not abort the whole branch day.
+      console.warn('Inventory deduction failed for order.', { orderId: order.id, error });
     }
   }
 
@@ -794,9 +795,8 @@ export async function deleteFlowerOrderSupabase(orderId: string): Promise<void> 
   if (existing.inventory_deducted) {
     const movements = await listFlowerInventoryMovementsSupabase({
       branchId: existing.branch_id,
-      fromDate: getPickupDateKey(existing.scheduled_for),
-      toDate: getPickupDateKey(existing.scheduled_for),
-      limit: 2000,
+      orderId: existing.id,
+      limit: 5000,
     });
     const netDeducted = netOrderDeductedByProduct(movements, existing.id);
 

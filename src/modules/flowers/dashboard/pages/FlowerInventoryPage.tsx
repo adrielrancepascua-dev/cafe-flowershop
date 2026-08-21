@@ -1191,6 +1191,7 @@ export default function FlowerInventoryPage() {
   } | null>(null);
   const [stockOutConfirmBusy, setStockOutConfirmBusy] = useState(false);
   const [forceDeductBusy, setForceDeductBusy] = useState(false);
+  const forceDeductLockRef = useRef(false);
 
   async function loadData() {
     const isFirstLoad = isFirstLoadRef.current;
@@ -1753,9 +1754,10 @@ export default function FlowerInventoryPage() {
             type="button"
             disabled={forceDeductBusy || INVENTORY_AUTO_DEDUCT_PAUSED}
             onClick={async () => {
-              if (forceDeductBusy || INVENTORY_AUTO_DEDUCT_PAUSED) {
+              if (forceDeductBusy || forceDeductLockRef.current || INVENTORY_AUTO_DEDUCT_PAUSED) {
                 return;
               }
+              forceDeductLockRef.current = true;
               setForceDeductBusy(true);
               setMessage('');
               setErrorMessage('');
@@ -1770,6 +1772,7 @@ export default function FlowerInventoryPage() {
               } catch (err) {
                 setErrorMessage(extractSupabaseErrorMessage(err, 'Order deduct failed.'));
               } finally {
+                forceDeductLockRef.current = false;
                 setForceDeductBusy(false);
               }
             }}
