@@ -39,7 +39,7 @@ import {
   isInventoryDeductionDue,
 } from './flowers-order-day-close';
 import { assertOrderContentEditable } from '../../../modules/flowers/shared/utils/flower-order-edit-policy';
-import { computeOrderPaymentFields } from '../../../modules/flowers/shared/utils/flower-order-payment-fields';
+import { assertRequiredDownpayment, computeOrderPaymentFields } from '../../../modules/flowers/shared/utils/flower-order-payment-fields';
 import {
   isMissingProductKindColumnError,
   markProductKindColumnMissing,
@@ -555,8 +555,12 @@ export async function createFlowerOrderSupabase(
 
   await validateOrderInspoPhotoSupabase(supabase, input.items, input.photo_inspo_data_url, input.claim_mode);
   await validateFlowerOrderStockSupabase(input.branch_id, input.items);
+  assertRequiredDownpayment(input.total_amount, input.downpayment);
 
   const orderId = buildOrderId();
+  if (!input.proof_dp_data_url?.trim()) {
+    throw new Error('Proof of DP is required.');
+  }
   const attachments = await resolveOrderAttachments({
     orderId,
     photo_inspo_data_url: input.photo_inspo_data_url,
@@ -652,6 +656,11 @@ export async function updateFlowerOrderSupabase(
   assertOrderContentEditable(existing, Date.now(), { adminUnlimitedEdits });
 
   await validateOrderInspoPhotoSupabase(supabase, input.items, input.photo_inspo_data_url, input.claim_mode);
+
+  assertRequiredDownpayment(input.total_amount, input.downpayment);
+  if (!input.proof_dp_data_url?.trim()) {
+    throw new Error('Proof of DP is required.');
+  }
 
   const attachments = await resolveOrderAttachments({
     orderId: input.id,

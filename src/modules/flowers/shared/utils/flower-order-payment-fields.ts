@@ -1,5 +1,22 @@
 import type { FlowerPaymentMode } from '../types/flower-order';
 
+/** Every order must have a downpayment or full payment — never ₱0. */
+export function assertRequiredDownpayment(totalAmount: number, downpayment: number): void {
+  if (!Number.isFinite(totalAmount) || totalAmount <= 0) {
+    throw new Error('Total amount must be greater than 0.');
+  }
+
+  if (!Number.isFinite(downpayment) || downpayment <= 0) {
+    throw new Error(
+      'Downpayment is required. Enter a partial DP or the full total if already paid in full.',
+    );
+  }
+
+  if (downpayment > totalAmount) {
+    throw new Error('Downpayment cannot exceed total amount.');
+  }
+}
+
 /** Recompute downpayment, balance, and balance_paid from edited amounts. */
 export function computeOrderPaymentFields(
   totalAmount: number,

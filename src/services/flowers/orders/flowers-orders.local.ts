@@ -36,7 +36,7 @@ import {
 } from './flowers-order-day-close';
 import { currentFlowerUserIsAdmin } from '../../../lib/auth/flower-auth.service';
 import { assertOrderContentEditable } from '../../../modules/flowers/shared/utils/flower-order-edit-policy';
-import { computeOrderPaymentFields } from '../../../modules/flowers/shared/utils/flower-order-payment-fields';
+import { assertRequiredDownpayment, computeOrderPaymentFields } from '../../../modules/flowers/shared/utils/flower-order-payment-fields';
 import {
   formatInventoryHistoricalReconcileUndoNote,
   formatInventoryOrderEditDeductNote,
@@ -264,6 +264,11 @@ function buildOrderFromInput(
   branchName: string,
   existing?: FlowerOrder,
 ): FlowerOrder {
+  assertRequiredDownpayment(input.total_amount, input.downpayment);
+  if (!input.proof_dp_data_url?.trim()) {
+    throw new Error('Proof of DP is required.');
+  }
+
   const payment = computeOrderPaymentFields(input.total_amount, input.downpayment, {
     balance_paid: existing?.balance_paid,
     balance_payment_mode: existing?.balance_payment_mode,
