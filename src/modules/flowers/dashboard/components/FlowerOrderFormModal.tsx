@@ -1258,7 +1258,6 @@ export default function FlowerOrderFormModal({
     [miscProducts, productQuantities],
   );
 
-  const requiresDownpaymentProof = useMemo(() => hasDownpayment, [hasDownpayment]);
   const activeBranchId = existingOrder?.branch_id ?? form.branch_id;
   const activeBranchName =
     branches.find((branch) => branch.id === activeBranchId)?.name ?? activeBranchId;
@@ -1405,18 +1404,20 @@ export default function FlowerOrderFormModal({
       trimmedDownpayment === '' ? 0 : Number(trimmedDownpayment);
     const total_amount = Number(totalAmountDraft);
 
-    if (trimmedDownpayment !== '' && !Number.isFinite(downpayment)) {
-      showValidationError('Downpayment must be a valid amount.');
-      return null;
-    }
-
     if (!Number.isFinite(total_amount) || total_amount <= 0) {
       showValidationError('Total amount must be greater than 0.');
       return null;
     }
 
-    if (!Number.isFinite(downpayment) || downpayment < 0) {
-      showValidationError('Downpayment must be 0 or greater.');
+    if (trimmedDownpayment === '' || !Number.isFinite(downpayment)) {
+      showValidationError('Downpayment is required.');
+      return null;
+    }
+
+    if (downpayment <= 0) {
+      showValidationError(
+        'Downpayment must be greater than 0. Enter a partial DP or the full total if already paid in full.',
+      );
       return null;
     }
 
@@ -1425,20 +1426,18 @@ export default function FlowerOrderFormModal({
       return null;
     }
 
-    const requiresProof = downpayment > 0;
-
-    if (requiresProof && !form.payment_mode) {
+    if (!form.payment_mode) {
       showValidationError('Please choose a downpayment payment mode (Cash, GCash, or bank).');
       return null;
     }
 
-    if (requiresProof && !form.payment_reference.trim()) {
-      showValidationError('Reference # is required when downpayment is greater than 0.');
+    if (!form.payment_reference.trim()) {
+      showValidationError('Reference # is required for the downpayment.');
       return null;
     }
 
-    if (requiresProof && !form.proof_dp_data_url) {
-      showValidationError('Proof of DP is required when downpayment is greater than 0.');
+    if (!form.proof_dp_data_url) {
+      showValidationError('Proof of DP is required.');
       return null;
     }
 
@@ -1458,8 +1457,7 @@ export default function FlowerOrderFormModal({
     setErrorMessage('');
     return {
       ...form,
-      // When there is no DP yet, store a neutral placeholder; reports ignore DP mode at ₱0.
-      payment_mode: requiresProof ? form.payment_mode : form.payment_mode || 'cash',
+      payment_mode: form.payment_mode,
       wrapper_color,
       downpayment,
       total_amount,
@@ -2316,12 +2314,13 @@ export default function FlowerOrderFormModal({
                     onChange={(event) =>
                       setDownpaymentDraft(event.target.value.replace(/[^\d.]/g, ''))
                     }
-                    placeholder="0"
+                    placeholder="Required"
                     className="flower-input mt-1.5"
+                    required
                   />
                   <span className="mt-1 block text-xs text-brand-brown/60">
-                    Leave blank if unpaid yet. Full payment? Enter the total as downpayment —
-                    no balance reference needed.
+                    Required — never ₱0. Partial DP, or enter the full total as DP if already paid
+                    in full (no balance reference needed).
                   </span>
                 </>
               )}
@@ -2394,16 +2393,13 @@ export default function FlowerOrderFormModal({
 
           <label className="mt-3 block text-sm font-medium text-brand-brown">
             Reference # (downpayment)
-            {requiresDownpaymentProof ? null : (
-              <span className="ml-1 text-xs font-normal text-brand-brown/60">(optional when DP is 0)</span>
-            )}
             <input
               type="text"
               value={form.payment_reference}
               onChange={(event) => updateField('payment_reference', event.target.value)}
               className={`flower-input mt-1.5 ${readOnlyFieldClass}`}
               readOnly={isViewMode}
-              required={requiresDownpaymentProof && !isViewMode}
+              required={!isViewMode}
             />
           </label>
 
@@ -2432,7 +2428,7 @@ export default function FlowerOrderFormModal({
               label="Proof of DP"
               previewLabel="Current DP proof"
               value={form.proof_dp_data_url}
-              optional={!requiresDownpaymentProof}
+              optional={false}
               readOnly={isViewMode}
               onEditRequest={() => setIsEditMode(true)}
               onChange={(file) => void handleFileChange('proof_dp_data_url', file)}
