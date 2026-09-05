@@ -727,11 +727,13 @@ export default function FlowerOrdersPage() {
     orderId: string,
     balancePaymentMode: FlowerPaymentMode,
     balancePaymentReference: string,
+    proofBalanceDataUrl: string,
   ) {
     const updated = await markFlowerOrderBalancePaid(
       orderId,
       balancePaymentMode,
       balancePaymentReference,
+      proofBalanceDataUrl,
     );
     await loadData();
     setSelectedOrder(updated);

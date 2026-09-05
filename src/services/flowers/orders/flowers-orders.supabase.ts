@@ -76,6 +76,7 @@ type OrderDbRow = {
   notes: string;
   photo_inspo_data_url: string;
   proof_dp_data_url: string;
+  proof_balance_data_url: string;
   order_form_ss_data_url: string;
   ready_photo_data_url: string;
   created_by_id: string;
@@ -109,6 +110,7 @@ const ORDER_SELECT = `
   notes,
   photo_inspo_data_url,
   proof_dp_data_url,
+  proof_balance_data_url,
   order_form_ss_data_url,
   ready_photo_data_url,
   created_by_id,
@@ -221,6 +223,7 @@ function mapOrderRow(row: OrderDbRow): FlowerOrder {
     notes: row.notes ?? '',
     photo_inspo_data_url: row.photo_inspo_data_url ?? '',
     proof_dp_data_url: row.proof_dp_data_url ?? '',
+    proof_balance_data_url: row.proof_balance_data_url ?? '',
     order_form_ss_data_url: row.order_form_ss_data_url ?? '',
     ready_photo_data_url: row.ready_photo_data_url ?? '',
     created_at: row.created_at,
@@ -591,6 +594,7 @@ export async function createFlowerOrderSupabase(
     notes: input.notes.trim(),
     photo_inspo_data_url: attachments.photo_inspo_data_url,
     proof_dp_data_url: attachments.proof_dp_data_url,
+    proof_balance_data_url: '',
     order_form_ss_data_url: attachments.order_form_ss_data_url,
     ready_photo_data_url: attachments.ready_photo_data_url,
     created_by_id: input.created_by_id,
@@ -695,6 +699,7 @@ export async function updateFlowerOrderSupabase(
       notes: input.notes.trim(),
       photo_inspo_data_url: attachments.photo_inspo_data_url,
       proof_dp_data_url: attachments.proof_dp_data_url,
+      proof_balance_data_url: existing.proof_balance_data_url ?? '',
       order_form_ss_data_url: attachments.order_form_ss_data_url,
       ready_photo_data_url: attachments.ready_photo_data_url || existing.ready_photo_data_url,
       created_by_id: input.created_by_id,
@@ -858,6 +863,7 @@ export async function markFlowerOrderBalancePaidSupabase(
   orderId: string,
   balancePaymentMode: FlowerPaymentMode,
   balancePaymentReference = '',
+  proofBalanceDataUrl = '',
 ): Promise<FlowerOrder> {
   const supabase = await requireAuthenticatedSupabaseClient();
   const existing = await fetchOrderById(orderId);
@@ -885,6 +891,21 @@ export async function markFlowerOrderBalancePaidSupabase(
     throw new Error('Reference # is required for non-cash balance payments.');
   }
 
+  const proofSource = proofBalanceDataUrl.trim() || existing.proof_balance_data_url.trim();
+  if (!proofSource) {
+    throw new Error('Proof of balance payment is required.');
+  }
+
+  const proof_balance_data_url = await resolveOrderAttachmentUrl(
+    proofSource,
+    orderId,
+    'proof-balance',
+  );
+
+  if (!proof_balance_data_url.trim()) {
+    throw new Error('Proof of balance payment is required.');
+  }
+
   const { data, error } = await supabase
     .from('flower_orders')
     .update(
@@ -893,6 +914,7 @@ export async function markFlowerOrderBalancePaidSupabase(
             balance_payment_mode: normalizedMode,
             balance_payment_reference:
               normalizedMode === 'cash' ? '' : balancePaymentReference.trim(),
+            proof_balance_data_url,
           }
         : {
             balance: 0,
@@ -900,6 +922,7 @@ export async function markFlowerOrderBalancePaidSupabase(
             balance_payment_mode: normalizedMode,
             balance_payment_reference:
               normalizedMode === 'cash' ? '' : balancePaymentReference.trim(),
+            proof_balance_data_url,
           },
     )
     .eq('id', orderId)
