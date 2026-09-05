@@ -7,7 +7,11 @@ import type {
   FlowerReportsOptions,
 } from '../../../modules/flowers/shared/types/flower-report';
 import type { FlowerOrderStatus } from '../../../modules/flowers/shared/types/flower-order';
-import { scheduledForToDateKey } from '../../../modules/flowers/shared/utils/flower-format';
+import {
+  getLocalDayBoundsIso,
+  scheduledForToDateKey,
+  toManilaDateKeyFromDate,
+} from '../../../modules/flowers/shared/utils/flower-format';
 import {
   buildFlowerReportFinancialSummary,
   isFlowerReportSalesIncluded,
@@ -43,6 +47,35 @@ type ReportOrderRow = {
     quantity: number;
   }>;
 };
+
+type SupabaseClient = NonNullable<ReturnType<typeof getSupabaseClient>>;
+
+const REPORT_ORDER_SELECT = `
+  id,
+  branch_id,
+  receiver,
+  scheduled_for,
+  status,
+  total_amount,
+  downpayment,
+  balance,
+  balance_paid,
+  payment_mode,
+  balance_payment_mode,
+  created_at,
+  flower_order_items (
+    id,
+    product_id,
+    item_name,
+    quantity
+  )
+`;
+
+/** Statuses that count toward sales totals (matches isFlowerReportSalesIncluded). */
+const REPORT_SALES_STATUSES: FlowerOrderStatus[] = ['completed', 'picked_up', 'delivered'];
+
+/** PostgREST default max rows — page explicitly so older months are not truncated. */
+const REPORT_ORDERS_PAGE_SIZE = 1000;
 
 function requireSupabaseClient() {
   const supabase = getSupabaseClient();
@@ -103,6 +136,87 @@ function buildMonthlySkeleton(months: number): FlowerMonthlySalesSummaryRow[] {
   return rows;
 }
 
+function maxDateKey(left: string, right: string): string {
+  return left >= right ? left : right;
+}
+
+/**
+ * Load every sales-included order in a Manila pickup window, paging past the
+ * silent 1000-row PostgREST cap so monthly totals are not truncated.
+ */
+async function listSalesOrdersForReportsPaged(
+  supabase: SupabaseClient,
+  options: {
+    branchId?: string;
+    scheduledFromIso: string;
+    scheduledToIso: string;
+  },
+): Promise<ReportOrderRow[]> {
+  const rows: ReportOrderRow[] = [];
+  let offset = 0;
+
+  for (;;) {
+    let query = supabase
+      .from('flower_orders')
+      .select(REPORT_ORDER_SELECT)
+      .in('status', REPORT_SALES_STATUSES)
+      .gte('scheduled_for', options.scheduledFromIso)
+      .lte('scheduled_for', options.scheduledToIso)
+      .order('scheduled_for', { ascending: true })
+      .order('id', { ascending: true })
+      .range(offset, offset + REPORT_ORDERS_PAGE_SIZE - 1);
+
+    if (options.branchId) {
+      query = query.eq('branch_id', options.branchId);
+    }
+
+    const { data, error } = await query;
+
+    if (error) {
+      throw error;
+    }
+
+    const page = (data as ReportOrderRow[] | null) ?? [];
+    rows.push(...page);
+
+    if (page.length < REPORT_ORDERS_PAGE_SIZE) {
+      break;
+    }
+
+    offset += REPORT_ORDERS_PAGE_SIZE;
+  }
+
+  return rows;
+}
+
+/** Upcoming pickups for the advance list — not limited to completed sales statuses. */
+async function listAdvanceOrdersForReports(
+  supabase: SupabaseClient,
+  options: {
+    branchId?: string;
+    advanceLimit: number;
+  },
+): Promise<ReportOrderRow[]> {
+  let query = supabase
+    .from('flower_orders')
+    .select(REPORT_ORDER_SELECT)
+    .gt('scheduled_for', new Date().toISOString())
+    .order('scheduled_for', { ascending: true })
+    .limit(options.advanceLimit);
+
+  if (options.branchId) {
+    query = query.eq('branch_id', options.branchId);
+  }
+
+  const { data, error } = await query;
+
+  if (error) {
+    throw error;
+  }
+
+  return (data as ReportOrderRow[] | null) ?? [];
+}
+
 export async function getFlowerReportsSupabase(options: FlowerReportsOptions = {}): Promise<FlowerReportsData> {
   const supabase = await requireAuthenticatedSupabaseClient();
   const dailyDays = options.dailyDays ?? 14;
@@ -110,60 +224,39 @@ export async function getFlowerReportsSupabase(options: FlowerReportsOptions = {
   const advanceLimit = options.advanceLimit ?? 25;
   const reportDate = options.reportDate ?? formatDateKeyUtc(new Date());
 
-  let ordersQuery = supabase
-    .from('flower_orders')
-    .select(
-      `
-      id,
-      branch_id,
-      receiver,
-      scheduled_for,
-      status,
-      total_amount,
-      downpayment,
-      balance,
-      balance_paid,
-      payment_mode,
-      balance_payment_mode,
-      created_at,
-      flower_order_items (
-        id,
-        product_id,
-        item_name,
-        quantity
-      )
-    `,
-    )
-    .order('created_at', { ascending: false });
+  const dailySummary = buildDailySkeleton(dailyDays);
+  const monthlySummary = buildMonthlySkeleton(monthlyMonths);
 
-  if (options.branchId) {
-    ordersQuery = ordersQuery.eq('branch_id', options.branchId);
-  }
+  const oldestMonth = monthlySummary[0]?.month ?? formatMonthKeyUtc(new Date());
+  const startDateKey = `${oldestMonth}-01`;
+  const todayManila = toManilaDateKeyFromDate(new Date());
+  const endDateKey = maxDateKey(todayManila, reportDate);
+  const { startIso: scheduledFromIso } = getLocalDayBoundsIso(startDateKey);
+  const { endIso: scheduledToIso } = getLocalDayBoundsIso(endDateKey);
 
-  const [{ data: ordersData, error: ordersError }, { data: branchesData, error: branchesError }] = await Promise.all([
-    ordersQuery,
+  const [orderRows, advanceOrderRows, branchesResult] = await Promise.all([
+    listSalesOrdersForReportsPaged(supabase, {
+      branchId: options.branchId,
+      scheduledFromIso,
+      scheduledToIso,
+    }),
+    listAdvanceOrdersForReports(supabase, {
+      branchId: options.branchId,
+      advanceLimit,
+    }),
     supabase.from('flower_branches').select('id, name'),
   ]);
 
-  if (ordersError) {
-    throw ordersError;
-  }
-
-  if (branchesError) {
-    throw branchesError;
+  if (branchesResult.error) {
+    throw branchesResult.error;
   }
 
   const branchNameById = new Map<string, string>();
-  for (const branch of (branchesData as BranchRow[] | null) ?? []) {
+  for (const branch of (branchesResult.data as BranchRow[] | null) ?? []) {
     branchNameById.set(branch.id, branch.name);
   }
 
-  const orderRows = (ordersData as ReportOrderRow[] | null) ?? [];
-
-  const dailySummary = buildDailySkeleton(dailyDays);
   const dailyByDate = new Map(dailySummary.map((row) => [row.date, row]));
-
-  const monthlySummary = buildMonthlySkeleton(monthlyMonths);
   const monthlyByMonth = new Map(monthlySummary.map((row) => [row.month, row]));
 
   for (const order of orderRows) {
@@ -187,7 +280,6 @@ export async function getFlowerReportsSupabase(options: FlowerReportsOptions = {
     }
   }
 
-  const now = Date.now();
   const reportOrders = orderRows.map((order) => ({
     branch_id: order.branch_id,
     branch_name: branchNameById.get(order.branch_id) ?? order.branch_id,
@@ -206,21 +298,17 @@ export async function getFlowerReportsSupabase(options: FlowerReportsOptions = {
     })),
   }));
 
-  const advanceOrders = orderRows
-    .filter((order) => order.scheduled_for && new Date(order.scheduled_for).getTime() > now)
-    .sort((a, b) => new Date(a.scheduled_for).getTime() - new Date(b.scheduled_for).getTime())
-    .slice(0, advanceLimit)
-    .map((order) => ({
-      order_id: order.id,
-      branch_id: order.branch_id,
-      branch_name: branchNameById.get(order.branch_id) ?? order.branch_id,
-      receiver: order.receiver,
-      scheduled_for: order.scheduled_for,
-      created_at: order.created_at,
-      status: order.status,
-      total_amount: Number(order.total_amount),
-      item_count: (order.flower_order_items ?? []).length,
-    }));
+  const advanceOrders = advanceOrderRows.map((order) => ({
+    order_id: order.id,
+    branch_id: order.branch_id,
+    branch_name: branchNameById.get(order.branch_id) ?? order.branch_id,
+    receiver: order.receiver,
+    scheduled_for: order.scheduled_for,
+    created_at: order.created_at,
+    status: order.status,
+    total_amount: Number(order.total_amount),
+    item_count: (order.flower_order_items ?? []).length,
+  }));
 
   const [staffExpenses, staffExpensesCash, staffExpensesGcash, supplierCosts, products] =
     await Promise.all([
