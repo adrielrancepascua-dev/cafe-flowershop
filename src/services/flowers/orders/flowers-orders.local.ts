@@ -293,6 +293,7 @@ function buildOrderFromInput(
     notes: input.notes.trim(),
     photo_inspo_data_url: input.photo_inspo_data_url,
     proof_dp_data_url: input.proof_dp_data_url,
+    proof_balance_data_url: existing?.proof_balance_data_url ?? '',
     order_form_ss_data_url: input.order_form_ss_data_url,
     ready_photo_data_url: input.ready_photo_data_url ?? existing?.ready_photo_data_url ?? '',
     created_at: existing?.created_at ?? new Date().toISOString(),
@@ -545,6 +546,7 @@ export async function markFlowerOrderBalancePaidLocal(
   orderId: string,
   balancePaymentMode: FlowerPaymentMode,
   balancePaymentReference = '',
+  proofBalanceDataUrl = '',
 ): Promise<FlowerOrder> {
   const orders = readOrdersFromStorage();
   const index = orders.findIndex((order) => order.id === orderId);
@@ -576,6 +578,11 @@ export async function markFlowerOrderBalancePaidLocal(
   const trimmedReference =
     normalizedMode === 'cash' ? '' : balancePaymentReference.trim();
 
+  const resolvedProof = proofBalanceDataUrl.trim() || current.proof_balance_data_url.trim();
+  if (!resolvedProof) {
+    throw new Error('Proof of balance payment is required.');
+  }
+
   const updated: FlowerOrder = {
     ...current,
     ...(isCorrection
@@ -586,6 +593,7 @@ export async function markFlowerOrderBalancePaidLocal(
         }),
     balance_payment_mode: normalizedMode,
     balance_payment_reference: trimmedReference,
+    proof_balance_data_url: resolvedProof,
     items: current.items.map((item) => ({ ...item })),
   };
 

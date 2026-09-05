@@ -108,6 +108,7 @@ export interface FlowerOrder {
   notes: string;
   photo_inspo_data_url: string;
   proof_dp_data_url: string;
+  proof_balance_data_url: string;
   order_form_ss_data_url: string;
   ready_photo_data_url: string;
   created_at: string;

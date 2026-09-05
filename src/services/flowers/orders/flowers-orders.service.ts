@@ -112,6 +112,7 @@ export async function markFlowerOrderBalancePaid(
   orderId: string,
   balancePaymentMode: FlowerPaymentMode,
   balancePaymentReference = '',
+  proofBalanceDataUrl = '',
 ): Promise<FlowerOrder> {
   return withSupabaseOrders(
     async () => {
@@ -120,10 +121,16 @@ export async function markFlowerOrderBalancePaid(
         orderId,
         balancePaymentMode,
         balancePaymentReference,
+        proofBalanceDataUrl,
       );
     },
     () =>
-      markFlowerOrderBalancePaidLocal(orderId, balancePaymentMode, balancePaymentReference),
+      markFlowerOrderBalancePaidLocal(
+        orderId,
+        balancePaymentMode,
+        balancePaymentReference,
+        proofBalanceDataUrl,
+      ),
   );
 }
 
