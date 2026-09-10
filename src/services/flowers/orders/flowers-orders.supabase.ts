@@ -429,17 +429,13 @@ async function restoreInventoryIfDeductedSupabase(order: FlowerOrder): Promise<v
   }
 }
 
-/** Claim + deduct one finished order immediately (does not wait for 7 PM). */
+/** Claim + deduct one saved order immediately (does not wait for 7 PM or Completed). */
 async function claimAndDeductOrderSupabase(order: FlowerOrder): Promise<boolean> {
   if (INVENTORY_AUTO_DEDUCT_PAUSED) {
     return false;
   }
 
-  if (
-    order.status === 'cancelled' ||
-    order.inventory_deducted ||
-    !FLOWER_ORDER_TERMINAL_STATUSES.includes(order.status)
-  ) {
+  if (order.status === 'cancelled' || order.inventory_deducted) {
     return false;
   }
 
@@ -1028,7 +1024,7 @@ export async function runDueInventoryDeductionsSupabase(): Promise<number> {
     .from('flower_orders')
     .select('id, scheduled_for, branch_id, status, inventory_deducted')
     .eq('inventory_deducted', false)
-    .in('status', FLOWER_ORDER_TERMINAL_STATUSES);
+    .neq('status', 'cancelled');
 
   if (error) {
     throw toServiceError(error, 'Failed to check scheduled inventory deductions.');
@@ -1059,7 +1055,7 @@ export async function forceRunInventoryDeductionsSupabase(): Promise<number> {
     .from('flower_orders')
     .select('id, scheduled_for, branch_id, status, inventory_deducted')
     .eq('inventory_deducted', false)
-    .in('status', FLOWER_ORDER_TERMINAL_STATUSES);
+    .neq('status', 'cancelled');
 
   if (error) {
     throw toServiceError(error, 'Failed to check pending inventory deductions.');

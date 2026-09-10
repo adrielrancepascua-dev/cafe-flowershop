@@ -256,6 +256,29 @@ assertEqual(
   'Run order deduct now must include pending terminal orders before 7 PM',
 );
 
+const notStartedPending = {
+  scheduled_for: '2026-08-20T02:00:00.000Z',
+  branch_id: 'branch-dagupan',
+  status: 'not_started' as const,
+  inventory_deducted: false,
+};
+
+assertEqual(
+  getInventoryDeductionBuckets([notStartedPending], beforeSevenPmUtc, { skipTimeGate: true }),
+  [{ dateKey: '2026-08-20', branchId: 'branch-dagupan' }],
+  'Run order deduct now must include not_started same-day orders (Daily Order POS)',
+);
+
+assertEqual(
+  getInventoryDeductionBuckets(
+    [{ ...notStartedPending, status: 'cancelled' as const }],
+    beforeSevenPmUtc,
+    { skipTimeGate: true },
+  ),
+  [],
+  'cancelled orders must never enter a deduct bucket',
+);
+
 // Root cause of Aug 21 loop: movements written "today" while completeness only
 // looked at the pickup-date window → leftover full qty → claim released → poll
 // re-deducted forever.

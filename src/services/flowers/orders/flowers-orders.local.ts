@@ -201,11 +201,7 @@ async function claimAndDeductOrderLocal(order: FlowerOrder): Promise<boolean> {
     return false;
   }
 
-  if (
-    order.status === 'cancelled' ||
-    order.inventory_deducted ||
-    !FLOWER_ORDER_TERMINAL_STATUSES.includes(order.status)
-  ) {
+  if (order.status === 'cancelled' || order.inventory_deducted) {
     return false;
   }
 
