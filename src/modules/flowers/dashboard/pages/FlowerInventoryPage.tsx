@@ -535,7 +535,7 @@ function StockAdjustControls({
         Stock out
       </button>
       <p className="basis-full text-[11px] text-brand-brown/60">
-        Sales deduct at 7:00 PM. Stock out is for waste or corrections only.
+        Sales deduct when the order is finished (walk-in on save). 7:00 PM catches leftovers. Stock out is for waste or corrections only.
       </p>
     </div>
   ) : (
@@ -585,7 +585,7 @@ function StockAdjustControls({
         </button>
       </div>
       <p className="text-[11px] text-brand-brown/60">
-        Sales deduct at 7:00 PM. Stock out is for waste or corrections only.
+        Sales deduct when the order is finished (walk-in on save). 7:00 PM catches leftovers. Stock out is for waste or corrections only.
       </p>
     </div>
   );
@@ -1729,8 +1729,8 @@ export default function FlowerInventoryPage() {
                 ? 'Flower totals across Dagupan, San Carlos, and Urdaneta. Select a branch to adjust stock.'
                 : 'Miscellaneous totals by category. Select a branch to stock in wrappers or gift items.'
               : stockKindTab === 'flower'
-                ? 'Flower stock grouped by type with colors in order. Completed sales deduct at 7:00 PM — use Stock out only for waste, damage, or corrections.'
-                : 'Stock in or out wrappers and gift items for this branch. Sales deduct at 7:00 PM; Stock out is for waste or corrections only.'
+                ? 'Flower stock grouped by type with colors in order. Finished sales deduct when completed (walk-in on save); 7:00 PM catches leftovers. Use Stock out only for waste, damage, or corrections.'
+                : 'Stock in or out wrappers and gift items for this branch. Finished sales deduct when completed; Stock out is for waste or corrections only.'
             : isAllBranchesView
               ? stockKindTab === 'flower'
                 ? 'Combined flower totals across all branches.'
@@ -2515,7 +2515,7 @@ export default function FlowerInventoryPage() {
         title="Stock out while sales are pending?"
         message={
           stockOutConfirm
-            ? `${stockOutConfirm.productName} still has ${stockOutConfirm.pendingSold} sold stem(s) waiting for the 7:00 PM auto deduct. Stock out is only for waste, damage, or corrections — not for sales. If you continue, 7:00 PM will still deduct the sale and stock can go down twice.`
+            ? `${stockOutConfirm.productName} still has ${stockOutConfirm.pendingSold} sold stem(s) waiting to deduct. Stock out is only for waste, damage, or corrections — not for sales. If you continue, the sale deduct can still run and stock can go down twice.`
             : ''
         }
         confirmLabel="Stock out anyway"

@@ -6,6 +6,7 @@ import type { FlowerBranchOption } from '../../shared/types/flower-inventory';
 import { extractSupabaseErrorMessage } from '../../../../lib/supabase/errors';
 import {
   FLOWER_ORDER_COMPLETE_STATUSES,
+  defaultFlowerClaimModeForScheduledIso,
   formatFlowerClaimModeLabel,
   formatScheduledForFieldLabel,
   getFlowerOrderStatusSequenceForClaimMode,
@@ -821,7 +822,7 @@ function emptyForm(
     receiver: '',
     customer_social: '',
     scheduled_for: pickupIso,
-    claim_mode: 'pickup',
+    claim_mode: defaultFlowerClaimModeForScheduledIso(pickupIso),
     wrapper_color: '',
     greeting_card: '',
     special_instructions: '',

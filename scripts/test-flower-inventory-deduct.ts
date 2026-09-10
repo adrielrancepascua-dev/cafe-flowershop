@@ -9,6 +9,10 @@ import {
 import { effectiveSoldPendingDeductionByProductId } from '../src/modules/flowers/shared/utils/flower-daily-inventory';
 import { formatInventoryMovementActor, inventoryMovementNoteLikePatternForOrderId } from '../src/modules/flowers/shared/utils/flower-format';
 import { getInventoryDeductionBuckets } from '../src/services/flowers/orders/flowers-order-day-close';
+import {
+  defaultFlowerClaimModeForScheduledIso,
+  getInitialFlowerOrderStatus,
+} from '../src/modules/flowers/shared/types/flower-order';
 
 function assertEqual<T>(actual: T, expected: T, message: string): void {
   const actualJson = JSON.stringify(actual);
@@ -372,6 +376,44 @@ assertEqual(
     },
   ],
   'only post-cutoff extra order_deducts are restored',
+);
+
+const nowManilaAfternoon = new Date('2026-09-10T08:00:00.000Z'); // 4:00 PM PH
+
+assertEqual(
+  defaultFlowerClaimModeForScheduledIso('2026-09-10T02:00:00.000Z', nowManilaAfternoon),
+  'walk_in',
+  'today’s calendar date defaults to walk-in',
+);
+
+assertEqual(
+  defaultFlowerClaimModeForScheduledIso('2026-09-11T02:00:00.000Z', nowManilaAfternoon),
+  'pickup',
+  'a future calendar date stays pickup',
+);
+
+assertEqual(
+  getInitialFlowerOrderStatus('walk_in', 2500, 2500, '2026-09-10T02:00:00.000Z', nowManilaAfternoon),
+  'completed',
+  'paid-in-full walk-in starts completed so inventory can deduct on save',
+);
+
+assertEqual(
+  getInitialFlowerOrderStatus('walk_in', 2500, 1000, '2026-09-10T02:00:00.000Z', nowManilaAfternoon),
+  'not_started',
+  'walk-in with remaining balance cannot start completed',
+);
+
+assertEqual(
+  getInitialFlowerOrderStatus('pickup', 2500, 2500, '2026-09-10T02:00:00.000Z', nowManilaAfternoon),
+  'not_started',
+  'pickup orders still start not_started even when paid in full',
+);
+
+assertEqual(
+  getInitialFlowerOrderStatus('walk_in', 2500, 2500, '2026-09-11T02:00:00.000Z', nowManilaAfternoon),
+  'not_started',
+  'future-dated walk-in does not auto-complete',
 );
 
 console.log('inventory deduct harden tests passed');
