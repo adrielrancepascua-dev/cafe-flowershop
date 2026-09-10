@@ -10,7 +10,7 @@ import type {
   ListFlowerOrdersOptions,
   UpdateFlowerOrderInput,
 } from '../../../modules/flowers/shared/types/flower-order';
-import { FLOWER_ORDER_TERMINAL_STATUSES } from '../../../modules/flowers/shared/types/flower-order';
+import { FLOWER_ORDER_TERMINAL_STATUSES, getInitialFlowerOrderStatus } from '../../../modules/flowers/shared/types/flower-order';
 import { getLocalDayBoundsIso, formatInventoryHistoricalReconcileUndoNote, formatInventoryOrderEditDeductNote, formatInventoryOrderEditRestoreNote } from '../../../modules/flowers/shared/utils/flower-format';
 import { normalizeFlowerPaymentMode } from '../../../modules/flowers/shared/utils/flower-payment';
 import type { FlowerPaymentMode } from '../../../modules/flowers/shared/types/flower-order';
@@ -410,6 +410,78 @@ async function deductInventoryForOrder(order: FlowerOrder): Promise<void> {
   }
 }
 
+async function restoreInventoryIfDeductedSupabase(order: FlowerOrder): Promise<void> {
+  if (!order.inventory_deducted) {
+    return;
+  }
+
+  const movements = await listMovementsForOrderDeduct(order);
+  const netDeducted = netOrderDeductedByProduct(movements, order.id);
+
+  for (const [productId, quantity] of netDeducted) {
+    await restoreFlowerInventoryForOrderSupabase({
+      branchId: order.branch_id,
+      productId,
+      quantity,
+      orderId: order.id,
+      receiver: order.receiver,
+    });
+  }
+}
+
+/** Claim + deduct one finished order immediately (does not wait for 7 PM). */
+async function claimAndDeductOrderSupabase(order: FlowerOrder): Promise<boolean> {
+  if (INVENTORY_AUTO_DEDUCT_PAUSED) {
+    return false;
+  }
+
+  if (
+    order.status === 'cancelled' ||
+    order.inventory_deducted ||
+    !FLOWER_ORDER_TERMINAL_STATUSES.includes(order.status)
+  ) {
+    return false;
+  }
+
+  const supabase = await requireAuthenticatedSupabaseClient();
+  const { data: claimed, error: claimError } = await supabase
+    .from('flower_orders')
+    .update({ inventory_deducted: true })
+    .eq('id', order.id)
+    .eq('inventory_deducted', false)
+    .select('id')
+    .maybeSingle();
+
+  if (claimError) {
+    console.warn('Inventory deduct claim failed.', { orderId: order.id, claimError });
+    return false;
+  }
+
+  if (!claimed) {
+    return false;
+  }
+
+  try {
+    await deductInventoryForOrder(order);
+    return true;
+  } catch (error) {
+    try {
+      const movements = await listMovementsForOrderDeduct(order);
+      const alreadyDeducted = netOrderDeductedByProduct(movements, order.id);
+      if (alreadyDeducted.size === 0) {
+        await supabase
+          .from('flower_orders')
+          .update({ inventory_deducted: false })
+          .eq('id', order.id);
+      }
+    } catch (releaseError) {
+      console.warn('Failed to evaluate deduct claim release.', { orderId: order.id, releaseError });
+    }
+    console.warn('Inventory deduction failed for order.', { orderId: order.id, error });
+    return false;
+  }
+}
+
 export async function restoreHistoricalReconcileDeductionsSupabase(): Promise<{
   restoredUnits: number;
   productCount: number;
@@ -461,47 +533,11 @@ async function maybeBatchDeductInventoryForClosedDay(
     return 0;
   }
 
-  const supabase = await requireAuthenticatedSupabaseClient();
   let deducted = 0;
 
   for (const order of pending) {
-    const { data: claimed, error: claimError } = await supabase
-      .from('flower_orders')
-      .update({ inventory_deducted: true })
-      .eq('id', order.id)
-      .eq('inventory_deducted', false)
-      .select('id')
-      .maybeSingle();
-
-    if (claimError) {
-      console.warn('Inventory deduct claim failed.', { orderId: order.id, claimError });
-      continue;
-    }
-
-    if (!claimed) {
-      continue;
-    }
-
-    try {
-      await deductInventoryForOrder(order);
+    if (await claimAndDeductOrderSupabase(order)) {
       deducted += 1;
-    } catch (error) {
-      // Never release the claim if any order-attributed deduct already landed —
-      // releasing caused a every-minute re-deduct loop on the dashboard poll.
-      try {
-        const movements = await listMovementsForOrderDeduct(order);
-        const alreadyDeducted = netOrderDeductedByProduct(movements, order.id);
-        if (alreadyDeducted.size === 0) {
-          await supabase
-            .from('flower_orders')
-            .update({ inventory_deducted: false })
-            .eq('id', order.id);
-        }
-      } catch (releaseError) {
-        console.warn('Failed to evaluate deduct claim release.', { orderId: order.id, releaseError });
-      }
-      // Continue other pending orders — one failure must not abort the whole branch day.
-      console.warn('Inventory deduction failed for order.', { orderId: order.id, error });
     }
   }
 
@@ -578,7 +614,12 @@ export async function createFlowerOrderSupabase(
     receiver: input.receiver.trim(),
     customer_social: input.customer_social.trim(),
     scheduled_for: input.scheduled_for,
-    status: 'not_started' as FlowerOrderStatus,
+    status: getInitialFlowerOrderStatus(
+      input.claim_mode,
+      input.total_amount,
+      input.downpayment,
+      input.scheduled_for,
+    ),
     claim_mode: input.claim_mode,
     wrapper_color: input.wrapper_color.trim(),
     greeting_card: input.greeting_card.trim(),
@@ -632,7 +673,8 @@ export async function createFlowerOrderSupabase(
     throw new Error('Order was created but could not be loaded.');
   }
 
-  return created;
+  await claimAndDeductOrderSupabase(created);
+  return (await fetchOrderById(orderId)) ?? created;
 }
 
 export async function updateFlowerOrderSupabase(
@@ -807,22 +849,7 @@ export async function deleteFlowerOrderSupabase(orderId: string): Promise<void> 
   }
 
   if (existing.inventory_deducted) {
-    const movements = await listFlowerInventoryMovementsSupabase({
-      branchId: existing.branch_id,
-      orderId: existing.id,
-      limit: 5000,
-    });
-    const netDeducted = netOrderDeductedByProduct(movements, existing.id);
-
-    for (const [productId, quantity] of netDeducted) {
-      await restoreFlowerInventoryForOrderSupabase({
-        branchId: existing.branch_id,
-        productId,
-        quantity,
-        orderId: existing.id,
-        receiver: existing.receiver,
-      });
-    }
+    await restoreInventoryIfDeductedSupabase(existing);
   }
 
   const { error } = await supabase.from('flower_orders').delete().eq('id', orderId);
@@ -851,13 +878,29 @@ export async function updateFlowerOrderStatusSupabase(
     throw new Error('Mark the remaining balance as paid before completing this order.');
   }
 
-  const { error } = await supabase.from('flower_orders').update({ status }).eq('id', orderId);
+  if (status === 'cancelled' && existing.inventory_deducted) {
+    await restoreInventoryIfDeductedSupabase(existing);
+    const { error: cancelError } = await supabase
+      .from('flower_orders')
+      .update({ status: 'cancelled', inventory_deducted: false })
+      .eq('id', orderId);
 
-  if (error) {
-    throw error;
+    if (cancelError) {
+      throw cancelError;
+    }
+  } else {
+    const { error } = await supabase.from('flower_orders').update({ status }).eq('id', orderId);
+
+    if (error) {
+      throw error;
+    }
   }
 
   const pickupDateKey = getPickupDateKey(existing.scheduled_for);
+  const updatedForDeduct = await fetchOrderById(orderId);
+  if (updatedForDeduct) {
+    await claimAndDeductOrderSupabase(updatedForDeduct);
+  }
   await maybeBatchDeductInventoryForClosedDay(pickupDateKey, existing.branch_id);
 
   const updated = await fetchOrderById(orderId);

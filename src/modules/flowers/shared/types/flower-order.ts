@@ -30,6 +30,7 @@ export function formatScheduledForFieldLabel(claimMode: FlowerClaimMode): string
 }
 
 import type { FlowerPaymentMode } from '../utils/flower-payment';
+import { scheduledForToDateKey, toManilaDateKeyFromDate } from '../utils/flower-format';
 
 export type { FlowerPaymentMode };
 
@@ -38,6 +39,49 @@ export const FLOWER_ORDER_TERMINAL_STATUSES: FlowerOrderStatus[] = [
   'delivered',
   'completed',
 ];
+
+/** Counter sales today default to walk-in; future calendar dates stay pickup. */
+export function defaultFlowerClaimModeForScheduledIso(
+  scheduledIso: string,
+  now: Date = new Date(),
+): FlowerClaimMode {
+  const scheduledKey = scheduledForToDateKey(scheduledIso);
+  if (scheduledKey && scheduledKey === toManilaDateKeyFromDate(now)) {
+    return 'walk_in';
+  }
+
+  return 'pickup';
+}
+
+/** Walk-in (paid in full, scheduled today) is already handed over — start completed so inventory can deduct on save. */
+export function getInitialFlowerOrderStatus(
+  claimMode: FlowerClaimMode,
+  totalAmount: number,
+  downpayment: number,
+  scheduledIso?: string,
+  now: Date = new Date(),
+): FlowerOrderStatus {
+  if (claimMode !== 'walk_in') {
+    return 'not_started';
+  }
+
+  if (scheduledIso) {
+    const scheduledKey = scheduledForToDateKey(scheduledIso);
+    if (!scheduledKey || scheduledKey !== toManilaDateKeyFromDate(now)) {
+      return 'not_started';
+    }
+  }
+
+  if (!Number.isFinite(totalAmount) || totalAmount <= 0 || !Number.isFinite(downpayment)) {
+    return 'not_started';
+  }
+
+  if (downpayment < totalAmount) {
+    return 'not_started';
+  }
+
+  return 'completed';
+}
 
 /** Left-to-right status picker order in the orders UI (claim-mode aware). */
 export function getFlowerOrderStatusSequenceForClaimMode(

@@ -393,9 +393,9 @@ export default function FlowerDailyInventoryPage() {
                 {worksheet.submitted.submitted_by_name} · {formatSubmittedAt(worksheet.submitted.submitted_at)}
               </p>
               <p className="mt-2 text-sm text-brand-brown/75">
-                Expected already subtracts today’s completed sales even if 7:00 PM deduct has not run. Stock is not
+                Expected already subtracts today’s completed sales even if deduct has not landed yet. Stock is not
                 changed automatically — use Inventory only for waste, damage, or confirmed corrections (never for
-                sales; sales deduct at 7:00 PM).
+                sales; sales deduct when the order is finished).
               </p>
               <div className="mt-3 flex flex-wrap gap-2">
                 {isEditing ? (

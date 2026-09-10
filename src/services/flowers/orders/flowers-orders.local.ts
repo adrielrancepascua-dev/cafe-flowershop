@@ -9,7 +9,7 @@ import type {
   ListFlowerOrdersOptions,
   UpdateFlowerOrderInput,
 } from '../../../modules/flowers/shared/types/flower-order';
-import { FLOWER_ORDER_TERMINAL_STATUSES } from '../../../modules/flowers/shared/types/flower-order';
+import { FLOWER_ORDER_TERMINAL_STATUSES, getInitialFlowerOrderStatus } from '../../../modules/flowers/shared/types/flower-order';
 import { normalizeFlowerPaymentMode } from '../../../modules/flowers/shared/utils/flower-payment';
 import { buildOrderId } from '../../orders/order-id';
 import {
@@ -127,6 +127,127 @@ function getPickupDateKeyFromOrder(iso: string): string {
   return getPickupDateKey(iso);
 }
 
+async function restoreInventoryIfDeductedLocal(order: FlowerOrder): Promise<void> {
+  if (!order.inventory_deducted) {
+    return;
+  }
+
+  const movements = await listFlowerInventoryMovementsLocal({
+    branchId: order.branch_id,
+    orderId: order.id,
+    limit: 5000,
+  });
+  const netDeducted = netOrderDeductedByProduct(movements, order.id);
+
+  for (const [productId, quantity] of netDeducted) {
+    await restoreFlowerInventoryForOrderLocal({
+      branchId: order.branch_id,
+      productId,
+      quantity,
+      orderId: order.id,
+      receiver: order.receiver,
+    });
+  }
+}
+
+async function deductInventoryForOrderLocal(order: FlowerOrder): Promise<void> {
+  await validateFlowerOrderStockLocal(order.branch_id, order.items);
+
+  const latestMovements = await listFlowerInventoryMovementsLocal({
+    branchId: order.branch_id,
+    orderId: order.id,
+    limit: 5000,
+  });
+  const planned = planOrderInventoryDeduction({
+    orderId: order.id,
+    branchId: order.branch_id,
+    items: order.items,
+    movements: latestMovements,
+  });
+
+  if (planned.length === 0) {
+    return;
+  }
+
+  for (const item of planned) {
+    await deductFlowerInventoryForOrderLocal({
+      branchId: order.branch_id,
+      productId: item.product_id,
+      quantity: item.quantity,
+      orderId: order.id,
+      receiver: order.receiver,
+    });
+  }
+
+  const afterMovements = await listFlowerInventoryMovementsLocal({
+    branchId: order.branch_id,
+    orderId: order.id,
+    limit: 5000,
+  });
+
+  if (
+    !hasCompleteOrderDeduction({
+      orderId: order.id,
+      items: order.items,
+      movements: afterMovements,
+    })
+  ) {
+    throw new Error(`Inventory deduction incomplete for order ${order.id}.`);
+  }
+}
+
+async function claimAndDeductOrderLocal(order: FlowerOrder): Promise<boolean> {
+  if (INVENTORY_AUTO_DEDUCT_PAUSED) {
+    return false;
+  }
+
+  if (
+    order.status === 'cancelled' ||
+    order.inventory_deducted ||
+    !FLOWER_ORDER_TERMINAL_STATUSES.includes(order.status)
+  ) {
+    return false;
+  }
+
+  const freshOrders = readOrdersFromStorage();
+  const index = freshOrders.findIndex((entry) => entry.id === order.id);
+
+  if (index === -1 || freshOrders[index].inventory_deducted) {
+    return false;
+  }
+
+  freshOrders[index] = {
+    ...freshOrders[index],
+    inventory_deducted: true,
+  };
+  writeOrdersToStorage(freshOrders);
+
+  try {
+    await deductInventoryForOrderLocal(order);
+    return true;
+  } catch (error) {
+    const afterFailMovements = await listFlowerInventoryMovementsLocal({
+      branchId: order.branch_id,
+      orderId: order.id,
+      limit: 5000,
+    });
+    const alreadyDeducted = netOrderDeductedByProduct(afterFailMovements, order.id);
+    if (alreadyDeducted.size === 0) {
+      const rollbackOrders = readOrdersFromStorage();
+      const rollbackIndex = rollbackOrders.findIndex((entry) => entry.id === order.id);
+      if (rollbackIndex !== -1) {
+        rollbackOrders[rollbackIndex] = {
+          ...rollbackOrders[rollbackIndex],
+          inventory_deducted: false,
+        };
+        writeOrdersToStorage(rollbackOrders);
+      }
+    }
+    console.warn('Inventory deduction failed for order.', { orderId: order.id, error });
+    return false;
+  }
+}
+
 async function maybeBatchDeductInventoryForClosedDay(
   dateKey: string,
   branchId: string,
@@ -148,83 +269,7 @@ async function maybeBatchDeductInventoryForClosedDay(
   const pending = getOrdersPendingInventoryDeduction(dayOrders, dateKey, branchId);
 
   for (const order of pending) {
-    const freshOrders = readOrdersFromStorage();
-    const index = freshOrders.findIndex((entry) => entry.id === order.id);
-
-    if (index === -1 || freshOrders[index].inventory_deducted) {
-      continue;
-    }
-
-    freshOrders[index] = {
-      ...freshOrders[index],
-      inventory_deducted: true,
-    };
-    writeOrdersToStorage(freshOrders);
-
-    try {
-      await validateFlowerOrderStockLocal(order.branch_id, order.items);
-
-      const latestMovements = await listFlowerInventoryMovementsLocal({
-        branchId: order.branch_id,
-        orderId: order.id,
-        limit: 5000,
-      });
-      const planned = planOrderInventoryDeduction({
-        orderId: order.id,
-        branchId: order.branch_id,
-        items: order.items,
-        movements: latestMovements,
-      });
-
-      if (planned.length === 0) {
-        continue;
-      }
-
-      for (const item of planned) {
-        await deductFlowerInventoryForOrderLocal({
-          branchId: order.branch_id,
-          productId: item.product_id,
-          quantity: item.quantity,
-          orderId: order.id,
-          receiver: order.receiver,
-        });
-      }
-
-      const afterMovements = await listFlowerInventoryMovementsLocal({
-        branchId: order.branch_id,
-        orderId: order.id,
-        limit: 5000,
-      });
-
-      if (
-        !hasCompleteOrderDeduction({
-          orderId: order.id,
-          items: order.items,
-          movements: afterMovements,
-        })
-      ) {
-        throw new Error(`Inventory deduction incomplete for order ${order.id}.`);
-      }
-    } catch (error) {
-      const afterFailMovements = await listFlowerInventoryMovementsLocal({
-        branchId: order.branch_id,
-        orderId: order.id,
-        limit: 5000,
-      });
-      const alreadyDeducted = netOrderDeductedByProduct(afterFailMovements, order.id);
-      if (alreadyDeducted.size === 0) {
-        const rollbackOrders = readOrdersFromStorage();
-        const rollbackIndex = rollbackOrders.findIndex((entry) => entry.id === order.id);
-        if (rollbackIndex !== -1) {
-          rollbackOrders[rollbackIndex] = {
-            ...rollbackOrders[rollbackIndex],
-            inventory_deducted: false,
-          };
-          writeOrdersToStorage(rollbackOrders);
-        }
-      }
-      console.warn('Inventory deduction failed for order.', { orderId: order.id, error });
-    }
+    await claimAndDeductOrderLocal(order);
   }
 }
 
@@ -282,7 +327,12 @@ function buildOrderFromInput(
     receiver: input.receiver.trim(),
     customer_social: input.customer_social.trim(),
     scheduled_for: input.scheduled_for,
-    status: existing?.status ?? 'not_started',
+    status: existing?.status ?? getInitialFlowerOrderStatus(
+      input.claim_mode,
+      input.total_amount,
+      input.downpayment,
+      input.scheduled_for,
+    ),
     claim_mode: input.claim_mode,
     wrapper_color: input.wrapper_color.trim(),
     greeting_card: input.greeting_card.trim(),
@@ -326,7 +376,8 @@ export async function createFlowerOrderLocal(input: CreateFlowerOrderInput): Pro
   const orders = readOrdersFromStorage();
   writeOrdersToStorage([created, ...orders]);
 
-  return created;
+  await claimAndDeductOrderLocal(created);
+  return readOrdersFromStorage().find((entry) => entry.id === created.id) ?? created;
 }
 
 export async function updateFlowerOrderLocal(input: UpdateFlowerOrderInput): Promise<FlowerOrder> {
@@ -486,22 +537,7 @@ export async function deleteFlowerOrderLocal(orderId: string): Promise<void> {
   const existing = orders[index];
 
   if (existing.inventory_deducted) {
-    const movements = await listFlowerInventoryMovementsLocal({
-      branchId: existing.branch_id,
-      orderId: existing.id,
-      limit: 5000,
-    });
-    const netDeducted = netOrderDeductedByProduct(movements, existing.id);
-
-    for (const [productId, quantity] of netDeducted) {
-      await restoreFlowerInventoryForOrderLocal({
-        branchId: existing.branch_id,
-        productId,
-        quantity,
-        orderId: existing.id,
-        receiver: existing.receiver,
-      });
-    }
+    await restoreInventoryIfDeductedLocal(existing);
   }
 
   orders.splice(index, 1);
@@ -529,14 +565,38 @@ export async function updateFlowerOrderStatusLocal(
     throw new Error('Mark the remaining balance as paid before completing this order.');
   }
 
-  const order: FlowerOrder = {
-    ...current,
-    status,
-    items: current.items.map((item) => ({ ...item })),
-  };
+  if (status === 'cancelled' && current.inventory_deducted) {
+    await restoreInventoryIfDeductedLocal(current);
+    const afterRestore = readOrdersFromStorage();
+    const restoreIndex = afterRestore.findIndex((entry) => entry.id === orderId);
+    if (restoreIndex === -1) {
+      throw new Error('Order not found.');
+    }
+    afterRestore[restoreIndex] = {
+      ...afterRestore[restoreIndex],
+      status: 'cancelled',
+      inventory_deducted: false,
+      items: afterRestore[restoreIndex].items.map((item) => ({ ...item })),
+    };
+    writeOrdersToStorage(afterRestore);
+  } else {
+    const ordersAfter = readOrdersFromStorage();
+    const nextIndex = ordersAfter.findIndex((entry) => entry.id === orderId);
+    if (nextIndex === -1) {
+      throw new Error('Order not found.');
+    }
+    ordersAfter[nextIndex] = {
+      ...ordersAfter[nextIndex],
+      status,
+      items: ordersAfter[nextIndex].items.map((item) => ({ ...item })),
+    };
+    writeOrdersToStorage(ordersAfter);
+  }
 
-  orders[index] = order;
-  writeOrdersToStorage(orders);
+  const forDeduct = readOrdersFromStorage().find((entry) => entry.id === orderId);
+  if (forDeduct) {
+    await claimAndDeductOrderLocal(forDeduct);
+  }
 
   await maybeBatchDeductInventoryForClosedDay(
     getPickupDateKeyFromOrder(current.scheduled_for),
@@ -544,7 +604,10 @@ export async function updateFlowerOrderStatusLocal(
   );
 
   const refreshed = readOrdersFromStorage().find((entry) => entry.id === orderId);
-  return refreshed ?? order;
+  if (!refreshed) {
+    throw new Error('Order not found.');
+  }
+  return refreshed;
 }
 
 export async function markFlowerOrderBalancePaidLocal(
