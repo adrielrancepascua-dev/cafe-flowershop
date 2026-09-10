@@ -2,7 +2,7 @@ import type { FlowerOrder } from '../../../modules/flowers/shared/types/flower-o
 import { FLOWER_ORDER_TERMINAL_STATUSES } from '../../../modules/flowers/shared/types/flower-order';
 import { getLocalDayBoundsIso, scheduledForToDateKey, toManilaDateKeyFromDate } from '../../../modules/flowers/shared/utils/flower-format';
 
-/** Terminal orders deduct at 7:00 PM Manila on their pickup date. */
+/** Saved orders deduct at 7:00 PM Manila on their pickup date (force deduct can run earlier). */
 export const INVENTORY_DEDUCTION_HOUR_MANILA = 19;
 
 export function getPickupDateKey(iso: string): string {
@@ -73,7 +73,6 @@ export function getOrdersPendingInventoryDeduction(
       getPickupDateKey(order.scheduled_for) === dateKey &&
       order.status !== 'cancelled' &&
       (!branchId || order.branch_id === branchId) &&
-      FLOWER_ORDER_TERMINAL_STATUSES.includes(order.status) &&
       !order.inventory_deducted,
   );
 }
@@ -106,10 +105,6 @@ export function getInventoryDeductionBuckets(
 
   for (const order of orders) {
     if (order.status === 'cancelled' || order.inventory_deducted) {
-      continue;
-    }
-
-    if (!FLOWER_ORDER_TERMINAL_STATUSES.includes(order.status)) {
       continue;
     }
 

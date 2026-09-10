@@ -1,5 +1,5 @@
 import type { FlowerInventoryStockRow } from '../types/flower-inventory';
-import { FLOWER_ORDER_TERMINAL_STATUSES, type FlowerOrder } from '../types/flower-order';
+import type { FlowerOrder } from '../types/flower-order';
 import type {
   FlowerDailyInventoryBranchSummary,
   FlowerDailyInventoryCount,
@@ -48,10 +48,6 @@ export function soldPendingDeductionByProductId(
       continue;
     }
 
-    if (!FLOWER_ORDER_TERMINAL_STATUSES.includes(order.status)) {
-      continue;
-    }
-
     for (const item of order.items ?? []) {
       if (!item.product_id) {
         continue;
@@ -85,8 +81,7 @@ export function effectiveSoldPendingDeductionByProductId(
     if (
       order.branch_id !== branchId ||
       order.status === 'cancelled' ||
-      !order.inventory_deducted ||
-      !FLOWER_ORDER_TERMINAL_STATUSES.includes(order.status)
+      !order.inventory_deducted
     ) {
       continue;
     }
