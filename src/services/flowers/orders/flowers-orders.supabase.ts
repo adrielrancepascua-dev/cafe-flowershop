@@ -11,7 +11,7 @@ import type {
   UpdateFlowerOrderInput,
 } from '../../../modules/flowers/shared/types/flower-order';
 import { FLOWER_ORDER_TERMINAL_STATUSES, getInitialFlowerOrderStatus } from '../../../modules/flowers/shared/types/flower-order';
-import { getLocalDayBoundsIso, formatInventoryHistoricalReconcileUndoNote, formatInventoryOrderEditDeductNote, formatInventoryOrderEditRestoreNote } from '../../../modules/flowers/shared/utils/flower-format';
+import { getLocalDayBoundsIso, formatInventoryHistoricalReconcileUndoNote, formatInventoryOrderEditDeductNote, formatInventoryOrderEditRestoreNote, formatInventoryOverDeductRestoreNote } from '../../../modules/flowers/shared/utils/flower-format';
 import { normalizeFlowerPaymentMode } from '../../../modules/flowers/shared/utils/flower-payment';
 import type { FlowerPaymentMode } from '../../../modules/flowers/shared/types/flower-order';
 import {
@@ -23,6 +23,7 @@ import {
   validateFlowerOrderStockSupabase,
 } from '../inventory/flowers-inventory.supabase';
 import {
+  extraOrderDeductionByProduct,
   hasCompleteOrderDeduction,
   HISTORICAL_RECONCILE_BUG_STARTED_AT,
   INVENTORY_AUTO_DEDUCT_PAUSED,
@@ -370,7 +371,7 @@ async function listMovementsForOrderDeduct(order: FlowerOrder) {
   });
 }
 
-async function deductInventoryForOrder(order: FlowerOrder): Promise<void> {
+async function deductInventoryForOrder(order: FlowerOrder): Promise<{ wrote: boolean }> {
   await validateFlowerOrderStockSupabase(order.branch_id, order.items);
 
   const movements = await listMovementsForOrderDeduct(order);
@@ -384,7 +385,7 @@ async function deductInventoryForOrder(order: FlowerOrder): Promise<void> {
 
   // Already fully covered by prior order_deduct rows — keep the claim, do nothing.
   if (planned.length === 0) {
-    return;
+    return { wrote: false };
   }
 
   for (const item of planned) {
@@ -408,6 +409,8 @@ async function deductInventoryForOrder(order: FlowerOrder): Promise<void> {
   ) {
     throw new Error(`Inventory deduction incomplete for order ${order.id}.`);
   }
+
+  return { wrote: true };
 }
 
 async function restoreInventoryIfDeductedSupabase(order: FlowerOrder): Promise<void> {
@@ -496,6 +499,59 @@ export async function restoreWronglyDeductedOpenOrdersSupabase(): Promise<{
   return { restoredOrders, restoredUnits };
 }
 
+/**
+ * Finished orders deducted 2×/3×: put back only the surplus stems.
+ * Leaves the legitimate first deduct in place and keeps inventory_deducted true.
+ */
+export async function restoreOverDeductedOrderInventorySupabase(): Promise<{
+  restoredOrders: number;
+  restoredUnits: number;
+}> {
+  const supabase = await requireAuthenticatedSupabaseClient();
+  const { data, error } = await supabase
+    .from('flower_orders')
+    .select(ORDER_SELECT)
+    .in('status', FLOWER_ORDER_TERMINAL_STATUSES);
+
+  if (error) {
+    throw toServiceError(error, 'Failed to load finished orders for over-deduct restore.');
+  }
+
+  const orders = ((data as OrderDbRow[] | null) ?? []).map(mapOrderRow);
+  let restoredOrders = 0;
+  let restoredUnits = 0;
+
+  for (const order of orders) {
+    const movements = await listMovementsForOrderDeduct(order);
+    const extras = extraOrderDeductionByProduct({
+      orderId: order.id,
+      items: order.items,
+      movements,
+    });
+    const units = [...extras.values()].reduce((sum, quantity) => sum + quantity, 0);
+    if (units <= 0) {
+      continue;
+    }
+
+    const note = formatInventoryOverDeductRestoreNote(order.id, order.receiver);
+    for (const [productId, quantity] of extras) {
+      await restoreFlowerInventoryForOrderSupabase({
+        branchId: order.branch_id,
+        productId,
+        quantity,
+        orderId: order.id,
+        receiver: order.receiver,
+        note,
+      });
+    }
+
+    restoredOrders += 1;
+    restoredUnits += units;
+  }
+
+  return { restoredOrders, restoredUnits };
+}
+
 /** Claim + deduct one finished order immediately (does not wait for 7 PM). */
 async function claimAndDeductOrderSupabase(order: FlowerOrder): Promise<boolean> {
   if (INVENTORY_AUTO_DEDUCT_PAUSED) {
@@ -511,6 +567,25 @@ async function claimAndDeductOrderSupabase(order: FlowerOrder): Promise<boolean>
   }
 
   const supabase = await requireAuthenticatedSupabaseClient();
+
+  // Heal stale false flags: movements already cover the order — set claim, do not re-deduct.
+  try {
+    const existingMovements = await listMovementsForOrderDeduct(order);
+    if (
+      hasCompleteOrderDeduction({
+        orderId: order.id,
+        items: order.items,
+        movements: existingMovements,
+      }) &&
+      netOrderDeductedByProduct(existingMovements, order.id).size > 0
+    ) {
+      await supabase.from('flower_orders').update({ inventory_deducted: true }).eq('id', order.id);
+      return false;
+    }
+  } catch (healError) {
+    console.warn('Pre-claim deduct completeness check failed.', { orderId: order.id, healError });
+  }
+
   const { data: claimed, error: claimError } = await supabase
     .from('flower_orders')
     .update({ inventory_deducted: true })
@@ -528,21 +603,27 @@ async function claimAndDeductOrderSupabase(order: FlowerOrder): Promise<boolean>
     return false;
   }
 
+  let wrote = false;
   try {
-    await deductInventoryForOrder(order);
+    const result = await deductInventoryForOrder(order);
+    wrote = result.wrote;
     return true;
   } catch (error) {
-    try {
-      const movements = await listMovementsForOrderDeduct(order);
-      const alreadyDeducted = netOrderDeductedByProduct(movements, order.id);
-      if (alreadyDeducted.size === 0) {
-        await supabase
-          .from('flower_orders')
-          .update({ inventory_deducted: false })
-          .eq('id', order.id);
+    // Never release after a successful write, or when any order_deduct already exists.
+    // Releasing here is what lets the 60s poll / force button deduct the full order again.
+    if (!wrote) {
+      try {
+        const movements = await listMovementsForOrderDeduct(order);
+        const alreadyDeducted = netOrderDeductedByProduct(movements, order.id);
+        if (alreadyDeducted.size === 0) {
+          await supabase
+            .from('flower_orders')
+            .update({ inventory_deducted: false })
+            .eq('id', order.id);
+        }
+      } catch (releaseError) {
+        console.warn('Failed to evaluate deduct claim release.', { orderId: order.id, releaseError });
       }
-    } catch (releaseError) {
-      console.warn('Failed to evaluate deduct claim release.', { orderId: order.id, releaseError });
     }
     console.warn('Inventory deduction failed for order.', { orderId: order.id, error });
     return false;
@@ -1095,6 +1176,15 @@ export async function runDueInventoryDeductionsSupabase(): Promise<number> {
     console.warn('Open-order inventory restore failed.', restoreError);
   }
 
+  try {
+    const over = await restoreOverDeductedOrderInventorySupabase();
+    if (over.restoredOrders > 0) {
+      console.info('Restored over-deducted finished order inventory.', over);
+    }
+  } catch (overError) {
+    console.warn('Over-deduct inventory restore failed.', overError);
+  }
+
   if (INVENTORY_AUTO_DEDUCT_PAUSED) {
     return 0;
   }
@@ -1133,6 +1223,15 @@ export async function forceRunInventoryDeductionsSupabase(): Promise<number> {
     }
   } catch (restoreError) {
     console.warn('Open-order inventory restore failed.', restoreError);
+  }
+
+  try {
+    const over = await restoreOverDeductedOrderInventorySupabase();
+    if (over.restoredOrders > 0) {
+      console.info('Restored over-deducted finished order inventory.', over);
+    }
+  } catch (overError) {
+    console.warn('Over-deduct inventory restore failed.', overError);
   }
 
   if (INVENTORY_AUTO_DEDUCT_PAUSED) {

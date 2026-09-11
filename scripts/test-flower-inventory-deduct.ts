@@ -1,5 +1,6 @@
 import {
   alreadyDeductedQuantityForOrder,
+  extraOrderDeductionByProduct,
   hasCompleteOrderDeduction,
   missingOrderDeductionByProduct,
   netOrderDeductedByProduct,
@@ -364,6 +365,30 @@ assertEqual(
   }),
   true,
   'over-deducted orders must still count as complete so claim stays set',
+);
+
+assertEqual(
+  Object.fromEntries(
+    extraOrderDeductionByProduct({
+      orderId: loopOrderId,
+      items: loopItems,
+      movements: [...movementsWrittenNextDay, ...movementsWrittenNextDay],
+    }),
+  ),
+  Object.fromEntries(loopItems.map((item) => [item.product_id, item.quantity])),
+  'double deduct leaves exactly one ordered qty as extra to restore',
+);
+
+assertEqual(
+  Object.fromEntries(
+    extraOrderDeductionByProduct({
+      orderId: loopOrderId,
+      items: loopItems,
+      movements: movementsWrittenNextDay,
+    }),
+  ),
+  {},
+  'exact single deduct has no extra to restore',
 );
 
 assertEqual(

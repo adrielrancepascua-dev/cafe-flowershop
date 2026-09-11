@@ -195,6 +195,29 @@ export function hasCompleteOrderDeduction(input: {
   return remainingOrderDeductionByProduct(input).size === 0;
 }
 
+/**
+ * Stems deducted beyond the order line qty (double/triple deduct leftovers).
+ * Products with movements but no line item count as fully extra.
+ */
+export function extraOrderDeductionByProduct(input: {
+  orderId: string;
+  items: OrderDeductLine[];
+  movements: DeductibleInventoryMovement[];
+}): Map<string, number> {
+  const ordered = pendingQuantityByProduct(input.items);
+  const netDeducted = netOrderDeductedByProduct(input.movements, input.orderId);
+  const extra = new Map<string, number>();
+
+  for (const [productId, deducted] of netDeducted) {
+    const surplus = deducted - (ordered.get(productId) ?? 0);
+    if (surplus > 0) {
+      extra.set(productId, surplus);
+    }
+  }
+
+  return extra;
+}
+
 /** PR #13 started rewriting historical order_deducts around this time (UTC). */
 export const HISTORICAL_RECONCILE_BUG_STARTED_AT = '2026-08-19T03:30:00.000Z';
 /** 7:00 PM Manila on Aug 19 — stop undoing after legitimate day-close deducts begin. */

@@ -265,8 +265,17 @@ export function formatInventoryHistoricalReconcileUndoNote(orderId: string, rece
   return `Order ${orderId} · ${trimmedReceiver} · historical reconcile undo`;
 }
 
+export function formatInventoryOverDeductRestoreNote(orderId: string, receiver: string): string {
+  const trimmedReceiver = receiver.trim() || 'Unknown';
+  return `Order ${orderId} · ${trimmedReceiver} · over-deduct restore`;
+}
+
 export function isHistoricalReconcileUndoNote(note: string): boolean {
   return /historical reconcile undo/i.test(note);
+}
+
+export function isOverDeductRestoreNote(note: string): boolean {
+  return /over-deduct restore/i.test(note);
 }
 
 export function resolveInventoryMovementReceiver(
