@@ -431,7 +431,8 @@ async function restoreInventoryIfDeductedSupabase(order: FlowerOrder): Promise<v
 
 /**
  * PR #25 wrongly deducted Not started / Ready drafts at 7 PM / force deduct.
- * Put those stems back and clear the flag so only finished orders stay deducted.
+ * Put remaining order_deduct stems back for every open order (even if the
+ * inventory_deducted flag was already cleared without a stock restore).
  */
 export async function restoreWronglyDeductedOpenOrdersSupabase(): Promise<{
   restoredOrders: number;
@@ -441,11 +442,10 @@ export async function restoreWronglyDeductedOpenOrdersSupabase(): Promise<{
   const { data, error } = await supabase
     .from('flower_orders')
     .select(ORDER_SELECT)
-    .eq('inventory_deducted', true)
     .in('status', ['not_started', 'ready']);
 
   if (error) {
-    throw toServiceError(error, 'Failed to load wrongly deducted open orders.');
+    throw toServiceError(error, 'Failed to load open orders for inventory restore.');
   }
 
   const orders = ((data as OrderDbRow[] | null) ?? []).map(mapOrderRow);
@@ -457,24 +457,40 @@ export async function restoreWronglyDeductedOpenOrdersSupabase(): Promise<{
     const netDeducted = netOrderDeductedByProduct(movements, order.id);
     const units = [...netDeducted.values()].reduce((sum, quantity) => sum + quantity, 0);
 
-    await restoreInventoryIfDeductedSupabase(order);
-
-    const { error: clearError } = await supabase
-      .from('flower_orders')
-      .update({ inventory_deducted: false })
-      .eq('id', order.id)
-      .eq('inventory_deducted', true);
-
-    if (clearError) {
-      console.warn('Failed to clear inventory_deducted after open-order restore.', {
-        orderId: order.id,
-        clearError,
-      });
+    if (units <= 0 && !order.inventory_deducted) {
       continue;
     }
 
-    restoredOrders += 1;
-    restoredUnits += units;
+    for (const [productId, quantity] of netDeducted) {
+      await restoreFlowerInventoryForOrderSupabase({
+        branchId: order.branch_id,
+        productId,
+        quantity,
+        orderId: order.id,
+        receiver: order.receiver,
+      });
+    }
+
+    if (order.inventory_deducted) {
+      const { error: clearError } = await supabase
+        .from('flower_orders')
+        .update({ inventory_deducted: false })
+        .eq('id', order.id)
+        .eq('inventory_deducted', true);
+
+      if (clearError) {
+        console.warn('Failed to clear inventory_deducted after open-order restore.', {
+          orderId: order.id,
+          clearError,
+        });
+        continue;
+      }
+    }
+
+    if (units > 0) {
+      restoredOrders += 1;
+      restoredUnits += units;
+    }
   }
 
   return { restoredOrders, restoredUnits };

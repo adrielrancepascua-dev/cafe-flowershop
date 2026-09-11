@@ -719,11 +719,7 @@ export async function restoreWronglyDeductedOpenOrdersLocal(): Promise<{
   let restoredUnits = 0;
 
   for (const order of orders) {
-    if (
-      !order.inventory_deducted ||
-      order.status === 'cancelled' ||
-      FLOWER_ORDER_TERMINAL_STATUSES.includes(order.status)
-    ) {
+    if (order.status === 'cancelled' || FLOWER_ORDER_TERMINAL_STATUSES.includes(order.status)) {
       continue;
     }
 
@@ -735,7 +731,19 @@ export async function restoreWronglyDeductedOpenOrdersLocal(): Promise<{
     const netDeducted = netOrderDeductedByProduct(movements, order.id);
     const units = [...netDeducted.values()].reduce((sum, quantity) => sum + quantity, 0);
 
-    await restoreInventoryIfDeductedLocal(order);
+    if (units <= 0 && !order.inventory_deducted) {
+      continue;
+    }
+
+    for (const [productId, quantity] of netDeducted) {
+      await restoreFlowerInventoryForOrderLocal({
+        branchId: order.branch_id,
+        productId,
+        quantity,
+        orderId: order.id,
+        receiver: order.receiver,
+      });
+    }
 
     const fresh = readOrdersFromStorage();
     const index = fresh.findIndex((entry) => entry.id === order.id);
@@ -750,8 +758,10 @@ export async function restoreWronglyDeductedOpenOrdersLocal(): Promise<{
     };
     writeOrdersToStorage(fresh);
 
-    restoredOrders += 1;
-    restoredUnits += units;
+    if (units > 0) {
+      restoredOrders += 1;
+      restoredUnits += units;
+    }
   }
 
   return { restoredOrders, restoredUnits };
