@@ -20,6 +20,7 @@ import {
   validateFlowerOrderStockLocal,
 } from '../inventory/flowers-inventory.local';
 import {
+  extraOrderDeductionByProduct,
   hasCompleteOrderDeduction,
   HISTORICAL_RECONCILE_BUG_STARTED_AT,
   INVENTORY_AUTO_DEDUCT_PAUSED,
@@ -41,6 +42,7 @@ import {
   formatInventoryHistoricalReconcileUndoNote,
   formatInventoryOrderEditDeductNote,
   formatInventoryOrderEditRestoreNote,
+  formatInventoryOverDeductRestoreNote,
 } from '../../../modules/flowers/shared/utils/flower-format';
 import { validateOrderInspoPhotoWithProducts } from './flowers-order-validation';
 import { listFlowerStemsLocal } from '../products/flowers-products.local';
@@ -150,7 +152,7 @@ async function restoreInventoryIfDeductedLocal(order: FlowerOrder): Promise<void
   }
 }
 
-async function deductInventoryForOrderLocal(order: FlowerOrder): Promise<void> {
+async function deductInventoryForOrderLocal(order: FlowerOrder): Promise<{ wrote: boolean }> {
   await validateFlowerOrderStockLocal(order.branch_id, order.items);
 
   const latestMovements = await listFlowerInventoryMovementsLocal({
@@ -166,7 +168,7 @@ async function deductInventoryForOrderLocal(order: FlowerOrder): Promise<void> {
   });
 
   if (planned.length === 0) {
-    return;
+    return { wrote: false };
   }
 
   for (const item of planned) {
@@ -194,6 +196,8 @@ async function deductInventoryForOrderLocal(order: FlowerOrder): Promise<void> {
   ) {
     throw new Error(`Inventory deduction incomplete for order ${order.id}.`);
   }
+
+  return { wrote: true };
 }
 
 async function claimAndDeductOrderLocal(order: FlowerOrder): Promise<boolean> {
@@ -216,31 +220,57 @@ async function claimAndDeductOrderLocal(order: FlowerOrder): Promise<boolean> {
     return false;
   }
 
+  // Heal stale false flags: movements already cover the order — set claim, do not re-deduct.
+  const existingMovements = await listFlowerInventoryMovementsLocal({
+    branchId: order.branch_id,
+    orderId: order.id,
+    limit: 5000,
+  });
+  if (
+    hasCompleteOrderDeduction({
+      orderId: order.id,
+      items: order.items,
+      movements: existingMovements,
+    }) &&
+    netOrderDeductedByProduct(existingMovements, order.id).size > 0
+  ) {
+    freshOrders[index] = {
+      ...freshOrders[index],
+      inventory_deducted: true,
+    };
+    writeOrdersToStorage(freshOrders);
+    return false;
+  }
+
   freshOrders[index] = {
     ...freshOrders[index],
     inventory_deducted: true,
   };
   writeOrdersToStorage(freshOrders);
 
+  let wrote = false;
   try {
-    await deductInventoryForOrderLocal(order);
+    const result = await deductInventoryForOrderLocal(order);
+    wrote = result.wrote;
     return true;
   } catch (error) {
-    const afterFailMovements = await listFlowerInventoryMovementsLocal({
-      branchId: order.branch_id,
-      orderId: order.id,
-      limit: 5000,
-    });
-    const alreadyDeducted = netOrderDeductedByProduct(afterFailMovements, order.id);
-    if (alreadyDeducted.size === 0) {
-      const rollbackOrders = readOrdersFromStorage();
-      const rollbackIndex = rollbackOrders.findIndex((entry) => entry.id === order.id);
-      if (rollbackIndex !== -1) {
-        rollbackOrders[rollbackIndex] = {
-          ...rollbackOrders[rollbackIndex],
-          inventory_deducted: false,
-        };
-        writeOrdersToStorage(rollbackOrders);
+    if (!wrote) {
+      const afterFailMovements = await listFlowerInventoryMovementsLocal({
+        branchId: order.branch_id,
+        orderId: order.id,
+        limit: 5000,
+      });
+      const alreadyDeducted = netOrderDeductedByProduct(afterFailMovements, order.id);
+      if (alreadyDeducted.size === 0) {
+        const rollbackOrders = readOrdersFromStorage();
+        const rollbackIndex = rollbackOrders.findIndex((entry) => entry.id === order.id);
+        if (rollbackIndex !== -1) {
+          rollbackOrders[rollbackIndex] = {
+            ...rollbackOrders[rollbackIndex],
+            inventory_deducted: false,
+          };
+          writeOrdersToStorage(rollbackOrders);
+        }
       }
     }
     console.warn('Inventory deduction failed for order.', { orderId: order.id, error });
@@ -767,6 +797,54 @@ export async function restoreWronglyDeductedOpenOrdersLocal(): Promise<{
   return { restoredOrders, restoredUnits };
 }
 
+/** Finished orders deducted 2×/3×: put back only surplus stems; keep inventory_deducted true. */
+export async function restoreOverDeductedOrderInventoryLocal(): Promise<{
+  restoredOrders: number;
+  restoredUnits: number;
+}> {
+  const orders = readOrdersFromStorage();
+  let restoredOrders = 0;
+  let restoredUnits = 0;
+
+  for (const order of orders) {
+    if (!FLOWER_ORDER_TERMINAL_STATUSES.includes(order.status)) {
+      continue;
+    }
+
+    const movements = await listFlowerInventoryMovementsLocal({
+      branchId: order.branch_id,
+      orderId: order.id,
+      limit: 5000,
+    });
+    const extras = extraOrderDeductionByProduct({
+      orderId: order.id,
+      items: order.items,
+      movements,
+    });
+    const units = [...extras.values()].reduce((sum, quantity) => sum + quantity, 0);
+    if (units <= 0) {
+      continue;
+    }
+
+    const note = formatInventoryOverDeductRestoreNote(order.id, order.receiver);
+    for (const [productId, quantity] of extras) {
+      await restoreFlowerInventoryForOrderLocal({
+        branchId: order.branch_id,
+        productId,
+        quantity,
+        orderId: order.id,
+        receiver: order.receiver,
+        note,
+      });
+    }
+
+    restoredOrders += 1;
+    restoredUnits += units;
+  }
+
+  return { restoredOrders, restoredUnits };
+}
+
 export async function runDueInventoryDeductionsLocal(): Promise<number> {
   try {
     const restored = await restoreWronglyDeductedOpenOrdersLocal();
@@ -775,6 +853,15 @@ export async function runDueInventoryDeductionsLocal(): Promise<number> {
     }
   } catch (restoreError) {
     console.warn('Open-order inventory restore failed.', restoreError);
+  }
+
+  try {
+    const over = await restoreOverDeductedOrderInventoryLocal();
+    if (over.restoredOrders > 0) {
+      console.info('Restored over-deducted finished order inventory.', over);
+    }
+  } catch (overError) {
+    console.warn('Over-deduct inventory restore failed.', overError);
   }
 
   if (INVENTORY_AUTO_DEDUCT_PAUSED) {
@@ -808,6 +895,15 @@ export async function forceRunInventoryDeductionsLocal(): Promise<number> {
     }
   } catch (restoreError) {
     console.warn('Open-order inventory restore failed.', restoreError);
+  }
+
+  try {
+    const over = await restoreOverDeductedOrderInventoryLocal();
+    if (over.restoredOrders > 0) {
+      console.info('Restored over-deducted finished order inventory.', over);
+    }
+  } catch (overError) {
+    console.warn('Over-deduct inventory restore failed.', overError);
   }
 
   if (INVENTORY_AUTO_DEDUCT_PAUSED) {
