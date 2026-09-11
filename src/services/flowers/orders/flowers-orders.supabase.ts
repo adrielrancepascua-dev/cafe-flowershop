@@ -429,13 +429,68 @@ async function restoreInventoryIfDeductedSupabase(order: FlowerOrder): Promise<v
   }
 }
 
-/** Claim + deduct one saved order immediately (does not wait for 7 PM or Completed). */
+/**
+ * PR #25 wrongly deducted Not started / Ready drafts at 7 PM / force deduct.
+ * Put those stems back and clear the flag so only finished orders stay deducted.
+ */
+export async function restoreWronglyDeductedOpenOrdersSupabase(): Promise<{
+  restoredOrders: number;
+  restoredUnits: number;
+}> {
+  const supabase = await requireAuthenticatedSupabaseClient();
+  const { data, error } = await supabase
+    .from('flower_orders')
+    .select(ORDER_SELECT)
+    .eq('inventory_deducted', true)
+    .in('status', ['not_started', 'ready']);
+
+  if (error) {
+    throw toServiceError(error, 'Failed to load wrongly deducted open orders.');
+  }
+
+  const orders = ((data as OrderDbRow[] | null) ?? []).map(mapOrderRow);
+  let restoredOrders = 0;
+  let restoredUnits = 0;
+
+  for (const order of orders) {
+    const movements = await listMovementsForOrderDeduct(order);
+    const netDeducted = netOrderDeductedByProduct(movements, order.id);
+    const units = [...netDeducted.values()].reduce((sum, quantity) => sum + quantity, 0);
+
+    await restoreInventoryIfDeductedSupabase(order);
+
+    const { error: clearError } = await supabase
+      .from('flower_orders')
+      .update({ inventory_deducted: false })
+      .eq('id', order.id)
+      .eq('inventory_deducted', true);
+
+    if (clearError) {
+      console.warn('Failed to clear inventory_deducted after open-order restore.', {
+        orderId: order.id,
+        clearError,
+      });
+      continue;
+    }
+
+    restoredOrders += 1;
+    restoredUnits += units;
+  }
+
+  return { restoredOrders, restoredUnits };
+}
+
+/** Claim + deduct one finished order immediately (does not wait for 7 PM). */
 async function claimAndDeductOrderSupabase(order: FlowerOrder): Promise<boolean> {
   if (INVENTORY_AUTO_DEDUCT_PAUSED) {
     return false;
   }
 
-  if (order.status === 'cancelled' || order.inventory_deducted) {
+  if (
+    order.status === 'cancelled' ||
+    order.inventory_deducted ||
+    !FLOWER_ORDER_TERMINAL_STATUSES.includes(order.status)
+  ) {
     return false;
   }
 
@@ -1015,6 +1070,15 @@ export async function getFlowerDayCloseStatusSupabase(
 }
 
 export async function runDueInventoryDeductionsSupabase(): Promise<number> {
+  try {
+    const restored = await restoreWronglyDeductedOpenOrdersSupabase();
+    if (restored.restoredOrders > 0) {
+      console.info('Restored wrongly deducted open orders.', restored);
+    }
+  } catch (restoreError) {
+    console.warn('Open-order inventory restore failed.', restoreError);
+  }
+
   if (INVENTORY_AUTO_DEDUCT_PAUSED) {
     return 0;
   }
@@ -1024,7 +1088,7 @@ export async function runDueInventoryDeductionsSupabase(): Promise<number> {
     .from('flower_orders')
     .select('id, scheduled_for, branch_id, status, inventory_deducted')
     .eq('inventory_deducted', false)
-    .neq('status', 'cancelled');
+    .in('status', FLOWER_ORDER_TERMINAL_STATUSES);
 
   if (error) {
     throw toServiceError(error, 'Failed to check scheduled inventory deductions.');
@@ -1044,8 +1108,17 @@ export async function runDueInventoryDeductionsSupabase(): Promise<number> {
   return deducted;
 }
 
-/** Admin-triggered: deduct pending orders now, ignoring the 7 PM time gate. */
+/** Admin-triggered: restore bad open-order deducts, then deduct finished pending orders now. */
 export async function forceRunInventoryDeductionsSupabase(): Promise<number> {
+  try {
+    const restored = await restoreWronglyDeductedOpenOrdersSupabase();
+    if (restored.restoredOrders > 0) {
+      console.info('Restored wrongly deducted open orders.', restored);
+    }
+  } catch (restoreError) {
+    console.warn('Open-order inventory restore failed.', restoreError);
+  }
+
   if (INVENTORY_AUTO_DEDUCT_PAUSED) {
     return 0;
   }
@@ -1055,7 +1128,7 @@ export async function forceRunInventoryDeductionsSupabase(): Promise<number> {
     .from('flower_orders')
     .select('id, scheduled_for, branch_id, status, inventory_deducted')
     .eq('inventory_deducted', false)
-    .neq('status', 'cancelled');
+    .in('status', FLOWER_ORDER_TERMINAL_STATUSES);
 
   if (error) {
     throw toServiceError(error, 'Failed to check pending inventory deductions.');

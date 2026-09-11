@@ -201,7 +201,11 @@ async function claimAndDeductOrderLocal(order: FlowerOrder): Promise<boolean> {
     return false;
   }
 
-  if (order.status === 'cancelled' || order.inventory_deducted) {
+  if (
+    order.status === 'cancelled' ||
+    order.inventory_deducted ||
+    !FLOWER_ORDER_TERMINAL_STATUSES.includes(order.status)
+  ) {
     return false;
   }
 
@@ -705,7 +709,64 @@ export async function restoreHistoricalReconcileDeductionsLocal(): Promise<{
   };
 }
 
+/** Undo PR #25 sweeping Not started / Ready drafts that were wrongly deducted. */
+export async function restoreWronglyDeductedOpenOrdersLocal(): Promise<{
+  restoredOrders: number;
+  restoredUnits: number;
+}> {
+  const orders = readOrdersFromStorage();
+  let restoredOrders = 0;
+  let restoredUnits = 0;
+
+  for (const order of orders) {
+    if (
+      !order.inventory_deducted ||
+      order.status === 'cancelled' ||
+      FLOWER_ORDER_TERMINAL_STATUSES.includes(order.status)
+    ) {
+      continue;
+    }
+
+    const movements = await listFlowerInventoryMovementsLocal({
+      branchId: order.branch_id,
+      orderId: order.id,
+      limit: 5000,
+    });
+    const netDeducted = netOrderDeductedByProduct(movements, order.id);
+    const units = [...netDeducted.values()].reduce((sum, quantity) => sum + quantity, 0);
+
+    await restoreInventoryIfDeductedLocal(order);
+
+    const fresh = readOrdersFromStorage();
+    const index = fresh.findIndex((entry) => entry.id === order.id);
+    if (index === -1) {
+      continue;
+    }
+
+    fresh[index] = {
+      ...fresh[index],
+      inventory_deducted: false,
+      items: fresh[index].items.map((item) => ({ ...item })),
+    };
+    writeOrdersToStorage(fresh);
+
+    restoredOrders += 1;
+    restoredUnits += units;
+  }
+
+  return { restoredOrders, restoredUnits };
+}
+
 export async function runDueInventoryDeductionsLocal(): Promise<number> {
+  try {
+    const restored = await restoreWronglyDeductedOpenOrdersLocal();
+    if (restored.restoredOrders > 0) {
+      console.info('Restored wrongly deducted open orders.', restored);
+    }
+  } catch (restoreError) {
+    console.warn('Open-order inventory restore failed.', restoreError);
+  }
+
   if (INVENTORY_AUTO_DEDUCT_PAUSED) {
     return 0;
   }
@@ -730,6 +791,15 @@ export async function runDueInventoryDeductionsLocal(): Promise<number> {
 }
 
 export async function forceRunInventoryDeductionsLocal(): Promise<number> {
+  try {
+    const restored = await restoreWronglyDeductedOpenOrdersLocal();
+    if (restored.restoredOrders > 0) {
+      console.info('Restored wrongly deducted open orders.', restored);
+    }
+  } catch (restoreError) {
+    console.warn('Open-order inventory restore failed.', restoreError);
+  }
+
   if (INVENTORY_AUTO_DEDUCT_PAUSED) {
     return 0;
   }
