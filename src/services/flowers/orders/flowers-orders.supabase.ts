@@ -502,6 +502,9 @@ export async function restoreWronglyDeductedOpenOrdersSupabase(): Promise<{
 /**
  * Finished orders deducted 2×/3×: put back only the surplus stems.
  * Leaves the legitimate first deduct in place and keeps inventory_deducted true.
+ *
+ * Do NOT call from the 60s poll / force button for all-time history — old loop
+ * leftovers can be thousands of phantom stems and inflate on_hand. Scoped repair only.
  */
 export async function restoreOverDeductedOrderInventorySupabase(): Promise<{
   restoredOrders: number;
@@ -1176,15 +1179,6 @@ export async function runDueInventoryDeductionsSupabase(): Promise<number> {
     console.warn('Open-order inventory restore failed.', restoreError);
   }
 
-  try {
-    const over = await restoreOverDeductedOrderInventorySupabase();
-    if (over.restoredOrders > 0) {
-      console.info('Restored over-deducted finished order inventory.', over);
-    }
-  } catch (overError) {
-    console.warn('Over-deduct inventory restore failed.', overError);
-  }
-
   if (INVENTORY_AUTO_DEDUCT_PAUSED) {
     return 0;
   }
@@ -1223,15 +1217,6 @@ export async function forceRunInventoryDeductionsSupabase(): Promise<number> {
     }
   } catch (restoreError) {
     console.warn('Open-order inventory restore failed.', restoreError);
-  }
-
-  try {
-    const over = await restoreOverDeductedOrderInventorySupabase();
-    if (over.restoredOrders > 0) {
-      console.info('Restored over-deducted finished order inventory.', over);
-    }
-  } catch (overError) {
-    console.warn('Over-deduct inventory restore failed.', overError);
   }
 
   if (INVENTORY_AUTO_DEDUCT_PAUSED) {

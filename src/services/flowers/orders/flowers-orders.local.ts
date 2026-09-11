@@ -797,7 +797,10 @@ export async function restoreWronglyDeductedOpenOrdersLocal(): Promise<{
   return { restoredOrders, restoredUnits };
 }
 
-/** Finished orders deducted 2×/3×: put back only surplus stems; keep inventory_deducted true. */
+/**
+ * Finished orders deducted 2×/3×: put back only surplus stems; keep inventory_deducted true.
+ * Not wired into due/force polls — all-time ledger extras can massively inflate stock.
+ */
 export async function restoreOverDeductedOrderInventoryLocal(): Promise<{
   restoredOrders: number;
   restoredUnits: number;
@@ -855,14 +858,6 @@ export async function runDueInventoryDeductionsLocal(): Promise<number> {
     console.warn('Open-order inventory restore failed.', restoreError);
   }
 
-  try {
-    const over = await restoreOverDeductedOrderInventoryLocal();
-    if (over.restoredOrders > 0) {
-      console.info('Restored over-deducted finished order inventory.', over);
-    }
-  } catch (overError) {
-    console.warn('Over-deduct inventory restore failed.', overError);
-  }
 
   if (INVENTORY_AUTO_DEDUCT_PAUSED) {
     return 0;
@@ -897,14 +892,6 @@ export async function forceRunInventoryDeductionsLocal(): Promise<number> {
     console.warn('Open-order inventory restore failed.', restoreError);
   }
 
-  try {
-    const over = await restoreOverDeductedOrderInventoryLocal();
-    if (over.restoredOrders > 0) {
-      console.info('Restored over-deducted finished order inventory.', over);
-    }
-  } catch (overError) {
-    console.warn('Over-deduct inventory restore failed.', overError);
-  }
 
   if (INVENTORY_AUTO_DEDUCT_PAUSED) {
     return 0;
