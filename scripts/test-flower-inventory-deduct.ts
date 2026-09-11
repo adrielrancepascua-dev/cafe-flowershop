@@ -265,8 +265,8 @@ const notStartedPending = {
 
 assertEqual(
   getInventoryDeductionBuckets([notStartedPending], beforeSevenPmUtc, { skipTimeGate: true }),
-  [{ dateKey: '2026-08-20', branchId: 'branch-dagupan' }],
-  'Run order deduct now must include not_started same-day orders (Daily Order POS)',
+  [],
+  'Run order deduct now must NOT include not_started drafts',
 );
 
 assertEqual(
@@ -277,6 +277,16 @@ assertEqual(
   ),
   [],
   'cancelled orders must never enter a deduct bucket',
+);
+
+assertEqual(
+  getInventoryDeductionBuckets(
+    [{ ...notStartedPending, status: 'ready' as const }],
+    beforeSevenPmUtc,
+    { skipTimeGate: true },
+  ),
+  [],
+  'Ready orders must not deduct until Completed / Picked up / Delivered',
 );
 
 // Root cause of Aug 21 loop: movements written "today" while completeness only

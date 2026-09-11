@@ -16,6 +16,7 @@ import {
   runDueInventoryDeductionsLocal,
   forceRunInventoryDeductionsLocal,
   restoreHistoricalReconcileDeductionsLocal,
+  restoreWronglyDeductedOpenOrdersLocal,
   updateFlowerOrderLocal,
   updateFlowerOrderReadyPhotoLocal,
   updateFlowerOrderStatusLocal,
@@ -167,6 +168,20 @@ export async function restoreHistoricalReconcileDeductions(): Promise<{
   );
 }
 
+/** Undo Not started / Ready orders that PR #25 wrongly deducted overnight. */
+export async function restoreWronglyDeductedOpenOrders(): Promise<{
+  restoredOrders: number;
+  restoredUnits: number;
+}> {
+  return withSupabaseOrders(
+    async () => {
+      const { restoreWronglyDeductedOpenOrdersSupabase } = await import('./flowers-orders.supabase');
+      return restoreWronglyDeductedOpenOrdersSupabase();
+    },
+    () => restoreWronglyDeductedOpenOrdersLocal(),
+  );
+}
+
 export async function runDueInventoryDeductions(): Promise<number> {
   return withSupabaseOrders(
     async () => {
@@ -177,7 +192,7 @@ export async function runDueInventoryDeductions(): Promise<number> {
   );
 }
 
-/** Admin-triggered: deduct pending orders now, ignoring the 7 PM time gate. */
+/** Admin: restore bad open-order deducts, then deduct finished pending orders now. */
 export async function forceRunInventoryDeductions(): Promise<number> {
   return withSupabaseOrders(
     async () => {

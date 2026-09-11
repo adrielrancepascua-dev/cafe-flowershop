@@ -535,7 +535,7 @@ function StockAdjustControls({
         Stock out
       </button>
       <p className="basis-full text-[11px] text-brand-brown/60">
-        Sales deduct when the order is finished (walk-in on save). 7:00 PM catches leftovers. Stock out is for waste or corrections only.
+        Sales deduct when the order is finished (walk-in on save). 7:00 PM catches finished leftovers only — not Not started drafts. Stock out is for waste or corrections only.
       </p>
     </div>
   ) : (
@@ -585,7 +585,7 @@ function StockAdjustControls({
         </button>
       </div>
       <p className="text-[11px] text-brand-brown/60">
-        Sales deduct when the order is finished (walk-in on save). 7:00 PM catches leftovers. Stock out is for waste or corrections only.
+        Sales deduct when the order is finished (walk-in on save). 7:00 PM catches finished leftovers only — not Not started drafts. Stock out is for waste or corrections only.
       </p>
     </div>
   );
@@ -1729,8 +1729,8 @@ export default function FlowerInventoryPage() {
                 ? 'Flower totals across Dagupan, San Carlos, and Urdaneta. Select a branch to adjust stock.'
                 : 'Miscellaneous totals by category. Select a branch to stock in wrappers or gift items.'
               : stockKindTab === 'flower'
-                ? 'Flower stock grouped by type with colors in order. Saved orders deduct on walk-in save, when marked done, or via Run order deduct now / 7:00 PM. Use Stock out only for waste, damage, or corrections.'
-                : 'Stock in or out wrappers and gift items for this branch. Saved orders deduct when finished or via Run order deduct now; Stock out is for waste or corrections only.'
+                ? 'Flower stock grouped by type with colors in order. Finished sales deduct on walk-in save or when marked done; 7:00 PM / Run order deduct now only catch finished leftovers. Use Stock out only for waste, damage, or corrections.'
+                : 'Stock in or out wrappers and gift items for this branch. Finished sales deduct when completed; Stock out is for waste or corrections only.'
             : isAllBranchesView
               ? stockKindTab === 'flower'
                 ? 'Combined flower totals across all branches.'
@@ -1756,11 +1756,13 @@ export default function FlowerInventoryPage() {
               setErrorMessage('');
               try {
                 const count = await forceRunInventoryDeductions();
+                await loadData();
                 if (count > 0) {
-                  setMessage(`Order deduct done — ${count} order(s) deducted.`);
-                  await loadData();
+                  setMessage(`Order deduct done — ${count} finished order(s) deducted.`);
                 } else {
-                  setMessage('No pending orders to deduct.');
+                  setMessage(
+                    'Checked — restored any wrongly deducted Not started/Ready drafts; no finished orders pending.',
+                  );
                 }
               } catch (err) {
                 setErrorMessage(extractSupabaseErrorMessage(err, 'Order deduct failed.'));
