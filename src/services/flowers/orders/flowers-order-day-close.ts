@@ -1,9 +1,18 @@
-import type { FlowerOrder } from '../../../modules/flowers/shared/types/flower-order';
+import type { FlowerOrder, FlowerOrderStatus } from '../../../modules/flowers/shared/types/flower-order';
 import { FLOWER_ORDER_TERMINAL_STATUSES } from '../../../modules/flowers/shared/types/flower-order';
 import { getLocalDayBoundsIso, scheduledForToDateKey, toManilaDateKeyFromDate } from '../../../modules/flowers/shared/utils/flower-format';
 
 /** Finished (terminal) orders deduct at 7:00 PM Manila on their pickup date (force deduct can run earlier). */
 export const INVENTORY_DEDUCTION_HOUR_MANILA = 19;
+
+/**
+ * Open-order restore snapshots Not started/Ready, then loops slowly.
+ * If staff finishes the order (and deducts) mid-loop, skip — otherwise we void
+ * the fresh order_deduct and leave inventory_deducted stuck true.
+ */
+export function shouldSkipOpenOrderInventoryRestore(liveStatus: FlowerOrderStatus): boolean {
+  return liveStatus === 'cancelled' || FLOWER_ORDER_TERMINAL_STATUSES.includes(liveStatus);
+}
 
 export function getPickupDateKey(iso: string): string {
   return scheduledForToDateKey(iso);

@@ -9,7 +9,10 @@ import {
 } from '../src/modules/flowers/shared/utils/flower-inventory-deduct';
 import { effectiveSoldPendingDeductionByProductId } from '../src/modules/flowers/shared/utils/flower-daily-inventory';
 import { formatInventoryMovementActor, inventoryMovementNoteLikePatternForOrderId } from '../src/modules/flowers/shared/utils/flower-format';
-import { getInventoryDeductionBuckets } from '../src/services/flowers/orders/flowers-order-day-close';
+import {
+  getInventoryDeductionBuckets,
+  shouldSkipOpenOrderInventoryRestore,
+} from '../src/services/flowers/orders/flowers-order-day-close';
 import {
   defaultFlowerClaimModeForScheduledIso,
   getInitialFlowerOrderStatus,
@@ -472,6 +475,42 @@ assertEqual(
   getInitialFlowerOrderStatus('walk_in', 2500, 2500, '2026-09-11T02:00:00.000Z', nowManilaAfternoon),
   'not_started',
   'future-dated walk-in does not auto-complete',
+);
+
+assertEqual(
+  shouldSkipOpenOrderInventoryRestore('not_started'),
+  false,
+  'open Not started drafts are eligible for wrong-deduct restore',
+);
+
+assertEqual(
+  shouldSkipOpenOrderInventoryRestore('ready'),
+  false,
+  'open Ready drafts are eligible for wrong-deduct restore',
+);
+
+assertEqual(
+  shouldSkipOpenOrderInventoryRestore('picked_up'),
+  true,
+  'finished picked_up must not be restored mid-loop (would void a fresh deduct)',
+);
+
+assertEqual(
+  shouldSkipOpenOrderInventoryRestore('delivered'),
+  true,
+  'finished delivered must not be restored mid-loop',
+);
+
+assertEqual(
+  shouldSkipOpenOrderInventoryRestore('completed'),
+  true,
+  'finished completed must not be restored mid-loop',
+);
+
+assertEqual(
+  shouldSkipOpenOrderInventoryRestore('cancelled'),
+  true,
+  'cancelled orders are not open-order restore targets',
 );
 
 console.log('inventory deduct harden tests passed');

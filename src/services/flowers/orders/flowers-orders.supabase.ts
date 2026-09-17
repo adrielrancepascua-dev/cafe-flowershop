@@ -38,6 +38,7 @@ import {
   getOrdersPendingInventoryDeduction,
   getPickupDateKey,
   isInventoryDeductionDue,
+  shouldSkipOpenOrderInventoryRestore,
 } from './flowers-order-day-close';
 import { assertOrderContentEditable } from '../../../modules/flowers/shared/utils/flower-order-edit-policy';
 import { assertRequiredDownpayment, computeOrderPaymentFields } from '../../../modules/flowers/shared/utils/flower-order-payment-fields';
@@ -436,6 +437,9 @@ async function restoreInventoryIfDeductedSupabase(order: FlowerOrder): Promise<v
  * PR #25 wrongly deducted Not started / Ready drafts at 7 PM / force deduct.
  * Put remaining order_deduct stems back for every open order (even if the
  * inventory_deducted flag was already cleared without a stock restore).
+ *
+ * Re-reads each order before restoring: if it became finished while this loop
+ * ran, skip so we do not void a legitimate just-written order_deduct.
  */
 export async function restoreWronglyDeductedOpenOrdersSupabase(): Promise<{
   restoredOrders: number;
@@ -456,34 +460,46 @@ export async function restoreWronglyDeductedOpenOrdersSupabase(): Promise<{
   let restoredUnits = 0;
 
   for (const order of orders) {
-    const movements = await listMovementsForOrderDeduct(order);
-    const netDeducted = netOrderDeductedByProduct(movements, order.id);
+    const live = await fetchOrderById(order.id);
+    if (!live || shouldSkipOpenOrderInventoryRestore(live.status)) {
+      continue;
+    }
+
+    const movements = await listMovementsForOrderDeduct(live);
+    const netDeducted = netOrderDeductedByProduct(movements, live.id);
     const units = [...netDeducted.values()].reduce((sum, quantity) => sum + quantity, 0);
 
-    if (units <= 0 && !order.inventory_deducted) {
+    if (units <= 0 && !live.inventory_deducted) {
+      continue;
+    }
+
+    // Re-check after the (slow) movement lookup — status may have flipped mid-flight.
+    const stillOpen = await fetchOrderById(live.id);
+    if (!stillOpen || shouldSkipOpenOrderInventoryRestore(stillOpen.status)) {
       continue;
     }
 
     for (const [productId, quantity] of netDeducted) {
       await restoreFlowerInventoryForOrderSupabase({
-        branchId: order.branch_id,
+        branchId: stillOpen.branch_id,
         productId,
         quantity,
-        orderId: order.id,
-        receiver: order.receiver,
+        orderId: stillOpen.id,
+        receiver: stillOpen.receiver,
       });
     }
 
-    if (order.inventory_deducted) {
+    if (stillOpen.inventory_deducted) {
       const { error: clearError } = await supabase
         .from('flower_orders')
         .update({ inventory_deducted: false })
-        .eq('id', order.id)
-        .eq('inventory_deducted', true);
+        .eq('id', stillOpen.id)
+        .eq('inventory_deducted', true)
+        .in('status', ['not_started', 'ready']);
 
       if (clearError) {
         console.warn('Failed to clear inventory_deducted after open-order restore.', {
-          orderId: order.id,
+          orderId: stillOpen.id,
           clearError,
         });
         continue;
