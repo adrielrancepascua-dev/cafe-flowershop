@@ -34,6 +34,7 @@ import {
   getOrdersPendingInventoryDeduction,
   getPickupDateKey,
   isInventoryDeductionDue,
+  shouldSkipOpenOrderInventoryRestore,
 } from './flowers-order-day-close';
 import { currentFlowerUserIsAdmin } from '../../../lib/auth/flower-auth.service';
 import { assertOrderContentEditable } from '../../../modules/flowers/shared/utils/flower-order-edit-policy';
@@ -739,7 +740,10 @@ export async function restoreHistoricalReconcileDeductionsLocal(): Promise<{
   };
 }
 
-/** Undo PR #25 sweeping Not started / Ready drafts that were wrongly deducted. */
+/**
+ * Undo PR #25 sweeping Not started / Ready drafts that were wrongly deducted.
+ * Re-reads each order before restoring so a mid-loop finish+deduct is not voided.
+ */
 export async function restoreWronglyDeductedOpenOrdersLocal(): Promise<{
   restoredOrders: number;
   restoredUnits: number;
@@ -749,35 +753,45 @@ export async function restoreWronglyDeductedOpenOrdersLocal(): Promise<{
   let restoredUnits = 0;
 
   for (const order of orders) {
-    if (order.status === 'cancelled' || FLOWER_ORDER_TERMINAL_STATUSES.includes(order.status)) {
+    if (shouldSkipOpenOrderInventoryRestore(order.status)) {
+      continue;
+    }
+
+    const live = readOrdersFromStorage().find((entry) => entry.id === order.id);
+    if (!live || shouldSkipOpenOrderInventoryRestore(live.status)) {
       continue;
     }
 
     const movements = await listFlowerInventoryMovementsLocal({
-      branchId: order.branch_id,
-      orderId: order.id,
+      branchId: live.branch_id,
+      orderId: live.id,
       limit: 5000,
     });
-    const netDeducted = netOrderDeductedByProduct(movements, order.id);
+    const netDeducted = netOrderDeductedByProduct(movements, live.id);
     const units = [...netDeducted.values()].reduce((sum, quantity) => sum + quantity, 0);
 
-    if (units <= 0 && !order.inventory_deducted) {
+    if (units <= 0 && !live.inventory_deducted) {
+      continue;
+    }
+
+    const stillOpen = readOrdersFromStorage().find((entry) => entry.id === live.id);
+    if (!stillOpen || shouldSkipOpenOrderInventoryRestore(stillOpen.status)) {
       continue;
     }
 
     for (const [productId, quantity] of netDeducted) {
       await restoreFlowerInventoryForOrderLocal({
-        branchId: order.branch_id,
+        branchId: stillOpen.branch_id,
         productId,
         quantity,
-        orderId: order.id,
-        receiver: order.receiver,
+        orderId: stillOpen.id,
+        receiver: stillOpen.receiver,
       });
     }
 
     const fresh = readOrdersFromStorage();
-    const index = fresh.findIndex((entry) => entry.id === order.id);
-    if (index === -1) {
+    const index = fresh.findIndex((entry) => entry.id === stillOpen.id);
+    if (index === -1 || shouldSkipOpenOrderInventoryRestore(fresh[index].status)) {
       continue;
     }
 
