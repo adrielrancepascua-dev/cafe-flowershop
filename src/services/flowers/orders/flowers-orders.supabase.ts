@@ -434,9 +434,10 @@ async function restoreInventoryIfDeductedSupabase(order: FlowerOrder): Promise<v
 }
 
 /**
- * PR #25 wrongly deducted Not started / Ready drafts at 7 PM / force deduct.
- * Put remaining order_deduct stems back for every open order (even if the
- * inventory_deducted flag was already cleared without a stock restore).
+ * Manual / emergency only — do NOT call from the 60s poll or force deduct.
+ * PR #25 wrongly deducted Not started / Ready drafts; this puts leftover
+ * order_deduct stems back. Running it on every poll races finish+deduct and
+ * voids legitimate stock (shows up as STOCK IN · void/delete restore).
  *
  * Re-reads each order before restoring: if it became finished while this loop
  * ran, skip so we do not void a legitimate just-written order_deduct.
@@ -1186,14 +1187,9 @@ export async function getFlowerDayCloseStatusSupabase(
 }
 
 export async function runDueInventoryDeductionsSupabase(): Promise<number> {
-  try {
-    const restored = await restoreWronglyDeductedOpenOrdersSupabase();
-    if (restored.restoredOrders > 0) {
-      console.info('Restored wrongly deducted open orders.', restored);
-    }
-  } catch (restoreError) {
-    console.warn('Open-order inventory restore failed.', restoreError);
-  }
+  // Open-order restore is intentionally NOT run here — it raced finish+deduct
+  // and put stems back as void/delete STOCK IN. Call restoreWronglyDeductedOpenOrders
+  // manually only if open drafts still have leftover order_deducts.
 
   if (INVENTORY_AUTO_DEDUCT_PAUSED) {
     return 0;
@@ -1224,16 +1220,9 @@ export async function runDueInventoryDeductionsSupabase(): Promise<number> {
   return deducted;
 }
 
-/** Admin-triggered: restore bad open-order deducts, then deduct finished pending orders now. */
+/** Admin-triggered: deduct finished pending orders now (skips 7 PM gate). */
 export async function forceRunInventoryDeductionsSupabase(): Promise<number> {
-  try {
-    const restored = await restoreWronglyDeductedOpenOrdersSupabase();
-    if (restored.restoredOrders > 0) {
-      console.info('Restored wrongly deducted open orders.', restored);
-    }
-  } catch (restoreError) {
-    console.warn('Open-order inventory restore failed.', restoreError);
-  }
+  // Same as runDue: do not auto-run open-order restore (deduct→STOCK IN race).
 
   if (INVENTORY_AUTO_DEDUCT_PAUSED) {
     return 0;

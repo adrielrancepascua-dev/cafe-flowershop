@@ -742,6 +742,8 @@ export async function restoreHistoricalReconcileDeductionsLocal(): Promise<{
 
 /**
  * Undo PR #25 sweeping Not started / Ready drafts that were wrongly deducted.
+ * Manual / emergency only — not wired into the 60s poll or force deduct
+ * (auto-running it voids just-finished order_deducts as STOCK IN).
  * Re-reads each order before restoring so a mid-loop finish+deduct is not voided.
  */
 export async function restoreWronglyDeductedOpenOrdersLocal(): Promise<{
@@ -863,15 +865,7 @@ export async function restoreOverDeductedOrderInventoryLocal(): Promise<{
 }
 
 export async function runDueInventoryDeductionsLocal(): Promise<number> {
-  try {
-    const restored = await restoreWronglyDeductedOpenOrdersLocal();
-    if (restored.restoredOrders > 0) {
-      console.info('Restored wrongly deducted open orders.', restored);
-    }
-  } catch (restoreError) {
-    console.warn('Open-order inventory restore failed.', restoreError);
-  }
-
+  // Open-order restore is intentionally NOT run here — see supabase twin.
 
   if (INVENTORY_AUTO_DEDUCT_PAUSED) {
     return 0;
@@ -897,15 +891,7 @@ export async function runDueInventoryDeductionsLocal(): Promise<number> {
 }
 
 export async function forceRunInventoryDeductionsLocal(): Promise<number> {
-  try {
-    const restored = await restoreWronglyDeductedOpenOrdersLocal();
-    if (restored.restoredOrders > 0) {
-      console.info('Restored wrongly deducted open orders.', restored);
-    }
-  } catch (restoreError) {
-    console.warn('Open-order inventory restore failed.', restoreError);
-  }
-
+  // Same as runDue: do not auto-run open-order restore (deduct→STOCK IN race).
 
   if (INVENTORY_AUTO_DEDUCT_PAUSED) {
     return 0;
