@@ -300,16 +300,26 @@ export async function createFlowerSupplyTransferSupabase(
 
   const transferId = crypto.randomUUID();
   const voucherLabel = input.transfer_type === 'new_arrival' ? 'New arrivals' : 'Old stock';
+  const transferItems = lines.map((line) => ({
+    productId: line.product_id,
+    quantity: line.quantity,
+  }));
 
   await transferFlowerInventorySupabase({
     fromBranchId: input.from_branch_id,
     toBranchId: input.to_branch_id,
-    items: lines.map((line) => ({
-      productId: line.product_id,
-      quantity: line.quantity,
-    })),
+    items: transferItems,
     note: `Supplies ${voucherLabel} voucher ${transferId}`,
   });
+
+  const reverseInventory = async (reason: string) => {
+    await transferFlowerInventorySupabase({
+      fromBranchId: input.to_branch_id,
+      toBranchId: input.from_branch_id,
+      items: transferItems,
+      note: `Rollback Supplies ${voucherLabel} voucher ${transferId} · ${reason}`,
+    });
+  };
 
   const { error: insertError } = await supabase.from('flower_supply_transfers').insert({
     id: transferId,
@@ -330,6 +340,7 @@ export async function createFlowerSupplyTransferSupabase(
   });
 
   if (insertError) {
+    await reverseInventory('voucher save failed');
     throw insertError;
   }
 
@@ -346,11 +357,16 @@ export async function createFlowerSupplyTransferSupabase(
   );
 
   if (itemsError) {
+    await supabase.from('flower_supply_transfers').delete().eq('id', transferId);
+    await reverseInventory('voucher items save failed');
     throw itemsError;
   }
 
   const created = await getFlowerSupplyTransferSupabase(transferId);
   if (!created) {
+    await supabase.from('flower_supply_transfer_items').delete().eq('transfer_id', transferId);
+    await supabase.from('flower_supply_transfers').delete().eq('id', transferId);
+    await reverseInventory('voucher reload failed');
     throw new Error('Failed to load saved supply transfer.');
   }
 

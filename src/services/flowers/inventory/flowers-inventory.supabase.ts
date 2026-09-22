@@ -644,7 +644,8 @@ async function applyFlowerStockChangeSupabase(input: {
   const previousOnHand = Number(existingStock?.on_hand ?? 0);
   const nextOnHand = previousOnHand + input.delta;
 
-  if (!input.allowNegative && nextOnHand < 0) {
+  // Only block outbound moves; inbound must still credit already-negative stock.
+  if (!input.allowNegative && input.delta < 0 && nextOnHand < 0) {
     throw new Error('Insufficient stock. Stock out would result in negative balance.');
   }
 
@@ -758,28 +759,68 @@ export async function transferFlowerInventorySupabase(
   const fromBranch = branches.find((branch) => branch.id === input.fromBranchId);
   const toBranch = branches.find((branch) => branch.id === input.toBranchId);
   const note = input.note?.trim() || `Transfer to ${toBranch?.name ?? input.toBranchId}`;
+  const completed: Array<{ productId: string; quantity: number }> = [];
 
-  for (const item of input.items) {
-    if (item.quantity <= 0) {
-      continue;
+  try {
+    for (const item of input.items) {
+      if (item.quantity <= 0) {
+        continue;
+      }
+
+      await applyFlowerStockChangeSupabase({
+        branchId: input.fromBranchId,
+        productId: item.productId,
+        delta: -item.quantity,
+        movementType: 'transfer_out',
+        note,
+        allowNegative: true,
+      });
+
+      try {
+        // Destination may already be negative from prior order deducts; inbound
+        // must still credit. allowNegative covers legacy non-RPC path too.
+        await applyFlowerStockChangeSupabase({
+          branchId: input.toBranchId,
+          productId: item.productId,
+          delta: item.quantity,
+          movementType: 'transfer_in',
+          note: `From ${fromBranch?.name ?? input.fromBranchId}`,
+          allowNegative: true,
+        });
+      } catch (transferInError) {
+        await applyFlowerStockChangeSupabase({
+          branchId: input.fromBranchId,
+          productId: item.productId,
+          delta: item.quantity,
+          movementType: 'stock_in',
+          note: `Rollback orphan transfer_out after failed transfer_in · ${note}`,
+          allowNegative: true,
+        });
+        throw transferInError;
+      }
+
+      completed.push({ productId: item.productId, quantity: item.quantity });
     }
-
-    await applyFlowerStockChangeSupabase({
-      branchId: input.fromBranchId,
-      productId: item.productId,
-      delta: -item.quantity,
-      movementType: 'transfer_out',
-      note,
-      allowNegative: true,
-    });
-
-    await applyFlowerStockChangeSupabase({
-      branchId: input.toBranchId,
-      productId: item.productId,
-      delta: item.quantity,
-      movementType: 'transfer_in',
-      note: `From ${fromBranch?.name ?? input.fromBranchId}`,
-    });
+  } catch (error) {
+    for (const done of [...completed].reverse()) {
+      await applyFlowerStockChangeSupabase({
+        branchId: input.toBranchId,
+        productId: done.productId,
+        delta: -done.quantity,
+        movementType: 'transfer_out',
+        note: `Rollback completed transfer after later failure · ${note}`,
+        allowNegative: true,
+      });
+      await applyFlowerStockChangeSupabase({
+        branchId: input.fromBranchId,
+        productId: done.productId,
+        delta: done.quantity,
+        movementType: 'transfer_in',
+        note: `Rollback completed transfer after later failure · ${note}`,
+        allowNegative: true,
+      });
+    }
+    throw error;
   }
 }
 

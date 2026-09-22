@@ -1,15 +1,13 @@
--- Record who performed each inventory movement (stock in/out, transfers, order deduct).
--- Run after add_co_admin_role.sql / fix_adjust_flower_stock_security.sql
+-- Allow stock-in / transfer-in onto an already-negative destination balance.
 --
--- Old movement rows stay null. The app shows "Unknown (before names were logged)" for those.
--- New writes stamp the signed-in flower_profiles display name from auth.uid().
-
-alter table public.flower_inventory_movements
-  add column if not exists created_by_id text,
-  add column if not exists created_by_name text not null default '';
-
-create index if not exists idx_flower_inventory_movements_branch_product_created_at
-  on public.flower_inventory_movements (branch_id, product_id, created_at desc);
+-- Bug: adjust_flower_stock rejected ANY resulting on_hand < 0 when
+-- p_allow_negative was false — including positive deltas (transfer_in).
+-- Supplies transfers deduct the source first, then credit the destination.
+-- When the destination was already negative (common after order deduct),
+-- transfer_in failed, the UI error caused retries, and each retry bled
+-- another stem from the source with no destination credit and no voucher.
+--
+-- Fix: only enforce the non-negative check on outbound (negative) deltas.
 
 create or replace function public.adjust_flower_stock(
   p_branch_id text,
@@ -59,7 +57,6 @@ begin
   v_previous := v_next - p_delta;
 
   -- Only block outbound moves that would deepen a shortage when not allowed.
-  -- Positive deltas (stock_in / transfer_in) must still credit negative destinations.
   if not p_allow_negative and p_delta < 0 and v_next < 0 then
     raise exception 'Insufficient stock. Stock out would result in negative balance.'
       using errcode = 'check_violation';
