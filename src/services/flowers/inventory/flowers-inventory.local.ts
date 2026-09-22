@@ -213,7 +213,8 @@ async function applyStockChange(input: {
   const previousOnHand = branchStock[input.productId] ?? 0;
   const newOnHand = previousOnHand + input.delta;
 
-  if (!input.allowNegative && newOnHand < 0) {
+  // Only block outbound moves; inbound must still credit already-negative stock.
+  if (!input.allowNegative && input.delta < 0 && newOnHand < 0) {
     throw new Error(
       `Insufficient stock for ${getProductName(input.productId)}. Available: ${previousOnHand}.`,
     );
@@ -317,27 +318,66 @@ export async function transferFlowerInventoryLocal(
 
   const note = input.note?.trim() || `Transfer to ${getBranchName(input.toBranchId)}`;
 
-  for (const item of input.items) {
-    if (item.quantity <= 0) {
-      continue;
+  const completed: Array<{ productId: string; quantity: number }> = [];
+
+  try {
+    for (const item of input.items) {
+      if (item.quantity <= 0) {
+        continue;
+      }
+
+      await applyStockChange({
+        branchId: input.fromBranchId,
+        productId: item.productId,
+        delta: -item.quantity,
+        movementType: 'transfer_out',
+        note,
+        allowNegative: true,
+      });
+
+      try {
+        await applyStockChange({
+          branchId: input.toBranchId,
+          productId: item.productId,
+          delta: item.quantity,
+          movementType: 'transfer_in',
+          note: `From ${getBranchName(input.fromBranchId)}`,
+          allowNegative: true,
+        });
+      } catch (transferInError) {
+        await applyStockChange({
+          branchId: input.fromBranchId,
+          productId: item.productId,
+          delta: item.quantity,
+          movementType: 'stock_in',
+          note: `Rollback orphan transfer_out after failed transfer_in · ${note}`,
+          allowNegative: true,
+        });
+        throw transferInError;
+      }
+
+      completed.push({ productId: item.productId, quantity: item.quantity });
     }
-
-    await applyStockChange({
-      branchId: input.fromBranchId,
-      productId: item.productId,
-      delta: -item.quantity,
-      movementType: 'transfer_out',
-      note,
-      allowNegative: true,
-    });
-
-    await applyStockChange({
-      branchId: input.toBranchId,
-      productId: item.productId,
-      delta: item.quantity,
-      movementType: 'transfer_in',
-      note: `From ${getBranchName(input.fromBranchId)}`,
-    });
+  } catch (error) {
+    for (const done of [...completed].reverse()) {
+      await applyStockChange({
+        branchId: input.toBranchId,
+        productId: done.productId,
+        delta: -done.quantity,
+        movementType: 'transfer_out',
+        note: `Rollback completed transfer after later failure · ${note}`,
+        allowNegative: true,
+      });
+      await applyStockChange({
+        branchId: input.fromBranchId,
+        productId: done.productId,
+        delta: done.quantity,
+        movementType: 'transfer_in',
+        note: `Rollback completed transfer after later failure · ${note}`,
+        allowNegative: true,
+      });
+    }
+    throw error;
   }
 }
 
