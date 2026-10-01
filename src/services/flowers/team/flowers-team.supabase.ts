@@ -3,21 +3,6 @@ import { getSupabaseClient } from '../../../lib/supabase/client';
 import type { CreateFlowerStaffResult, FlowerTeamMember } from '../../../modules/flowers/shared/types/auth';
 import { mapFlowerProfileRow } from './flowers-team.shared';
 
-async function requireSessionToken(): Promise<string> {
-  await requireSupabaseAuthSession();
-  const supabase = getSupabaseClient();
-  if (!supabase) {
-    throw new Error('Supabase is not configured.');
-  }
-
-  const { data, error } = await supabase.auth.getSession();
-  if (error || !data.session?.access_token) {
-    throw new Error('You must be signed in as admin.');
-  }
-
-  return data.session.access_token;
-}
-
 export async function listFlowerTeamSupabase(): Promise<FlowerTeamMember[]> {
   await requireSupabaseAuthSession();
   const supabase = getSupabaseClient();
@@ -40,22 +25,21 @@ export async function listFlowerTeamSupabase(): Promise<FlowerTeamMember[]> {
 }
 
 export async function createFlowerStaffSupabase(displayName: string): Promise<CreateFlowerStaffResult> {
-  const token = await requireSessionToken();
-  const response = await fetch('/api/create-flower-staff', {
-    method: 'POST',
-    headers: {
-      Authorization: `Bearer ${token}`,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({ display_name: displayName }),
-  });
-
-  const payload = (await response.json()) as CreateFlowerStaffResult & { error?: string };
-  if (!response.ok) {
-    throw new Error(payload.error ?? 'Could not create staff account.');
+  await requireSupabaseAuthSession();
+  const supabase = getSupabaseClient();
+  if (!supabase) {
+    throw new Error('Supabase is not configured.');
   }
 
-  return payload;
+  const { data, error } = await supabase.rpc('create_flower_staff', {
+    p_display_name: displayName,
+  });
+
+  if (error) {
+    throw new Error(error.message || 'Could not create staff account.');
+  }
+
+  return data as CreateFlowerStaffResult;
 }
 
 export async function setFlowerTeamMemberActiveSupabase(
@@ -80,19 +64,18 @@ export async function setFlowerTeamMemberActiveSupabase(
 }
 
 export async function deleteFlowerTeamMemberSupabase(memberId: string): Promise<void> {
-  const token = await requireSessionToken();
-  const response = await fetch('/api/delete-flower-staff', {
-    method: 'POST',
-    headers: {
-      Authorization: `Bearer ${token}`,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({ user_id: memberId }),
+  await requireSupabaseAuthSession();
+  const supabase = getSupabaseClient();
+  if (!supabase) {
+    throw new Error('Supabase is not configured.');
+  }
+
+  const { error } = await supabase.rpc('delete_flower_staff', {
+    p_user_id: memberId,
   });
 
-  const payload = (await response.json()) as { error?: string };
-  if (!response.ok) {
-    throw new Error(payload.error ?? 'Could not delete staff account.');
+  if (error) {
+    throw new Error(error.message || 'Could not delete staff account.');
   }
 }
 
