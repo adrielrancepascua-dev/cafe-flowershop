@@ -1,4 +1,20 @@
-import { requireFlowerAdmin } from './_flower-admin-auth.mjs';
+import { createClient } from '@supabase/supabase-js';
+
+function getUserClient(token) {
+  const supabaseUrl = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL;
+  const anonKey = process.env.VITE_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY;
+
+  if (!supabaseUrl || !anonKey) {
+    const error = new Error('Server is missing Supabase configuration (URL or anon key).');
+    error.statusCode = 500;
+    throw error;
+  }
+
+  return createClient(supabaseUrl, anonKey, {
+    global: { headers: { Authorization: `Bearer ${token}` } },
+    auth: { persistSession: false, autoRefreshToken: false },
+  });
+}
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
@@ -17,36 +33,21 @@ export default async function handler(req, res) {
   }
 
   try {
-    const { adminClient, adminUserId } = await requireFlowerAdmin(token);
-
-    if (userId === adminUserId) {
-      return res.status(400).json({ error: 'You cannot delete your own account.' });
-    }
-
-    const { data: targetProfile, error: targetError } = await adminClient
-      .from('flower_profiles')
-      .select('id, email, display_name, role')
-      .eq('id', userId)
-      .single();
-
-    if (targetError || !targetProfile) {
-      return res.status(404).json({ error: 'User not found.' });
-    }
-
-    if (targetProfile.role !== 'staff') {
-      return res.status(400).json({ error: 'Only staff accounts can be deleted.' });
-    }
-
-    const { error: deleteError } = await adminClient.auth.admin.deleteUser(userId);
-    if (deleteError) {
-      return res.status(400).json({ error: deleteError.message });
-    }
-
-    return res.status(200).json({
-      id: targetProfile.id,
-      email: targetProfile.email,
-      display_name: targetProfile.display_name,
+    const userClient = getUserClient(token);
+    const { error } = await userClient.rpc('delete_flower_staff', {
+      p_user_id: userId,
     });
+
+    if (error) {
+      const statusCode = /admin access required|signed in as admin/i.test(error.message)
+        ? 403
+        : /not found/i.test(error.message)
+          ? 404
+          : 400;
+      return res.status(statusCode).json({ error: error.message });
+    }
+
+    return res.status(200).json({ id: userId });
   } catch (error) {
     const statusCode = error?.statusCode ?? 500;
     return res.status(statusCode).json({
