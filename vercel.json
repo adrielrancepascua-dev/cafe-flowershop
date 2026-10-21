@@ -8,5 +8,11 @@
       "source": "/(.*)",
       "destination": "/index.html"
     }
+  ],
+  "crons": [
+    {
+      "path": "/api/purge-old-order-photos",
+      "schedule": "15 16 * * *"
+    }
   ]
 }

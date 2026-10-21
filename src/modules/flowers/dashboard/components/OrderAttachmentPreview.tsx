@@ -1,3 +1,6 @@
+import { useState } from 'react';
+import { isRemovedOrderPhoto } from '../../shared/utils/order-photo-retention';
+
 function isImageAttachment(value: string): boolean {
   return (
     value.startsWith('data:image/') ||
@@ -19,8 +22,18 @@ export default function OrderAttachmentPreview({
   centered?: boolean;
   hint?: string | null;
 }) {
+  const [broken, setBroken] = useState(false);
+
   if (!value) {
     return null;
+  }
+
+  if (isRemovedOrderPhoto(value) || broken) {
+    return (
+      <p className={`mt-2 text-xs text-brand-brown/60 ${centered ? 'text-center' : ''}`}>
+        Removed after 30 days.
+      </p>
+    );
   }
 
   const wrapperClassName = centered ? 'mt-2 flex flex-col items-center text-center' : 'mt-2';
@@ -45,7 +58,7 @@ export default function OrderAttachmentPreview({
     <div className={wrapperClassName}>
       <p className="mb-2 text-xs font-medium text-brand-brown/70">{label}</p>
       <a href={value} target="_blank" rel="noreferrer" className="inline-block">
-        <img src={value} alt={label} className={imageClassName} />
+        <img src={value} alt={label} className={imageClassName} onError={() => setBroken(true)} />
       </a>
       {hintText ? (
         <p className="mt-2 max-w-sm text-[11px] text-brand-brown/55">{hintText}</p>
