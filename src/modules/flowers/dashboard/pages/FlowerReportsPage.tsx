@@ -55,6 +55,7 @@ export default function FlowerReportsPage() {
   const [loading, setLoading] = useState(true);
   const [blockedMessage, setBlockedMessage] = useState('');
   const [showDailyCountLink, setShowDailyCountLink] = useState(false);
+  const [showOrdersLink, setShowOrdersLink] = useState(false);
   const [supplierAmount, setSupplierAmount] = useState('');
   const [supplierDescription, setSupplierDescription] = useState('');
   const [supplierBranchId, setSupplierBranchId] = useState('');
@@ -95,6 +96,7 @@ export default function FlowerReportsPage() {
     setLoading(true);
     setBlockedMessage('');
     setShowDailyCountLink(false);
+    setShowOrdersLink(false);
 
     try {
       if (!isAdmin) {
@@ -119,6 +121,11 @@ export default function FlowerReportsPage() {
             setBlockedMessage(
               `Reports locked — ${access.openOrders} open order(s) left for ${branchLabel} today. Mark all as picked up or delivered first.`,
             );
+          } else if (access.missingWalkInPhotos > 0) {
+            setBlockedMessage(
+              `Reports locked — ${access.missingWalkInPhotos} walk-in order(s) still need a finished photo for ${branchLabel}. Upload those photos first.`,
+            );
+            setShowOrdersLink(true);
           } else {
             setBlockedMessage(
               `Reports locked — submit today’s daily inventory count for ${branchLabel} first.`,
@@ -305,6 +312,14 @@ export default function FlowerReportsPage() {
               {' '}
               <Link to="/dashboard/flowers/daily-count" className="font-semibold underline underline-offset-2">
                 Open Daily count
+              </Link>
+            </>
+          ) : null}
+          {showOrdersLink ? (
+            <>
+              {' '}
+              <Link to="/dashboard/flowers/orders" className="font-semibold underline underline-offset-2">
+                Open Orders
               </Link>
             </>
           ) : null}
