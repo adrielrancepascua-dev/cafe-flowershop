@@ -58,6 +58,7 @@ import {
   formatOrderContentEditDeadlinePh,
   getOrderContentEditPolicy,
 } from '../../shared/utils/flower-order-edit-policy';
+import { isRemovedOrderPhoto } from '../../shared/utils/order-photo-retention';
 import OrderAttachmentField from './OrderAttachmentField';
 import OrderAttachmentPreview from './OrderAttachmentPreview';
 
@@ -1958,6 +1959,8 @@ export default function FlowerOrderFormModal({
                         photoRulesUseWalkIn ? 'walk_in' : form.claim_mode,
                       )}
                     </p>
+                  ) : isRemovedOrderPhoto(form.ready_photo_data_url) ? (
+                    <p className="mt-1 text-sm text-brand-brown/70">Removed after 30 days.</p>
                   ) : (
                     <p className="mt-1 text-sm font-medium text-emerald-800">Photo submitted</p>
                   )}

@@ -1,4 +1,5 @@
 import { useRef } from 'react';
+import { isRemovedOrderPhoto } from '../../shared/utils/order-photo-retention';
 import OrderAttachmentPreview from './OrderAttachmentPreview';
 
 type OrderAttachmentFieldProps = {
@@ -52,7 +53,20 @@ export default function OrderAttachmentField({
         className="sr-only"
         tabIndex={-1}
       />
-      {!value ? (
+      {isRemovedOrderPhoto(value) ? (
+        <>
+          <p className="mt-2 text-xs text-brand-brown/60">Removed after 30 days.</p>
+          {readOnly ? null : (
+            <button
+              type="button"
+              onClick={handleChooseClick}
+              className="flower-btn-secondary mt-2 w-full py-1.5 text-xs sm:w-auto"
+            >
+              Replace photo
+            </button>
+          )}
+        </>
+      ) : !value ? (
         readOnly ? (
           <p className="mt-2 text-xs text-brand-brown/60">No photo attached.</p>
         ) : (
