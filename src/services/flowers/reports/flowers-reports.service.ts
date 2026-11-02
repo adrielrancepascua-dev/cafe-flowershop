@@ -68,10 +68,11 @@ export type StaffReportsAccessResult = {
   pendingIncomingTransfers: number;
   openOrders: number;
   totalOrders: number;
+  missingWalkInPhotos: number;
   dailyInventorySubmitted: boolean;
 };
 
-/** Staff can open reports only after confirming incoming transfers, closing the day, and submitting daily inventory. */
+/** Staff can open reports only after confirming incoming transfers, closing the day, uploading walk-in photos, and submitting daily inventory. */
 export async function getStaffReportsAccess(
   reportDate: string,
   branchId?: string,
@@ -81,6 +82,7 @@ export async function getStaffReportsAccess(
     pendingIncomingTransfers: 0,
     openOrders: 0,
     totalOrders: 0,
+    missingWalkInPhotos: 0,
     dailyInventorySubmitted: false,
   };
 
@@ -116,19 +118,44 @@ export async function getStaffReportsAccess(
     };
   }
 
+  const [{ listFlowerOrders }, { listFlowerProducts }] = await Promise.all([
+    import('../orders/flowers-orders.service'),
+    import('../products/flowers-products.service'),
+  ]);
+  const { buildFlowerProductIdSet, walkInOrderBlocksReportsWithoutPhoto } = await import(
+    '../../../modules/flowers/shared/utils/flower-order-items'
+  );
+  const [dayOrders, products] = await Promise.all([
+    listFlowerOrders({
+      branchId,
+      scheduledFrom: reportDate,
+      scheduledTo: reportDate,
+    }),
+    listFlowerProducts(),
+  ]);
+  const flowerProductIds = buildFlowerProductIdSet(products);
+  const missingWalkInPhotos = dayOrders.filter((order) =>
+    walkInOrderBlocksReportsWithoutPhoto(order, flowerProductIds),
+  ).length;
+
+  if (missingWalkInPhotos > 0) {
+    return {
+      ...denied,
+      openOrders: status.open_orders,
+      totalOrders: status.total_orders,
+      missingWalkInPhotos,
+    };
+  }
+
   const { isDailyInventorySubmitted } = await import('../inventory/flowers-daily-inventory.service');
   const dailyInventorySubmitted = await isDailyInventorySubmitted(branchId, reportDate);
 
-  // Temporarily skip the daily-count gate while inventory numbers are being
-  // manually realigned after the Aug 19 auto-deduct incident.  Remove this
-  // override once staff resume normal daily counts.
-  const SKIP_DAILY_COUNT_GATE = true;
-
   return {
-    allowed: SKIP_DAILY_COUNT_GATE || dailyInventorySubmitted,
+    allowed: dailyInventorySubmitted,
     pendingIncomingTransfers: 0,
     openOrders: status.open_orders,
     totalOrders: status.total_orders,
+    missingWalkInPhotos: 0,
     dailyInventorySubmitted,
   };
 }

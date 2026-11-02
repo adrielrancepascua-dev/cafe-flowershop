@@ -1,4 +1,4 @@
-import type { FlowerClaimMode } from '../types/flower-order';
+import type { FlowerClaimMode, FlowerOrderStatus } from '../types/flower-order';
 import type { FlowerProduct } from '../types/flower-product';
 
 export function buildFlowerProductIdSet(products: FlowerProduct[]): Set<string> {
@@ -67,4 +67,36 @@ export function orderSkipsReadyPhotoRequirement(
   }
 
   return orderIsMiscOnly(items, flowerProductIds);
+}
+
+function hasFinishedPhoto(readyPhotoDataUrl: string | null | undefined): boolean {
+  return Boolean(String(readyPhotoDataUrl ?? '').trim());
+}
+
+/**
+ * Walk-in flower orders can be completed during the day without a photo.
+ * Reports still wait on that photo. Misc-only walk-ins stay optional.
+ */
+export function walkInOrderBlocksReportsWithoutPhoto(
+  order: {
+    claim_mode: FlowerClaimMode;
+    status: FlowerOrderStatus;
+    ready_photo_data_url: string;
+    items: Array<{ product_id: string }>;
+  },
+  flowerProductIds: ReadonlySet<string>,
+): boolean {
+  if (order.claim_mode !== 'walk_in' || order.status === 'cancelled') {
+    return false;
+  }
+
+  if (hasFinishedPhoto(order.ready_photo_data_url)) {
+    return false;
+  }
+
+  if (flowerProductIds.size === 0) {
+    return order.items.length > 0;
+  }
+
+  return !orderIsMiscOnly(order.items, flowerProductIds);
 }
