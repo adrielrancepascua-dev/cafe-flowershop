@@ -1,4 +1,5 @@
--- Drop order photos 30 days after they were uploaded. Order rows stay.
+-- Drop photos for orders whose pickup month is already over.
+-- A July reservation for November stays until December. Order rows stay.
 -- The Storage API must delete the files. These functions only list them and
 -- mark the order columns so the app does not keep pointing at a missing file.
 
@@ -16,17 +17,32 @@ as $$
     );
 $$;
 
+drop function if exists public.list_expired_order_attachment_paths(integer);
+
 create or replace function public.list_expired_order_attachment_paths(p_limit integer default 200)
-returns table(object_name text, created_at timestamptz)
+returns table(object_name text, created_at timestamptz, scheduled_for timestamptz)
 language sql
 stable
 security definer
 set search_path = public, storage
 as $$
-  select o.name, o.created_at
+  select o.name, o.created_at, fo.scheduled_for
   from storage.objects o
+  left join public.flower_orders fo
+    on split_part(o.name, '/', 1) = fo.id
   where o.bucket_id = 'order-attachments'
-    and o.created_at < now() - interval '30 days'
+    and (
+      (
+        fo.id is not null
+        and (fo.scheduled_for at time zone 'Asia/Manila')
+          < date_trunc('month', now() at time zone 'Asia/Manila')
+      )
+      or (
+        fo.id is null
+        and (o.created_at at time zone 'Asia/Manila')
+          < date_trunc('month', now() at time zone 'Asia/Manila')
+      )
+    )
   order by o.created_at
   limit least(greatest(coalesce(p_limit, 200), 1), 500);
 $$;

@@ -1960,7 +1960,7 @@ export default function FlowerOrderFormModal({
                       )}
                     </p>
                   ) : isRemovedOrderPhoto(form.ready_photo_data_url) ? (
-                    <p className="mt-1 text-sm text-brand-brown/70">Removed after 30 days.</p>
+                    <p className="mt-1 text-sm text-brand-brown/70">Photo no longer stored.</p>
                   ) : (
                     <p className="mt-1 text-sm font-medium text-emerald-800">Photo submitted</p>
                   )}

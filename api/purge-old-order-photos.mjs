@@ -1,8 +1,18 @@
 import { createClient } from '@supabase/supabase-js';
 
 const BUCKET = 'order-attachments';
-const RETENTION_MS = 30 * 24 * 60 * 60 * 1000;
 const BATCH_LIMIT = 200;
+
+function manilaMonthKey(value) {
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Asia/Manila',
+    year: 'numeric',
+    month: '2-digit',
+  }).formatToParts(new Date(value));
+  const year = parts.find((part) => part.type === 'year')?.value;
+  const month = parts.find((part) => part.type === 'month')?.value;
+  return year && month ? `${year}-${month}` : '';
+}
 
 function json(res, status, body) {
   res.status(status).json(body);
@@ -39,7 +49,6 @@ async function deleteStoragePaths(supabaseUrl, serviceRoleKey, paths) {
 }
 
 export async function purgeExpiredOrderPhotos(admin, supabaseUrl, serviceRoleKey) {
-  const cutoffMs = Date.now() - RETENTION_MS;
   const { data, error } = await admin.rpc('list_expired_order_attachment_paths', {
     p_limit: BATCH_LIMIT,
   });
@@ -48,9 +57,11 @@ export async function purgeExpiredOrderPhotos(admin, supabaseUrl, serviceRoleKey
     throw new Error(error.message);
   }
 
+  const currentMonth = manilaMonthKey(new Date());
   const expired = (data || []).filter((row) => {
-    const createdMs = new Date(row.created_at).getTime();
-    return row.object_name && Number.isFinite(createdMs) && createdMs < cutoffMs;
+    const basis = row.scheduled_for || row.created_at;
+    const monthKey = manilaMonthKey(basis);
+    return row.object_name && monthKey && monthKey < currentMonth;
   });
 
   if (expired.length === 0) {

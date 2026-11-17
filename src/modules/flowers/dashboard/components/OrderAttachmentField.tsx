@@ -55,7 +55,7 @@ export default function OrderAttachmentField({
       />
       {isRemovedOrderPhoto(value) ? (
         <>
-          <p className="mt-2 text-xs text-brand-brown/60">Removed after 30 days.</p>
+          <p className="mt-2 text-xs text-brand-brown/60">Photo no longer stored.</p>
           {readOnly ? null : (
             <button
               type="button"

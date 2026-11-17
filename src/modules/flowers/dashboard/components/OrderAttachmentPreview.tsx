@@ -31,7 +31,7 @@ export default function OrderAttachmentPreview({
   if (isRemovedOrderPhoto(value) || broken) {
     return (
       <p className={`mt-2 text-xs text-brand-brown/60 ${centered ? 'text-center' : ''}`}>
-        Removed after 30 days.
+        Photo no longer stored.
       </p>
     );
   }
