@@ -362,6 +362,46 @@ export async function createFlowerSupplyTransferSupabase(
     throw itemsError;
   }
 
+  const historyNote = `Supplies ${voucherLabel} voucher ${transferId}`;
+  const { data: historyRow, error: historyError } = await supabase
+    .from('flower_inventory_transfers')
+    .insert({
+      from_branch_id: input.from_branch_id,
+      to_branch_id: input.to_branch_id,
+      status: 'confirmed',
+      note: historyNote,
+      requested_by_id: input.created_by_id,
+      requested_by_name: input.prepared_by.trim(),
+      resolved_by_id: input.created_by_id,
+      resolved_by_name: input.received_by.trim(),
+      resolved_at: new Date().toISOString(),
+    })
+    .select('id')
+    .single();
+
+  if (historyError || !historyRow) {
+    await supabase.from('flower_supply_transfer_items').delete().eq('transfer_id', transferId);
+    await supabase.from('flower_supply_transfers').delete().eq('id', transferId);
+    await reverseInventory('transfer history save failed');
+    throw historyError ?? new Error('Failed to show the supply transfer on the branch transfer list.');
+  }
+
+  const { error: historyItemsError } = await supabase.from('flower_inventory_transfer_items').insert(
+    lines.map((line) => ({
+      transfer_id: historyRow.id,
+      product_id: line.product_id,
+      quantity: line.quantity,
+    })),
+  );
+
+  if (historyItemsError) {
+    await supabase.from('flower_inventory_transfers').delete().eq('id', historyRow.id);
+    await supabase.from('flower_supply_transfer_items').delete().eq('transfer_id', transferId);
+    await supabase.from('flower_supply_transfers').delete().eq('id', transferId);
+    await reverseInventory('transfer history items save failed');
+    throw historyItemsError;
+  }
+
   const created = await getFlowerSupplyTransferSupabase(transferId);
   if (!created) {
     await supabase.from('flower_supply_transfer_items').delete().eq('transfer_id', transferId);
